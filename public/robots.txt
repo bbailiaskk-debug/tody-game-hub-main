@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://tody-game-hub.bbailiaskk.workers.dev/sitemap.xml

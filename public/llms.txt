@@ -1,0 +1,20 @@
+# Todor Khristov Gaming
+
+> Официален сайт за игри, музика, видеа и общност на Todor Khristov Gaming.
+
+## Основни страници
+
+- [Начало](https://tody-game-hub.bbailiaskk.workers.dev/): Представяне на канала, игрови заглавия и общност.
+- [Игри](https://tody-game-hub.bbailiaskk.workers.dev/games): Game hub и информация за игрите в ротация.
+- [Музика](https://tody-game-hub.bbailiaskk.workers.dev/music): Плейлист с оригинални MP3 песни и аудио player.
+- [Информация](https://tody-game-hub.bbailiaskk.workers.dev/info): Профил на създателя, социални канали и график.
+
+## Език и съдържание
+
+Сайтът поддържа български и английски език. Съдържанието е насочено към гейминг, забавление, музика и изграждане на общност около канала.
+
+## Технически бележки
+
+- Каноничният HTTPS домейн е https://tody-game-hub.bbailiaskk.workers.dev/
+- Sitemap: https://tody-game-hub.bbailiaskk.workers.dev/sitemap.xml
+- Robots: https://tody-game-hub.bbailiaskk.workers.dev/robots.txt

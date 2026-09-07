@@ -1,0 +1,21 @@
+{
+  "name": "tody-game-hub",
+  "compatibility_date": "2026-08-30",
+  "main": ".output/server/index.mjs",
+  "assets": {
+    "directory": ".output/public",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "GOOGLE_CLIENT_ID": "replace-with-google-client-id"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "AUTH_USERS_KV",
+      "id": "987d097bccb842538cf6af6ebafdbee5"
+    }
+  ],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}

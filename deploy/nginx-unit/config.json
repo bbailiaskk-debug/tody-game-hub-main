@@ -1,0 +1,43 @@
+{
+  "listeners": {
+    "*:80": {
+      "pass": "routes/site"
+    }
+  },
+  "routes": {
+    "site": [
+      {
+        "match": {
+          "uri": [
+            "*.css",
+            "*.js",
+            "*.mjs",
+            "*.map",
+            "*.ico",
+            "*.png",
+            "*.jpg",
+            "*.jpeg",
+            "*.webp",
+            "*.avif",
+            "*.svg",
+            "*.woff",
+            "*.woff2",
+            "*.ttf",
+            "*.otf"
+          ]
+        },
+        "action": {
+          "proxy": "https://tody-game-hub.bbailiaskk.workers.dev",
+          "response_headers": {
+            "Cache-Control": "public, max-age=604800, immutable"
+          }
+        }
+      },
+      {
+        "action": {
+          "proxy": "https://tody-game-hub.bbailiaskk.workers.dev"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,193 @@
+@import "tailwindcss";
+@source "../src";
+@import "tw-animate-css";
+
+@font-face {
+  font-family: "LIGHTZ";
+  src: url("/Rougan-j9wd7.ttf") format("truetype");
+  font-display: swap;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-brand: var(--brand);
+  --color-brand-dim: var(--brand-dim);
+  --color-youtube: var(--youtube);
+  --color-tiktok: var(--tiktok);
+  --color-spotify: var(--spotify);
+  --color-discord: var(--discord);
+  --font-display: "Archivo Black", system-ui, sans-serif;
+  --font-sans: "Manrope", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-rotwimch: "RoTwimch", system-ui, sans-serif;
+  --shadow-glow: 0 18px 50px -18px color-mix(in oklab, var(--brand) 55%, transparent);
+}
+
+:root {
+  --site-background-image: none;
+  --site-background-overlay: linear-gradient(color-mix(in oklab, var(--brand) 9%, transparent),
+      color-mix(in oklab, var(--brand) 9%, transparent));
+  --radius: 0.9rem;
+  --background: oklch(0.18 0.008 150);
+  --foreground: oklch(0.97 0.005 150);
+  --card: oklch(0.215 0.008 150);
+  --card-foreground: oklch(0.97 0.005 150);
+  --popover: oklch(0.2 0.008 150);
+  --popover-foreground: oklch(0.97 0.005 150);
+  --surface: oklch(0.225 0.008 150);
+  --surface-2: oklch(0.26 0.01 150);
+  --brand: oklch(0.78 0.19 155);
+  --brand-dim: oklch(0.55 0.13 155);
+  --primary: oklch(0.78 0.19 155);
+  --primary-foreground: oklch(0.19 0.03 155);
+  --secondary: oklch(0.26 0.01 150);
+  --secondary-foreground: oklch(0.97 0.005 150);
+  --muted: oklch(0.26 0.01 150);
+  --muted-foreground: oklch(0.68 0.012 150);
+  --accent: oklch(0.28 0.02 155);
+  --accent-foreground: oklch(0.9 0.1 155);
+  --destructive: oklch(0.62 0.2 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.3 0.01 150);
+  --input: oklch(0.3 0.01 150);
+  --ring: oklch(0.78 0.19 155);
+  --youtube: oklch(0.55 0.22 25);
+  --tiktok: oklch(0.28 0.01 150);
+  --spotify: oklch(0.78 0.19 155);
+  --discord: oklch(0.62 0.17 292);
+}
+
+.light {
+  --background: oklch(0.98 0.006 150);
+  --foreground: oklch(0.2 0.01 150);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.01 150);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.01 150);
+  --surface: oklch(0.96 0.008 150);
+  --surface-2: oklch(0.93 0.01 150);
+  --brand: oklch(0.62 0.17 155);
+  --brand-dim: oklch(0.72 0.12 155);
+  --primary: oklch(0.62 0.17 155);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.93 0.01 150);
+  --secondary-foreground: oklch(0.2 0.01 150);
+  --muted: oklch(0.94 0.008 150);
+  --muted-foreground: oklch(0.45 0.015 150);
+  --accent: oklch(0.9 0.05 155);
+  --accent-foreground: oklch(0.3 0.1 155);
+  --border: oklch(0.88 0.01 150);
+  --input: oklch(0.88 0.01 150);
+  --ring: oklch(0.62 0.17 155);
+  --tiktok: oklch(0.25 0.01 150);
+}
+
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+@utility grid-bg {
+  background-image:
+    radial-gradient(circle at 70% 20%,
+      color-mix(in oklab, var(--brand) 12%, transparent),
+      transparent 55%),
+    linear-gradient(to right,
+      color-mix(in oklab, var(--border) 60%, transparent) 1px,
+      transparent 1px),
+    linear-gradient(to bottom,
+      color-mix(in oklab, var(--border) 60%, transparent) 1px,
+      transparent 1px);
+  background-size:
+    100% 100%,
+    64px 64px,
+    64px 64px;
+  background-position: center, center, center;
+  background-attachment: scroll, scroll, scroll;
+}
+
+.art-image-0 {
+  background-image: url("/cute-gamer-girl-making-heart-gesture-artwork-vector.jpg");
+}
+
+.art-image-1 {
+  background-image: url("/cartoon-gamer-girl-mascot-logo-with-anime-style-for-esport-use-vector.jpg");
+}
+
+.welcome-slide-0 {
+  background-image: url("/undraw_happy-music_na4p.png");
+}
+
+.welcome-slide-1 {
+  background-image: url("/undraw_audio-player_7uwh.png");
+}
+
+.welcome-slide-2 {
+  background-image: url("/undraw_listening_fz9g.png");
+}
+
+.welcome-slide-3 {
+  background-image: url("/undraw_media-player_kxtm.png");
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: color-mix(in oklab, var(--color-background) 94%, var(--brand) 6%);
+    background-image: var(--site-background-overlay), var(--site-background-image);
+    background-position: center;
+    background-size: cover;
+    background-attachment: fixed;
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  @media (max-width: 767px) {
+    body {
+      background-image: none;
+      background-attachment: scroll;
+    }
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+}
