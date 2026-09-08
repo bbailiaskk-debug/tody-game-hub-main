@@ -7,10 +7,6 @@ type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
 };
 
-type CloudflareEnv = {
-  ASSETS?: { fetch: (request: Request) => Promise<Response> };
-};
-
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
 async function getServerEntry(): Promise<ServerEntry> {
@@ -87,31 +83,43 @@ function initializeCloudflareEnv(env: unknown): void {
   (globalThis as typeof globalThis & { CF_ENV?: unknown }).CF_ENV = env;
 }
 
-async function serveSitemap(request: Request, env: unknown): Promise<Response | null> {
+function buildSitemapXml(): string {
+  const baseUrl = "https://tody-game-hub.bbailiaskk.workers.dev";
+  const pages = [
+    { loc: "/", changefreq: "daily", priority: "1.0" },
+    { loc: "/music", changefreq: "daily", priority: "0.9" },
+    { loc: "/games", changefreq: "weekly", priority: "0.8" },
+    { loc: "/info", changefreq: "weekly", priority: "0.8" },
+    { loc: "/ai", changefreq: "weekly", priority: "0.8" },
+  ];
+
+  const urls = pages
+    .map(
+      (page) =>
+        `  <url>
+    <loc>${baseUrl}${page.loc}</loc>
+    <changefreq>${page.changefreq}</changefreq>
+    <priority>${page.priority}</priority>
+  </url>`,
+    )
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>`;
+}
+
+function serveSitemap(request: Request): Response | null {
   const url = new URL(request.url);
   if (url.pathname !== "/sitemap.xml") return null;
 
-  const assets = (env as CloudflareEnv).ASSETS;
-  if (!assets) return null;
-
-  const assetUrl = new URL(request.url);
-  assetUrl.search = "";
-  const response = await assets.fetch(new Request(assetUrl, { method: "GET" }));
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("xml")) {
-    return new Response("Sitemap asset not found", {
-      status: 404,
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
-  }
-
-  const headers = new Headers(response.headers);
-  headers.set("Content-Type", "application/xml; charset=utf-8");
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
+  return new Response(buildSitemapXml(), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/xml; charset=utf-8",
+      "Cache-Control": "public, max-age=3600",
+    },
   });
 }
 
@@ -125,7 +133,7 @@ export default {
       return httpsRedirect;
     }
 
-    const sitemapResponse = await serveSitemap(request, env);
+    const sitemapResponse = serveSitemap(request);
     if (sitemapResponse) {
       return withHsts(sitemapResponse);
     }
