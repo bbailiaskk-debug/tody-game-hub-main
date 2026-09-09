@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SiteHeader } from "../components/site/SiteHeader";
 import { SiteSettingsProvider } from "../components/site/theme";
+import { SplashScreen } from "../components/site/SplashScreen";
 
 function NotFoundComponent() {
   return (
@@ -137,6 +138,9 @@ function RootShell({ children }: { children: ReactNode }) {
               <Link to="/" className="label-mono text-[0.6rem] hover:text-foreground">
                 Начало
               </Link>
+              <Link to="/games" className="label-mono text-[0.6rem] hover:text-foreground">
+                Игри
+              </Link>
               <Link to="/music" className="label-mono text-[0.6rem] hover:text-foreground">
                 Музика
               </Link>
@@ -159,6 +163,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <SiteSettingsProvider>
+        <SplashScreen />
         <SiteHeader />
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />

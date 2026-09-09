@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ChessKnight, Gamepad2, Grid3x3, Puzzle } from "lucide-react";
 import { useSiteSettings } from "../components/site/theme";
 
 export const Route = createFileRoute("/games")({
@@ -14,6 +15,57 @@ export const Route = createFileRoute("/games")({
   }),
   component: GamesPage,
 });
+
+const playableGames = [
+  {
+    to: "/chess" as const,
+    title: { bg: "ШАХ", en: "CHESS", zh: "国际象棋" },
+    tag: { bg: "НАСТОЛНА", en: "BOARD", zh: "棋盘" },
+    note: {
+      bg: "Класически шах срещу приятел — рокада, ан пасан и промоция.",
+      en: "Classic chess against a friend — castling, en passant, and promotion.",
+      zh: "与朋友对弈经典国际象棋 — 王车易位、吃过路兵和升变。",
+    },
+    icon: ChessKnight,
+    color: "#1DB954",
+  },
+  {
+    to: "/game2048" as const,
+    title: { bg: "2048", en: "2048", zh: "2048" },
+    tag: { bg: "ПЪЗЗЛ", en: "PUZZLE", zh: "拼图" },
+    note: {
+      bg: "Плъзгай и съединявай плочките, за да стигнеш до 2048.",
+      en: "Slide and merge tiles to reach 2048.",
+      zh: "滑动并合并方块，达到 2048。",
+    },
+    icon: Puzzle,
+    color: "#1DB954",
+  },
+  {
+    to: "/tictactoe" as const,
+    title: { bg: "TIC TAC TOE", en: "TIC TAC TOE", zh: "井字棋" },
+    tag: { bg: "КЛАСИКА", en: "CLASSIC", zh: "经典" },
+    note: {
+      bg: "Морски шах срещу компютъра или приятел.",
+      en: "Play against the computer or a friend.",
+      zh: "与电脑或朋友对战。",
+    },
+    icon: Grid3x3,
+    color: "#3b82f6",
+  },
+  {
+    to: "/dino" as const,
+    title: { bg: "CHROME DINOSAUR", en: "CHROME DINOSAUR", zh: "Chrome 恐龙" },
+    tag: { bg: "АРКАДА", en: "ARCADE", zh: "街机" },
+    note: {
+      bg: "Класическата игра на динозавра — безкрайно бягане.",
+      en: "The classic dinosaur game — endless runner.",
+      zh: "经典的恐龙游戏 — 无尽跑酷。",
+    },
+    icon: Gamepad2,
+    color: "#f59e0b",
+  },
+];
 
 function GamesPage() {
   const { lang } = useSiteSettings();
@@ -35,59 +87,31 @@ function GamesPage() {
             {isBg ? "ГЕЙМ ХЪБ" : isZh ? "游戏中心" : "GAME HUB"}
           </span>
         </div>
-        <div className="mt-10 grid max-w-3xl gap-4 text-muted-foreground md:grid-cols-2">
-          <p>
-            {isBg
-              ? "Разгледай игрите, които влизат в ротацията на Todor Khristov Gaming. Всяко заглавие носи различен ритъм: строене, състезание, стратегия, екшън или хаос с приятели."
-              : isZh
-                ? "探索 Todor Khristov Gaming 的游戏轮换。每款游戏都带来不同的节奏：建造、竞技、策略、动作或与朋友一起的混乱。"
-                : "Explore the games in the Todor Khristov Gaming rotation. Every title brings a different rhythm: building, competition, strategy, action, or chaos with friends."}
-          </p>
-          <p>
-            {isBg
-              ? "Следи новите серии, избери своя фаворит и се върни за още моменти от общността. Game hub-ът е място за идеи, забавление и игри без излишна сериозност."
-              : isZh
-                ? "关注新的系列，选择你喜欢的游戏，回来发现更多社区精彩时刻。这里是分享想法、娱乐和游戏的地方。"
-                : "Follow new series, choose your favorite, and return for more community moments. The game hub is a place for ideas, entertainment, and games without taking things too seriously."}
-          </p>
-        </div>
-        <div className="mt-10 grid max-w-4xl gap-8 border-t border-border/60 pt-8 text-muted-foreground md:grid-cols-3">
-          <div>
-            <h2 className="font-display text-base text-foreground">
-              {isBg ? "Различни жанрове" : isZh ? "不同类型" : "Different genres"}
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed">
-              {isBg
-                ? "От отворени светове и сървайвъл до шутъри, MOBA и tower defense, тук има заглавия за различни настроения и стилове на игра."
-                : isZh
-                  ? "从开放世界和生存游戏，到射击、MOBA 和塔防，这里涵盖不同的心情与玩法。"
-                  : "From open worlds and survival to shooters, MOBAs, and tower defense, this collection covers different moods and play styles."}
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-base text-foreground">
-              {isBg ? "Нови моменти" : isZh ? "精彩时刻" : "Fresh moments"}
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed">
-              {isBg
-                ? "Ротацията се променя според новите серии, идеите на общността и игрите, които предлагат най-много неочаквани ситуации."
-                : isZh
-                  ? "游戏轮换会随着新系列、社区想法和最能创造意外时刻的游戏而改变。"
-                  : "The rotation changes with new series, community ideas, and games that create the most unexpected situations."}
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-base text-foreground">
-              {isBg ? "Играй заедно" : isZh ? "一起游玩" : "Play together"}
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed">
-              {isBg
-                ? "Избери игра, последвай канала и се присъедини към разговорите. Най-добрите моменти са тези, които споделяме."
-                : isZh
-                  ? "选择一款游戏，关注频道并加入讨论。最精彩的时刻，就是我们共同分享的时刻。"
-                  : "Choose a game, follow the channel, and join the conversation. The best moments are the ones we share."}
-            </p>
-          </div>
+
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {playableGames.map((game) => {
+            const Icon = game.icon;
+            return (
+              <Link
+                key={game.to}
+                to={game.to}
+                className="group rounded-3xl border border-border bg-card p-6 transition-all duration-200 hover:border-brand-dim hover:shadow-[0_0_24px_rgba(29,185,84,0.15)]"
+              >
+                <div className="flex items-start justify-between">
+                  <span className="label-mono text-[0.6rem] text-brand">
+                    {game.tag[lang]}
+                  </span>
+                  <Icon className="size-4 text-muted-foreground transition-colors group-hover:text-brand" />
+                </div>
+                <h3 className="mt-10 text-2xl">{game.title[lang]}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{game.note[lang]}</p>
+                <span className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#1DB954]/30 bg-[#161B16] px-4 py-2 font-mono text-[0.65rem] font-bold tracking-[0.15em] text-brand uppercase transition-all duration-200 group-hover:bg-[#1DB954]/10 group-hover:shadow-[0_0_12px_rgba(29,185,84,0.2)]">
+                  {isBg ? "ИГРАЙ" : isZh ? "开始" : "PLAY"}
+                  <span className="text-[0.8rem]">›</span>
+                </span>
+              </Link>
+            );
+          })}
         </div>
       </section>
     </main>

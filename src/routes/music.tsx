@@ -115,6 +115,12 @@ function MusicPage() {
   const [backgroundError, setBackgroundError] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
+  const mediaActionsRef = useRef({
+    play: () => {},
+    pause: () => {},
+    previoustrack: () => {},
+    nexttrack: () => {},
+  });
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -236,6 +242,43 @@ function MusicPage() {
     setProgress(nextProgress);
     if (audioRef.current) audioRef.current.currentTime = nextProgress;
   };
+
+  mediaActionsRef.current = {
+    play: togglePlayback,
+    pause: togglePlayback,
+    previoustrack: () => stepTrack(-1),
+    nexttrack: () => stepTrack(1),
+  };
+
+  useEffect(() => {
+    const mediaSession = navigator.mediaSession;
+    if (!mediaSession) return;
+
+    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ["play", () => mediaActionsRef.current.play()],
+      ["pause", () => mediaActionsRef.current.pause()],
+      ["previoustrack", () => mediaActionsRef.current.previoustrack()],
+      ["nexttrack", () => mediaActionsRef.current.nexttrack()],
+    ];
+
+    handlers.forEach(([action, handler]) => mediaSession.setActionHandler(action, handler));
+
+    return () => {
+      handlers.forEach(([action]) => mediaSession.setActionHandler(action, null));
+    };
+  }, []);
+
+  useEffect(() => {
+    const mediaSession = navigator.mediaSession;
+    if (!mediaSession || typeof MediaMetadata === "undefined" || !selectedTrack) return;
+
+    mediaSession.metadata = new MediaMetadata({
+      title: selectedTrack.name,
+      artist: "Todor Khristov Gaming",
+      album: "Todor Khristov Gaming",
+    });
+    mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [selectedTrack, isPlaying]);
 
   const visibleTracks = tracks.filter((track) =>
     track.name.toLowerCase().includes(search.toLowerCase()),

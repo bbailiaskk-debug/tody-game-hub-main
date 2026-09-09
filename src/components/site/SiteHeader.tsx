@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import { Mail, Menu, Moon, Music2, Settings, Sun, LogIn, LogOut, X } from "lucide-react";
+import { ChessKnight, Gamepad2, Grid3x3, Mail, Menu, Moon, Music2, Puzzle, Settings, Sun, LogIn, LogOut, X } from "lucide-react";
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 
@@ -18,6 +18,33 @@ import { copy, useSiteSettings } from "./theme";
 const SettingsPanel = lazy(() =>
   import("./SettingsPanel").then((module) => ({ default: module.SettingsPanel })),
 );
+
+const socialLinks = [
+  {
+    label: "YouTube",
+    href: "https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ",
+    color: "#D90429",
+    text: "#ffffff",
+  },
+  {
+    label: "TikTok",
+    href: "https://www.tiktok.com/@todorkhristovgmaing",
+    color: "#121212",
+    text: "#ffffff",
+  },
+  {
+    label: "Spotify",
+    href: "https://open.spotify.com/artist/0qeXEFSge1i8K1lC8np20g",
+    color: "#1DB954",
+    text: "#000000",
+  },
+  {
+    label: "Discord",
+    href: "https://discord.com/invite/uRNGhKf7vC",
+    color: "#5865F2",
+    text: "#ffffff",
+  },
+] as const;
 
 export function SiteHeader() {
   const { lang, theme, toggleTheme, setLang } = useSiteSettings();
@@ -119,6 +146,7 @@ export function SiteHeader() {
 
   const menuItems = [
     { to: "/", label: t.nav.home },
+    { to: "/games", label: t.nav.games },
     { to: "/music", label: t.nav.music },
     { to: "/info", label: t.nav.info },
   ] as const;
@@ -262,6 +290,95 @@ export function SiteHeader() {
                     </span>
                   </Link>
                 ))}
+
+                <Link
+                  to="/dino"
+                  onClick={() => setMenuOpen(false)}
+                  aria-label="Chrome Dinosaur Game"
+                  className="group flex items-center justify-between gap-3 rounded-full border border-[#1DB954]/20 bg-[#161B16] px-4 py-3.5 transition-all duration-200 hover:border-[#1DB954]/50 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)]"
+                >
+                  <span className="flex flex-col">
+                    <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
+                      CHROME{" "}
+                      <span className="text-brand transition-colors group-hover:text-[#4ADE80]">
+                        DINOSAUR
+                      </span>{" "}
+                      <span className="text-brand transition-colors group-hover:text-[#4ADE80]">
+                        GAME
+                      </span>
+                    </span>
+                    <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
+                      take a break
+                    </span>
+                  </span>
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B16] text-brand transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#4ADE80]">
+                    <Gamepad2 className="size-4" />
+                  </span>
+                </Link>
+
+                <Link
+                  to="/tictactoe"
+                  onClick={() => setMenuOpen(false)}
+                  aria-label="Tic Tac Toe"
+                  className="group flex items-center justify-between gap-3 rounded-full border border-[#1DB954]/20 bg-[#161B16] px-4 py-3.5 transition-all duration-200 hover:border-[#1DB954]/50 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)]"
+                >
+                  <span className="flex flex-col">
+                    <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
+                      TIC TAC{" "}
+                      <span className="text-brand transition-colors group-hover:text-[#4ADE80]">
+                        TOE
+                      </span>
+                    </span>
+                    <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
+                      {lang === "bg" ? "морски шах" : "classic game"}
+                    </span>
+                  </span>
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B16] text-brand transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#4ADE80]">
+                    <Grid3x3 className="size-4" />
+                  </span>
+                </Link>
+
+                <Link
+                  to="/chess"
+                  onClick={() => setMenuOpen(false)}
+                  aria-label="Chess"
+                  className="group flex items-center justify-between gap-3 rounded-full border border-[#1DB954]/20 bg-[#161B16] px-4 py-3.5 transition-all duration-200 hover:border-[#1DB954]/50 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)]"
+                >
+                  <span className="flex flex-col">
+                    <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
+                      <span className="text-brand transition-colors group-hover:text-[#4ADE80]">
+                        CHESS
+                      </span>
+                    </span>
+                    <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
+                      {lang === "bg" ? "настолна класика" : "board classic"}
+                    </span>
+                  </span>
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B16] text-brand transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#4ADE80]">
+                    <ChessKnight className="size-4" />
+                  </span>
+                </Link>
+
+                <Link
+                  to="/game2048"
+                  onClick={() => setMenuOpen(false)}
+                  aria-label="2048"
+                  className="group flex items-center justify-between gap-3 rounded-full border border-[#1DB954]/20 bg-[#161B16] px-4 py-3.5 transition-all duration-200 hover:border-[#1DB954]/50 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)]"
+                >
+                  <span className="flex flex-col">
+                    <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
+                      <span className="text-brand transition-colors group-hover:text-[#4ADE80]">
+                        2048
+                      </span>
+                    </span>
+                    <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
+                      {lang === "bg" ? "пъззл игра" : "puzzle game"}
+                    </span>
+                  </span>
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B16] text-brand transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#4ADE80]">
+                    <Puzzle className="size-4" />
+                  </span>
+                </Link>
               </nav>
 
               <div className="border-t border-border/70 p-3">
@@ -335,6 +452,33 @@ export function SiteHeader() {
                 >
                   {lang === "bg" ? "НАСТРОЙКИ" : "SETTINGS"}
                 </button>
+              </div>
+
+              <div className="border-t border-border/70 p-3">
+                <p className="mb-2 text-[0.9rem] font-mono tracking-[0.2em] text-muted-foreground uppercase">
+                  {lang === "bg" ? "Социални мрежи" : "Social Media"}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {socialLinks.map((social) => (
+                    <a
+                      key={social.label}
+                      href={social.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${social.label} — ${lang === "bg" ? "отваря се в нов раздел" : "opens in a new tab"}`}
+                      style={{ backgroundColor: social.color, color: social.text }}
+                      className="group inline-flex items-center justify-between rounded-full px-4 py-3 font-mono text-[0.75rem] font-bold tracking-[0.12em] transition-transform duration-200 hover:-translate-y-0.5 hover:brightness-110"
+                    >
+                      <span className="truncate">{social.label}</span>
+                      <span
+                        aria-hidden="true"
+                        className="text-sm leading-none transition-transform group-hover:translate-x-0.5"
+                      >
+                        ↗
+                      </span>
+                    </a>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

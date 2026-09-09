@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { getChessSecret } from "./lib/chess-auth";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -78,9 +79,12 @@ function redirectToHttps(request: Request): Response | null {
   return Response.redirect(redirectUrl.toString(), 301);
 }
 
-// Initialize Cloudflare Worker environment for server functions
+// Initialize Cloudflare Worker environment for server functions. Nitro dispatches
+// the ssr service with only the Request (env param is undefined), but it stashes
+// the real env on globalThis.__env__ before the service runs — fall back to it.
 function initializeCloudflareEnv(env: unknown): void {
-  (globalThis as typeof globalThis & { CF_ENV?: unknown }).CF_ENV = env;
+  const realEnv = env ?? (globalThis as typeof globalThis & { __env__?: unknown }).__env__;
+  (globalThis as typeof globalThis & { CF_ENV?: unknown }).CF_ENV = realEnv;
 }
 
 function buildSitemapXml(): string {
@@ -123,6 +127,84 @@ function serveSitemap(request: Request): Response | null {
   });
 }
 
+type ChessGameNamespace = {
+  idFromName: (name: string) => unknown;
+  idFromString?: (id: string) => unknown;
+  get: (id: unknown) => { fetch: (request: Request) => Promise<Response> };
+};
+
+type ChessEnvLike = { CHESS_GAME_DO?: ChessGameNamespace };
+
+// Nitro dispatches the ssr service with only the web Request, so the fetch
+// handler's `env` argument is undefined in production. The real worker env is
+// exposed by Nitro on request.runtime.cloudflare.env, globalThis.__env__, and
+// on globalThis.CF_ENV (set locally via initializeCloudflareEnv).
+function resolveChessNamespace(request: Request, env: unknown): ChessGameNamespace | null {
+  if (env && typeof env === "object") {
+    const direct = (env as ChessEnvLike).CHESS_GAME_DO;
+    if (direct) return direct;
+  }
+
+  const runtimeRequest = request as Request & { runtime?: { cloudflare?: { env?: unknown } } };
+  const runtimeEnv = runtimeRequest.runtime?.cloudflare?.env;
+  if (runtimeEnv && typeof runtimeEnv === "object") {
+    const fromRuntime = (runtimeEnv as ChessEnvLike).CHESS_GAME_DO;
+    if (fromRuntime) return fromRuntime;
+  }
+
+  const globals = globalThis as typeof globalThis & { __env__?: unknown; CF_ENV?: unknown };
+  for (const candidate of [globals.__env__, globals.CF_ENV]) {
+    if (candidate && typeof candidate === "object") {
+      const ns = (candidate as ChessEnvLike).CHESS_GAME_DO;
+      if (ns) return ns;
+    }
+  }
+
+  return null;
+}
+
+function jsonResponse(data: unknown, status: number): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
+}
+
+async function serveChessGameRequest(request: Request, env: unknown): Promise<Response | null> {
+  const url = new URL(request.url);
+  const prefix = "/api/ws/chess/";
+  if (!url.pathname.startsWith(prefix)) return null;
+
+  const gameId = url.pathname.slice(prefix.length).split("/")[0] ?? "";
+  if (!gameId) return jsonResponse({ error: "invalid-game" }, 400);
+
+  const namespace = resolveChessNamespace(request, env);
+  if (!namespace) return jsonResponse({ error: "chess-not-configured" }, 503);
+
+  const id = namespace.idFromName(gameId);
+  const stub = namespace.get(id);
+
+  // For WebSocket upgrades, mint (or read) the chess secret on the SSR side —
+  // the same secret serverChessAuth uses — and pass it to the DO as a header so
+  // token verification and minting always agree, independent of the DO's KV
+  // binding resolution.
+  let doRequest = request;
+  if ((request.headers.get("Upgrade") ?? "").toLowerCase() === "websocket") {
+    const secret = await getChessSecret();
+    const doHeaders = new Headers(request.headers);
+    doHeaders.set("x-chess-secret", secret);
+    doRequest = new Request(request, { headers: doHeaders });
+  }
+
+  try {
+    return await stub.fetch(doRequest);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error("Chess DO fetch failed.", error);
+    return jsonResponse({ error: "do-fetch-failed", message: detail }, 502);
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     // Initialize Cloudflare environment for server functions
@@ -136,6 +218,11 @@ export default {
     const sitemapResponse = serveSitemap(request);
     if (sitemapResponse) {
       return withHsts(sitemapResponse);
+    }
+
+    const chessResponse = await serveChessGameRequest(request, env);
+    if (chessResponse) {
+      return chessResponse;
     }
 
     try {

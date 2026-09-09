@@ -211,7 +211,7 @@ export function useSiteSettings() {
 
 export const copy = {
   bg: {
-    nav: { home: "НАЧАЛО", music: "МУЗИКА", info: "ИНФОРМАЦИЯ" },
+    nav: { home: "НАЧАЛО", games: "ИГРИ", music: "МУЗИКА", info: "ИНФОРМАЦИЯ" },
     online: "ОНЛАЙН",
     settings: "Настройки",
     settingsLabel: "КОНТРОЛЕН ПАНЕЛ",
@@ -222,7 +222,7 @@ export const copy = {
     tagline: "ГЕЙМИНГ / СЪЗДАТЕЛ",
   },
   en: {
-    nav: { home: "HOME", music: "MUSIC", info: "INFO" },
+    nav: { home: "HOME", games: "GAMES", music: "MUSIC", info: "INFO" },
     online: "ONLINE",
     settings: "Settings",
     settingsLabel: "CONTROL PANEL",
@@ -233,7 +233,7 @@ export const copy = {
     tagline: "GAMING / CREATOR",
   },
   zh: {
-    nav: { home: "首页", music: "音乐", info: "信息" },
+    nav: { home: "首页", games: "游戏", music: "音乐", info: "信息" },
     online: "在线",
     settings: "设置",
     settingsLabel: "控制面板",

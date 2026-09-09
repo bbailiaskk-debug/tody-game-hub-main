@@ -1,5 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ArrowUpRight, Calendar, Check, Mail, Share2, X } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  ArrowUpRight,
+  Calendar,
+  Check,
+  Flame,
+  Mail,
+  Music,
+  Play,
+  Share2,
+  Users,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -122,6 +133,27 @@ const artImages = [
   "/cartoon-gamer-girl-mascot-logo-with-anime-style-for-esport-use-vector.jpg",
 ] as const;
 
+const contentItems = {
+  bg: [
+    { label: "ПОСЛЕДНИ ЮТУБ ВИДЕА", hint: "Виж последните клипове", target: "youtube-videos" },
+    { label: "ГЕЙМИНГ АКЦЕНТИ", hint: "Виж гейминг клипове", target: "highlights" },
+    { label: "ОБЩНОСТНИ НОВИНИ", hint: "Виж последните новини", target: "community-news" },
+    { label: "МУЗИКАЛНИ ПЛЕЙЛИСТИ", hint: "Виж музиката", target: "music-playlists" },
+  ],
+  en: [
+    { label: "LATEST YOUTUBE VIDEOS", hint: "Watch the latest clips", target: "youtube-videos" },
+    { label: "GAMING HIGHLIGHTS", hint: "Watch gaming clips", target: "highlights" },
+    { label: "COMMUNITY NEWS", hint: "See the latest news", target: "community-news" },
+    { label: "MUSIC PLAYLISTS", hint: "Watch the music", target: "music-playlists" },
+  ],
+  zh: [
+    { label: "最新 YouTube 视频", hint: "观看最新视频", target: "youtube-videos" },
+    { label: "游戏精彩片段", hint: "观看游戏片段", target: "highlights" },
+    { label: "社区新闻", hint: "查看最新消息", target: "community-news" },
+    { label: "音乐播放列表", hint: "观看音乐", target: "music-playlists" },
+  ],
+} as const;
+
 const EMAILJS_SERVICE_ID = "service_k20134z";
 const EMAILJS_CONTACT_TEMPLATE_ID = "template_ls0ocsm";
 const EMAILJS_CONTACT_PUBLIC_KEY = "pPXV2aJ44QdXUxZ25";
@@ -190,38 +222,71 @@ function InfoPage() {
         </div>
 
         <div className="mt-10 grid gap-6 items-start md:grid-cols-[0.8fr_1.2fr]">
-          <div className="flex flex-col rounded-3xl border border-border bg-card p-6">
-            <div className="relative grid h-[320px] overflow-hidden rounded-2xl bg-surface/70 p-3 sm:h-[360px]">
-              <div
-                aria-hidden="true"
-                className={`art-image-${activeArt} absolute inset-3 h-[calc(100%-1.5rem)] w-[calc(100%-1.5rem)] rounded-xl bg-cover bg-center`}
-              />
-            </div>
-            <p className="label-mono mt-5 text-[0.6rem]">
-              {isBg ? "СЪЗДАТЕЛ / ГЕЙМЪР" : isZh ? "创作者 / 游戏玩家" : "CREATOR / GAMER"}
-            </p>
-            <div className="mt-8 border-t border-border pt-6">
-              <p className="label-mono text-[0.6rem]">
-                {isBg ? "ОФИЦИАЛЕН КАНАЛ" : isZh ? "官方频道" : "OFFICIAL CHANNEL"}
-              </p>
-              <p className="mt-2 font-display text-xl leading-tight">
-                TODOR KHRISTOV <span className="text-brand">GAMING</span>
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {(isBg
-                  ? ["ИГРИ", "LIVE", "BG"]
-                  : isZh
-                    ? ["游戏", "直播", "中文"]
-                    : ["GAMES", "LIVE", "BG"]
-                ).map((tag) => (
-                  <span
-                    key={tag}
-                    className="label-mono rounded-md bg-surface-2 px-3 py-1.5 text-[0.58rem]"
-                  >
-                    {tag}
-                  </span>
-                ))}
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col rounded-3xl border border-border bg-card p-6">
+              <div className="relative grid h-[320px] overflow-hidden rounded-2xl bg-surface/70 p-3 sm:h-[360px]">
+                <div
+                  aria-hidden="true"
+                  className={`art-image-${activeArt} absolute inset-3 h-[calc(100%-1.5rem)] w-[calc(100%-1.5rem)] rounded-xl bg-cover bg-center`}
+                />
               </div>
+              <p className="label-mono mt-5 text-[0.6rem]">
+                {isBg ? "СЪЗДАТЕЛ / ГЕЙМЪР" : isZh ? "创作者 / 游戏玩家" : "CREATOR / GAMER"}
+              </p>
+              <div className="mt-8 border-t border-border pt-6">
+                <p className="label-mono text-[0.6rem]">
+                  {isBg ? "ОФИЦИАЛЕН КАНАЛ" : isZh ? "官方频道" : "OFFICIAL CHANNEL"}
+                </p>
+                <p className="mt-2 font-display text-xl leading-tight">
+                  TODOR KHRISTOV <span className="text-brand">GAMING</span>
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {(isBg
+                    ? ["ИГРИ", "LIVE", "BG"]
+                    : isZh
+                      ? ["游戏", "直播", "中文"]
+                      : ["GAMES", "LIVE", "BG"]
+                  ).map((tag) => (
+                    <span
+                      key={tag}
+                      className="label-mono rounded-md bg-surface-2 px-3 py-1.5 text-[0.58rem]"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-[#1DB954]/20 bg-[#161B16] p-5">
+              <h2 className="label-mono text-brand text-[0.7rem]">
+                {isBg ? "СЪДЪРЖАНИЕ" : isZh ? "内容" : "CONTENT"}
+              </h2>
+              <ul className="mt-4 space-y-1">
+                {contentItems[lang].map((item) => (
+                  <li key={item.label}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        document
+                          .getElementById(item.target)
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                      className="group flex w-full items-center justify-between rounded-xl px-3 py-3 text-left transition-colors hover:bg-surface-2"
+                    >
+                      <span className="flex flex-col">
+                        <span className="font-mono text-[0.7rem] tracking-[0.14em] text-foreground">
+                          {item.label}
+                        </span>
+                        <span className="mt-0.5 text-xs text-muted-foreground">{item.hint}</span>
+                      </span>
+                      <span className="text-brand transition-transform group-hover:translate-x-1">
+                        ›
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
 
@@ -305,6 +370,208 @@ function InfoPage() {
                     : "From experiments across different game genres to music moments and visually styled content, the goal is to keep the energy alive, creative, and always ready for the next session. Every upload is designed to maintain a fun, interactive atmosphere and a strong connection with the audience."}
               </p>
             </div>
+          </div>
+        </div>
+
+        <div
+          id="youtube-videos"
+          className="mt-14 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
+        >
+          <div className="flex items-center gap-3">
+            <Play className="size-4 text-brand" />
+            <span className="label-mono">
+              {isBg ? "ПОСЛЕДНИ ЮТУБ ВИДЕА" : isZh ? "最新 YouTube 视频" : "LATEST YOUTUBE VIDEOS"}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <a
+              href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4 transition-colors hover:bg-surface-2"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="font-mono text-[0.7rem] tracking-[0.14em] text-foreground">
+                  {isBg ? "НАЙ-НОВИТЕ КЛИПОВЕ" : isZh ? "最新视频" : "THE LATEST CLIPS"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {isBg
+                    ? "Свежи видеа всяка седмица"
+                    : isZh
+                      ? "每周更新的新鲜视频"
+                      : "Fresh videos every week"}
+                </span>
+              </span>
+              <ArrowUpRight className="size-4 text-brand transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            </a>
+            <a
+              href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ/live"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4 transition-colors hover:bg-surface-2"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="font-mono text-[0.7rem] tracking-[0.14em] text-foreground">
+                  {isBg ? "СТРИЙМОВЕ" : isZh ? "直播" : "STREAMS"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {isBg ? "Гледай на живо" : isZh ? "观看直播" : "Watch live"}
+                </span>
+              </span>
+              <ArrowUpRight className="size-4 text-brand transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            </a>
+          </div>
+        </div>
+
+        <div
+          id="highlights"
+          className="mt-8 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
+        >
+          <div className="flex items-center gap-3">
+            <Flame className="size-4 text-brand" />
+            <span className="label-mono">
+              {isBg ? "ГЕЙМИНГ АКЦЕНТИ" : isZh ? "游戏精彩片段" : "GAMING HIGHLIGHTS"}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <a
+              href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4 transition-colors hover:bg-surface-2"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="font-mono text-[0.7rem] tracking-[0.14em] text-foreground">
+                  {isBg ? "ЕПИЧНИ МОМЕНТИ" : isZh ? "精彩时刻" : "EPIC MOMENTS"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {isBg
+                    ? "Най-запомнящите се кадри"
+                    : isZh
+                      ? "最难忘的画面"
+                      : "The most memorable frames"}
+                </span>
+              </span>
+              <ArrowUpRight className="size-4 text-brand transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            </a>
+            <a
+              href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ/shorts"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4 transition-colors hover:bg-surface-2"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="font-mono text-[0.7rem] tracking-[0.14em] text-foreground">
+                  {isBg ? "ШОРТИ" : isZh ? "短视频" : "SHORTS"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {isBg ? "Кратки гейминг кадри" : isZh ? "简短游戏片段" : "Short gaming clips"}
+                </span>
+              </span>
+              <ArrowUpRight className="size-4 text-brand transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            </a>
+          </div>
+        </div>
+
+        <div
+          id="community-news"
+          className="mt-8 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
+        >
+          <div className="flex items-center gap-3">
+            <Users className="size-4 text-brand" />
+            <span className="label-mono">
+              {isBg ? "ОБЩНОСТНИ НОВИНИ" : isZh ? "社区新闻" : "COMMUNITY NEWS"}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <a
+              href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ/community"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4 transition-colors hover:bg-surface-2"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="font-mono text-[0.7rem] tracking-[0.14em] text-foreground">
+                  {isBg ? "ОБЯВИ В ОБЩНОСТТА" : isZh ? "社区公告" : "COMMUNITY POSTS"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {isBg
+                    ? "Следвай директно от канала"
+                    : isZh
+                      ? "直接关注频道"
+                      : "Follow straight from the channel"}
+                </span>
+              </span>
+              <ArrowUpRight className="size-4 text-brand transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            </a>
+            <a
+              href="https://discord.com/invite/uRNGhKf7vC"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4 transition-colors hover:bg-surface-2"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="font-mono text-[0.7rem] tracking-[0.14em] text-foreground">
+                  {isBg ? "DISCORD СЪРВЪР" : isZh ? "Discord 服务器" : "DISCORD SERVER"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {isBg ? "Присъедини се към общността" : isZh ? "加入社区" : "Join the community"}
+                </span>
+              </span>
+              <ArrowUpRight className="size-4 text-brand transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            </a>
+          </div>
+        </div>
+
+        <div
+          id="music-playlists"
+          className="mt-8 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
+        >
+          <div className="flex items-center gap-3">
+            <Music className="size-4 text-brand" />
+            <span className="label-mono">
+              {isBg ? "МУЗИКАЛНИ ПЛЕЙЛИСТИ" : isZh ? "音乐播放列表" : "MUSIC PLAYLISTS"}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <a
+              href="https://open.spotify.com/artist/0qeXEFSge1i8K1lC8np20g"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4 transition-colors hover:bg-surface-2"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="font-mono text-[0.7rem] tracking-[0.14em] text-foreground">
+                  {isBg ? "SPOTIFY" : isZh ? "Spotify" : "SPOTIFY"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {isBg
+                    ? "Слушай оригиналните парчета"
+                    : isZh
+                      ? "收听原创歌曲"
+                      : "Listen to the official tracks"}
+                </span>
+              </span>
+              <ArrowUpRight className="size-4 text-brand transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            </a>
+            <Link
+              to="/music"
+              className="group flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4 transition-colors hover:bg-surface-2"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="font-mono text-[0.7rem] tracking-[0.14em] text-foreground">
+                  {isBg ? "МУЗИКАЛЕН ПЛЕЪР" : isZh ? "音乐播放器" : "MUSIC PLAYER"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {isBg
+                    ? "Отвори страницата с музика"
+                    : isZh
+                      ? "打开音乐页面"
+                      : "Open the music page"}
+                </span>
+              </span>
+              <ArrowUpRight className="size-4 text-brand transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            </Link>
           </div>
         </div>
 

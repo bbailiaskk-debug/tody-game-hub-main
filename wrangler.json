@@ -15,6 +15,20 @@
       "id": "987d097bccb842538cf6af6ebafdbee5"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHESS_GAME_DO",
+        "class_name": "ChessMatchDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ChessMatchDO"]
+    }
+  ],
   "compatibility_flags": [
     "nodejs_compat"
   ]

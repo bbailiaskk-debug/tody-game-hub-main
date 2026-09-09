@@ -11,12 +11,16 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AiRouteImport } from './routes/ai'
+import { Route as ChessRouteImport } from './routes/chess'
+import { Route as DinoRouteImport } from './routes/dino'
+import { Route as Game2048RouteImport } from './routes/game2048'
 import { Route as GamesRouteImport } from './routes/games'
 import { Route as InfoRouteImport } from './routes/info'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MusicRouteImport } from './routes/music'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as TictactoeRouteImport } from './routes/tictactoe'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -26,6 +30,21 @@ const IndexRoute = IndexRouteImport.update({
 const AiRoute = AiRouteImport.update({
   id: '/ai',
   path: '/ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChessRoute = ChessRouteImport.update({
+  id: '/chess',
+  path: '/chess',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DinoRoute = DinoRouteImport.update({
+  id: '/dino',
+  path: '/dino',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Game2048Route = Game2048RouteImport.update({
+  id: '/game2048',
+  path: '/game2048',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GamesRoute = GamesRouteImport.update({
@@ -58,80 +77,113 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TictactoeRoute = TictactoeRouteImport.update({
+  id: '/tictactoe',
+  path: '/tictactoe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai': typeof AiRoute
+  '/chess': typeof ChessRoute
+  '/dino': typeof DinoRoute
+  '/game2048': typeof Game2048Route
   '/games': typeof GamesRoute
   '/info': typeof InfoRoute
   '/login': typeof LoginRoute
   '/music': typeof MusicRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/tictactoe': typeof TictactoeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai': typeof AiRoute
+  '/chess': typeof ChessRoute
+  '/dino': typeof DinoRoute
+  '/game2048': typeof Game2048Route
   '/games': typeof GamesRoute
   '/info': typeof InfoRoute
   '/login': typeof LoginRoute
   '/music': typeof MusicRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/tictactoe': typeof TictactoeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/ai': typeof AiRoute
+  '/chess': typeof ChessRoute
+  '/dino': typeof DinoRoute
+  '/game2048': typeof Game2048Route
   '/games': typeof GamesRoute
   '/info': typeof InfoRoute
   '/login': typeof LoginRoute
   '/music': typeof MusicRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/tictactoe': typeof TictactoeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/ai'
+    | '/chess'
+    | '/dino'
+    | '/game2048'
     | '/games'
     | '/info'
     | '/login'
     | '/music'
     | '/profile'
     | '/reset-password'
+    | '/tictactoe'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/ai'
+    | '/chess'
+    | '/dino'
+    | '/game2048'
     | '/games'
     | '/info'
     | '/login'
     | '/music'
     | '/profile'
     | '/reset-password'
+    | '/tictactoe'
   id:
     | '__root__'
     | '/'
     | '/ai'
+    | '/chess'
+    | '/dino'
+    | '/game2048'
     | '/games'
     | '/info'
     | '/login'
     | '/music'
     | '/profile'
     | '/reset-password'
+    | '/tictactoe'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiRoute: typeof AiRoute
+  ChessRoute: typeof ChessRoute
+  DinoRoute: typeof DinoRoute
+  Game2048Route: typeof Game2048Route
   GamesRoute: typeof GamesRoute
   InfoRoute: typeof InfoRoute
   LoginRoute: typeof LoginRoute
   MusicRoute: typeof MusicRoute
   ProfileRoute: typeof ProfileRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  TictactoeRoute: typeof TictactoeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -148,6 +200,27 @@ declare module '@tanstack/react-router' {
       path: '/ai'
       fullPath: '/ai'
       preLoaderRoute: typeof AiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chess': {
+      id: '/chess'
+      path: '/chess'
+      fullPath: '/chess'
+      preLoaderRoute: typeof ChessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dino': {
+      id: '/dino'
+      path: '/dino'
+      fullPath: '/dino'
+      preLoaderRoute: typeof DinoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/game2048': {
+      id: '/game2048'
+      path: '/game2048'
+      fullPath: '/game2048'
+      preLoaderRoute: typeof Game2048RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/games': {
@@ -192,18 +265,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tictactoe': {
+      id: '/tictactoe'
+      path: '/tictactoe'
+      fullPath: '/tictactoe'
+      preLoaderRoute: typeof TictactoeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiRoute: AiRoute,
+  ChessRoute: ChessRoute,
+  DinoRoute: DinoRoute,
+  Game2048Route: Game2048Route,
   GamesRoute: GamesRoute,
   InfoRoute: InfoRoute,
   LoginRoute: LoginRoute,
   MusicRoute: MusicRoute,
   ProfileRoute: ProfileRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  TictactoeRoute: TictactoeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
