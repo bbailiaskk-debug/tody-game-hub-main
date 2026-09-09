@@ -20,6 +20,10 @@
       {
         "name": "CHESS_GAME_DO",
         "class_name": "ChessMatchDO"
+      },
+      {
+        "name": "TTT_GAME_DO",
+        "class_name": "TicTacToeMatchDO"
       }
     ]
   },
@@ -27,6 +31,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["ChessMatchDO"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["TicTacToeMatchDO"]
     }
   ],
   "compatibility_flags": [

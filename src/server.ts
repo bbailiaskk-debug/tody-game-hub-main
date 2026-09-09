@@ -163,6 +163,38 @@ function resolveChessNamespace(request: Request, env: unknown): ChessGameNamespa
   return null;
 }
 
+type TttGameNamespace = {
+  idFromName: (name: string) => unknown;
+  idFromString?: (id: string) => unknown;
+  get: (id: unknown) => { fetch: (request: Request) => Promise<Response> };
+};
+
+type TttEnvLike = { TTT_GAME_DO?: TttGameNamespace };
+
+function resolveTttNamespace(request: Request, env: unknown): TttGameNamespace | null {
+  if (env && typeof env === "object") {
+    const direct = (env as TttEnvLike).TTT_GAME_DO;
+    if (direct) return direct;
+  }
+
+  const runtimeRequest = request as Request & { runtime?: { cloudflare?: { env?: unknown } } };
+  const runtimeEnv = runtimeRequest.runtime?.cloudflare?.env;
+  if (runtimeEnv && typeof runtimeEnv === "object") {
+    const fromRuntime = (runtimeEnv as TttEnvLike).TTT_GAME_DO;
+    if (fromRuntime) return fromRuntime;
+  }
+
+  const globals = globalThis as typeof globalThis & { __env__?: unknown; CF_ENV?: unknown };
+  for (const candidate of [globals.__env__, globals.CF_ENV]) {
+    if (candidate && typeof candidate === "object") {
+      const ns = (candidate as TttEnvLike).TTT_GAME_DO;
+      if (ns) return ns;
+    }
+  }
+
+  return null;
+}
+
 function jsonResponse(data: unknown, status: number): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -205,6 +237,40 @@ async function serveChessGameRequest(request: Request, env: unknown): Promise<Re
   }
 }
 
+async function serveTicTacToeGameRequest(request: Request, env: unknown): Promise<Response | null> {
+  const url = new URL(request.url);
+  const prefix = "/api/ws/ttt/";
+  if (!url.pathname.startsWith(prefix)) return null;
+
+  const gameId = url.pathname.slice(prefix.length).split("/")[0] ?? "";
+  if (!gameId) return jsonResponse({ error: "invalid-game" }, 400);
+
+  const namespace = resolveTttNamespace(request, env);
+  if (!namespace) return jsonResponse({ error: "ttt-not-configured" }, 503);
+
+  const id = namespace.idFromName(gameId);
+  const stub = namespace.get(id);
+
+  // For WebSocket upgrades, mint (or read) the shared chess secret on the SSR
+  // side — the same secret serverTicTacToeAuth uses — and pass it to the DO as
+  // a header so token verification and minting always agree.
+  let doRequest = request;
+  if ((request.headers.get("Upgrade") ?? "").toLowerCase() === "websocket") {
+    const secret = await getChessSecret();
+    const doHeaders = new Headers(request.headers);
+    doHeaders.set("x-chess-secret", secret);
+    doRequest = new Request(request, { headers: doHeaders });
+  }
+
+  try {
+    return await stub.fetch(doRequest);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error("TicTacToe DO fetch failed.", error);
+    return jsonResponse({ error: "do-fetch-failed", message: detail }, 502);
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     // Initialize Cloudflare environment for server functions
@@ -223,6 +289,11 @@ export default {
     const chessResponse = await serveChessGameRequest(request, env);
     if (chessResponse) {
       return chessResponse;
+    }
+
+    const tttResponse = await serveTicTacToeGameRequest(request, env);
+    if (tttResponse) {
+      return tttResponse;
     }
 
     try {

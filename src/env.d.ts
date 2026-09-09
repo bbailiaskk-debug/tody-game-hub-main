@@ -12,6 +12,7 @@ declare module "cloudflare:workers" {
       put: (key: string, value: string) => Promise<void>;
     };
     CHESS_GAME_DO?: DurableObjectNamespace;
+    TTT_GAME_DO?: DurableObjectNamespace;
   };
 
   export type AlarmInfo = {
