@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import { ChessKnight, Gamepad2, Grid3x3, Mail, Menu, Moon, Music2, Puzzle, Settings, Sun, LogIn, LogOut, X } from "lucide-react";
+import { Bot, ChessKnight, Gamepad2, Grid3x3, Mail, Menu, Moon, Music2, Puzzle, Settings, Sun, LogIn, LogOut, X } from "lucide-react";
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 
@@ -261,7 +261,7 @@ export function SiteHeader() {
 
             <div
               id="site-main-menu"
-              className={`absolute right-0 top-full z-50 mt-3 w-[calc(100vw-1rem)] max-w-[28rem] overflow-hidden rounded-[2rem] border border-border/80 bg-background shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 sm:w-[28rem] ${
+              className={`absolute right-0 top-full z-50 mt-3 w-[calc(100vw-1rem)] max-w-[28rem] max-h-[85vh] overflow-y-auto overflow-x-hidden scrollbar-thin rounded-[2rem] border border-border/80 bg-background shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 sm:w-[28rem] sm:max-h-none sm:overflow-hidden ${
                 menuOpen
                   ? "translate-y-0 opacity-100"
                   : "pointer-events-none -translate-y-2 opacity-0"
@@ -377,6 +377,30 @@ export function SiteHeader() {
                   </span>
                   <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B16] text-brand transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#4ADE80]">
                     <Puzzle className="size-4" />
+                  </span>
+                </Link>
+
+                <Link
+                  to="/ai"
+                  onClick={() => setMenuOpen(false)}
+                  aria-label="Gemini AI"
+                  className="group flex items-center justify-between gap-3 rounded-full border border-[#4285F4]/20 bg-[#161B26] px-4 py-3.5 transition-all duration-200 hover:border-[#4285F4]/50 hover:bg-[#4285F4]/10 hover:shadow-[0_0_18px_rgba(66,133,244,0.25)]"
+                >
+                  <span className="flex flex-col">
+                    <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
+                      <span className="text-[#4285F4] transition-colors group-hover:text-[#60A5FA]">
+                        GEMINI
+                      </span>{" "}
+                      <span className="text-[#4285F4] transition-colors group-hover:text-[#60A5FA]">
+                        AI
+                      </span>
+                    </span>
+                    <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
+                      {lang === "bg" ? "изкуствен интелект" : "artificial intelligence"}
+                    </span>
+                  </span>
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B26] text-[#4285F4] transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#60A5FA]">
+                    <Bot className="size-4" />
                   </span>
                 </Link>
               </nav>
