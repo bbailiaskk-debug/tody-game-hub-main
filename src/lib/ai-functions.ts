@@ -6,10 +6,17 @@ export type AiChatImage = {
   dataUrl: string;
 };
 
+export type AiChatFile = {
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+};
+
 export type AiChatMessage = {
   role: "user" | "model";
   text: string;
   images?: AiChatImage[];
+  files?: AiChatFile[];
 };
 
 type AiChatInput = {
@@ -18,7 +25,7 @@ type AiChatInput = {
 
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta";
 
-const MAX_IMAGES_PER_MESSAGE = 4;
+const MAX_ATTACHMENTS = 4;
 
 const IMAGE_GEN_MODEL_DEFAULT = "gemini-3.1-flash-image";
 
@@ -44,13 +51,23 @@ const IMAGE_PROMPT_STRIP = new RegExp(
 const SYSTEM_PROMPT = `Ти си TK-Bot — официалният AI асистент на Todor Khristov Gaming.
 Отговаряй кратко, ясно и полезно. По подразбиране отговаряй на български; ако потребителят пише на друг език, отговори на същия език.
 
+Никога не казвай, че не можеш да отваряш или четеш линкове. Когато получиш линк, разпознай към какво сочи и отговори полезно.
+
+Структура на сайта Tody Game Hub:
+- / — начална страница.
+- /games — списък с игрите на сайта.
+- /ai — AI чатът (TK-Bot); параметърът ?chat=... в URL-а сочи конкретен разговор от историята на чата.
+- /music — музикална секция на канала.
+- /info — инфо и контакт страница.
+- /login — вход в акаунт; /profile — профилът на потребителя.
+- Игри в сайта: 2048, Шах, Кръстче-Нуличка и Chrome Dinosaur.
+
 Познания за канала:
 - YouTube канал: https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ (Todor Khristov Gaming)
 - TikTok: https://www.tiktok.com/@todorkhristovgmaing
 - Spotify: https://open.spotify.com/artist/0qeXEFSge1i8K1lC8np20g
 - Discord сървър: https://discord.gg/uRNGhKf7vC
 - Нови видеа излизат всеки вторник и петък.
-- Сайтът (tody-game-hub) съдържа игри: 2048, Шах, Кръстче-Нуличка и Chrome Dinosaur, както и музикална секция и инфо страница.
 Ако не знаеш отговора, признай честно и предложи контакт с Discord общността.`;
 
 function readSecret(name: string): string {
@@ -221,6 +238,15 @@ function parseImageDataUrl(dataUrl: string): { mimeType: string; base64: string 
   };
 }
 
+function parseFileDataUrl(dataUrl: string): { mimeType: string; base64: string } | null {
+  if (typeof dataUrl !== "string") return null;
+  const groups = /^data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(
+    dataUrl.trim(),
+  );
+  if (!groups) return null;
+  return { mimeType: groups[1] as string, base64: groups[2] as string };
+}
+
 export const serverAiChat = createServerFn({ method: "POST" })
   .validator((data: AiChatInput) => data)
   .handler(async ({ data }) => {
@@ -259,11 +285,21 @@ export const serverAiChat = createServerFn({ method: "POST" })
 
       if (message.role === "user") {
         for (const image of Array.isArray(message.images) ? message.images : []) {
-          if (parts.filter((part) => part["inline_data"]).length >= MAX_IMAGES_PER_MESSAGE) {
+          if (parts.filter((part) => part["inline_data"]).length >= MAX_ATTACHMENTS) {
             break;
           }
           const parsed = parseImageDataUrl(image?.dataUrl);
           if (!parsed) continue;
+          parts.push({
+            ["inline_data"]: { ["mime_type"]: parsed.mimeType, data: parsed.base64 },
+          });
+        }
+        for (const file of Array.isArray(message.files) ? message.files : []) {
+          if (parts.filter((part) => part["inline_data"]).length >= MAX_ATTACHMENTS) {
+            break;
+          }
+          const parsed = parseFileDataUrl(file?.dataUrl);
+          if (!parsed || parsed.mimeType.startsWith("image/")) continue;
           parts.push({
             ["inline_data"]: { ["mime_type"]: parsed.mimeType, data: parsed.base64 },
           });

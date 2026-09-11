@@ -1,6 +1,22 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 
-import { Bot, ChessKnight, Gamepad2, Grid3x3, Mail, Menu, Moon, Music2, Puzzle, Settings, Sun, LogIn, LogOut, X } from "lucide-react";
+import {
+  Bot,
+  ChessKnight,
+  ChevronDown,
+  Gamepad2,
+  Grid3x3,
+  LogIn,
+  LogOut,
+  Mail,
+  Menu,
+  Moon,
+  Music2,
+  Puzzle,
+  Settings,
+  Sun,
+  X,
+} from "lucide-react";
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 
@@ -46,6 +62,13 @@ const socialLinks = [
   },
 ] as const;
 
+const menuGames = [
+  { to: "/dino", label: "CHROME DINOSAUR", icon: Gamepad2 },
+  { to: "/tictactoe", label: "TIC TAC TOE", icon: Grid3x3 },
+  { to: "/chess", label: "CHESS", icon: ChessKnight },
+  { to: "/game2048", label: "2048", icon: Puzzle },
+] as const;
+
 export function SiteHeader() {
   const { lang, theme, toggleTheme, setLang } = useSiteSettings();
 
@@ -56,6 +79,8 @@ export function SiteHeader() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const [mounted, setMounted] = useState(false);
+
+  const [gamesMenuOpen, setGamesMenuOpen] = useState(false);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -150,6 +175,15 @@ export function SiteHeader() {
     { to: "/music", label: t.nav.music },
     { to: "/info", label: t.nav.info },
   ] as const;
+
+  const location = useLocation();
+
+  const gamePathActive =
+    location.pathname === "/games" ||
+    location.pathname === "/dino" ||
+    location.pathname === "/tictactoe" ||
+    location.pathname === "/chess" ||
+    location.pathname === "/game2048";
 
   const navLink =
     "rounded-full px-6 py-2.5 font-mono text-xs tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground";
@@ -272,116 +306,90 @@ export function SiteHeader() {
               </div>
 
               <nav className="space-y-1.5 p-3">
-                {menuItems.map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    onClick={() => setMenuOpen(false)}
-                    {...(item.to === "/" ? { activeOptions: { exact: true } } : {})}
-                    className="group flex items-center justify-between rounded-[1.2rem] px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
-                    activeProps={{
-                      className:
-                        "flex items-center justify-between rounded-[1.2rem] bg-primary px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] text-primary-foreground",
-                    }}
-                  >
-                    <span>{item.label}</span>
-                    <span className="text-[1rem] text-current transition-transform group-hover:translate-x-1">
-                      ›
-                    </span>
-                  </Link>
-                ))}
-
-                <Link
-                  to="/dino"
-                  onClick={() => setMenuOpen(false)}
-                  aria-label="Chrome Dinosaur Game"
-                  className="group flex items-center justify-between gap-3 rounded-full border border-[#1DB954]/20 bg-[#161B16] px-4 py-3.5 transition-all duration-200 hover:border-[#1DB954]/50 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)]"
-                >
-                  <span className="flex flex-col">
-                    <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
-                      CHROME{" "}
-                      <span className="text-brand transition-colors group-hover:text-[#4ADE80]">
-                        DINOSAUR
-                      </span>{" "}
-                      <span className="text-brand transition-colors group-hover:text-[#4ADE80]">
-                        GAME
+                {menuItems.map((item) =>
+                  item.to === "/games" ? (
+                    <div key={item.to} className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => setGamesMenuOpen((current) => !current)}
+                        aria-expanded={gamesMenuOpen}
+                        aria-controls="games-submenu"
+                        className={`group flex w-full items-center justify-between rounded-[1.2rem] px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] transition-colors ${
+                          gamePathActive
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-surface hover:text-foreground"
+                        }`}
+                      >
+                        <span>{item.label}</span>
+                        <ChevronDown
+                          className={`size-4 transition-transform duration-200 ${
+                            gamesMenuOpen ? "rotate-180" : ""
+                          }`}
+                        />
+                      </button>
+                      {gamesMenuOpen ? (
+                        <div
+                          id="games-submenu"
+                          className="ml-1 space-y-1 border-l border-border/60 pl-3"
+                        >
+                          <Link
+                            to="/games"
+                            onClick={() => setMenuOpen(false)}
+                            className="group flex items-center gap-3 rounded-[1rem] px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.18em] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+                          >
+                            <Gamepad2 className="size-4 text-brand" />
+                            <span>{item.label}</span>
+                            <span className="ml-auto text-current transition-transform group-hover:translate-x-1">
+                              ›
+                            </span>
+                          </Link>
+                          {menuGames.map((game) => {
+                            const Icon = game.icon;
+                            return (
+                              <Link
+                                key={game.to}
+                                to={game.to}
+                                onClick={() => setMenuOpen(false)}
+                                className="group flex items-center gap-3 rounded-[1rem] px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.18em] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+                                activeProps={{
+                                  className:
+                                    "group flex items-center gap-3 rounded-[1rem] bg-surface px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.18em] text-foreground",
+                                }}
+                              >
+                                <Icon className="size-4 text-brand" />
+                                <span className="truncate">{game.label}</span>
+                                <span className="ml-auto text-current transition-transform group-hover:translate-x-1">
+                                  ›
+                                </span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setMenuOpen(false)}
+                      {...(item.to === "/" ? { activeOptions: { exact: true } } : {})}
+                      className="group flex items-center justify-between rounded-[1.2rem] px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+                      activeProps={{
+                        className:
+                          "flex items-center justify-between rounded-[1.2rem] bg-primary px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] text-primary-foreground",
+                      }}
+                    >
+                      <span>{item.label}</span>
+                      <span className="text-[1rem] text-current transition-transform group-hover:translate-x-1">
+                        ›
                       </span>
-                    </span>
-                    <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
-                      take a break
-                    </span>
-                  </span>
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B16] text-brand transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#4ADE80]">
-                    <Gamepad2 className="size-4" />
-                  </span>
-                </Link>
-
-                <Link
-                  to="/tictactoe"
-                  onClick={() => setMenuOpen(false)}
-                  aria-label="Tic Tac Toe"
-                  className="group flex items-center justify-between gap-3 rounded-full border border-[#1DB954]/20 bg-[#161B16] px-4 py-3.5 transition-all duration-200 hover:border-[#1DB954]/50 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)]"
-                >
-                  <span className="flex flex-col">
-                    <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
-                      TIC TAC{" "}
-                      <span className="text-brand transition-colors group-hover:text-[#4ADE80]">
-                        TOE
-                      </span>
-                    </span>
-                    <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
-                      {lang === "bg" ? "морски шах" : "classic game"}
-                    </span>
-                  </span>
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B16] text-brand transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#4ADE80]">
-                    <Grid3x3 className="size-4" />
-                  </span>
-                </Link>
-
-                <Link
-                  to="/chess"
-                  onClick={() => setMenuOpen(false)}
-                  aria-label="Chess"
-                  className="group flex items-center justify-between gap-3 rounded-full border border-[#1DB954]/20 bg-[#161B16] px-4 py-3.5 transition-all duration-200 hover:border-[#1DB954]/50 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)]"
-                >
-                  <span className="flex flex-col">
-                    <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
-                      <span className="text-brand transition-colors group-hover:text-[#4ADE80]">
-                        CHESS
-                      </span>
-                    </span>
-                    <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
-                      {lang === "bg" ? "настолна класика" : "board classic"}
-                    </span>
-                  </span>
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B16] text-brand transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#4ADE80]">
-                    <ChessKnight className="size-4" />
-                  </span>
-                </Link>
-
-                <Link
-                  to="/game2048"
-                  onClick={() => setMenuOpen(false)}
-                  aria-label="2048"
-                  className="group flex items-center justify-between gap-3 rounded-full border border-[#1DB954]/20 bg-[#161B16] px-4 py-3.5 transition-all duration-200 hover:border-[#1DB954]/50 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)]"
-                >
-                  <span className="flex flex-col">
-                    <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
-                      <span className="text-brand transition-colors group-hover:text-[#4ADE80]">
-                        2048
-                      </span>
-                    </span>
-                    <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
-                      {lang === "bg" ? "пъззл игра" : "puzzle game"}
-                    </span>
-                  </span>
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B16] text-brand transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#4ADE80]">
-                    <Puzzle className="size-4" />
-                  </span>
-                </Link>
+                    </Link>
+                  ),
+                )}
 
                 <Link
                   to="/ai"
+                  search={{ chat: "" }}
                   onClick={() => setMenuOpen(false)}
                   aria-label="Gemini AI"
                   className="group flex items-center justify-between gap-3 rounded-full border border-[#4285F4]/20 bg-[#161B26] px-4 py-3.5 transition-all duration-200 hover:border-[#4285F4]/50 hover:bg-[#4285F4]/10 hover:shadow-[0_0_18px_rgba(66,133,244,0.25)]"
