@@ -1,6 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowUp,
+  Check,
+  Copy,
   FileText,
   History,
   Home,
@@ -9,6 +11,8 @@ import {
   LogIn,
   Menu,
   MessageSquareText,
+  Mic,
+  Music,
   Palette,
   Plus,
   Send,
@@ -20,9 +24,24 @@ import {
   Volume2,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ClipboardEvent as ReactClipboardEvent,
+  type FormEvent,
+} from "react";
 
 import { serverAiChat, type AiChatMessage } from "../lib/ai-functions";
+import {
+  serverGetAiChats,
+  serverSaveAiChats,
+  type ChatFile,
+  type ChatImage,
+  type ChatMessage,
+  type StoredChat,
+} from "../lib/ai-chat-store";
 import { useSiteSettings } from "../components/site/theme";
 import {
   parseStoredJson,
@@ -45,38 +64,35 @@ export const Route = createFileRoute("/ai")({
   component: AiPage,
 });
 
-type ChatImage = {
+type PendingImageItem = {
+  kind: "image";
+  id: string;
   mimeType: string;
   dataUrl: string;
 };
 
-type ChatFile = {
+type PendingFileItem = {
+  kind: "video" | "audio" | "file";
+  id: string;
   name: string;
   mimeType: string;
   dataUrl: string;
-  size?: number;
+  size: number;
 };
 
-type ChatMessage = {
-  id: string;
-  role: "user" | "model";
-  text: string;
-  images?: ChatImage[];
-  files?: ChatFile[];
-};
+type PendingItem = PendingImageItem | PendingFileItem;
 
-type StoredChat = {
-  id: string;
-  title: string;
-  updatedAt: number;
-  userEmail: string;
-  messages: ChatMessage[];
-};
+let itemSequence = 1;
+function nextItemId(): string {
+  itemSequence += 1;
+  return `p${itemSequence}`;
+}
 
 const CHATS_STORAGE_KEY = "tody_ai_chats_v1";
+const CHATS_DB_NAME = "tody_ai_chats";
+const CHATS_DB_STORE = "chats";
 
-function readStoredChats(): StoredChat[] {
-  const parsed = parseStoredJson<unknown>(storageGet(CHATS_STORAGE_KEY), []);
+function sanitizeStoredChats(parsed: unknown): StoredChat[] {
   if (!Array.isArray(parsed)) return [];
 
   return parsed
@@ -98,20 +114,131 @@ function readStoredChats(): StoredChat[] {
           !!message &&
           (message.role === "user" || message.role === "model") &&
           typeof message.text === "string" &&
-          Boolean((message.id && message.text) || message.text),
+          (message.text.trim() !== "" ||
+            (Array.isArray(message.images) && message.images.length > 0) ||
+            (Array.isArray(message.files) && message.files.length > 0)),
       ),
     }));
 }
 
-function writeStoredChats(chats: StoredChat[]) {
-  storageSet(CHATS_STORAGE_KEY, JSON.stringify(chats));
+function openChatsDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    try {
+      const request = indexedDB.open(CHATS_DB_NAME, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(CHATS_DB_STORE)) {
+          db.createObjectStore(CHATS_DB_STORE);
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error ?? new Error("indexeddb"));
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
-const MAX_ATTACHED_IMAGES = 4;
+async function idbGetChats(): Promise<StoredChat[] | null> {
+  try {
+    const db = await openChatsDatabase();
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction(CHATS_DB_STORE, "readonly");
+      const request = transaction.objectStore(CHATS_DB_STORE).get("all");
+      request.onsuccess = () => {
+        const value = request.result;
+        resolve(Array.isArray(value) ? (value as StoredChat[]) : null);
+      };
+      request.onerror = () => reject(request.error ?? new Error("indexeddb"));
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function idbSetChats(chats: StoredChat[]): Promise<boolean> {
+  try {
+    const db = await openChatsDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(CHATS_DB_STORE, "readwrite");
+      transaction.objectStore(CHATS_DB_STORE).put(chats, "all");
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("indexeddb"));
+      transaction.onabort = () => reject(transaction.error ?? new Error("indexeddb"));
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readStoredChats(): Promise<StoredChat[]> {
+  if (typeof window === "undefined") return [];
+
+  const stored = await idbGetChats();
+  if (stored) return sanitizeStoredChats(stored);
+
+  const legacy = parseStoredJson<unknown>(storageGet(CHATS_STORAGE_KEY), []);
+  return sanitizeStoredChats(legacy);
+}
+
+async function writeStoredChats(chats: StoredChat[]) {
+  if (typeof window === "undefined") return;
+
+  const stripData = (chatsToSave: StoredChat[], keepNewest: boolean) =>
+    chatsToSave.map((chat, index) => {
+      if (keepNewest && index <= 0) return chat;
+      return {
+        ...chat,
+        messages: chat.messages.map((message) => ({
+          ...message,
+          ...(message.images
+            ? { images: message.images.map((image) => ({ ...image, dataUrl: "" })) }
+            : {}),
+          ...(message.files
+            ? { files: message.files.map((file) => ({ ...file, dataUrl: "" })) }
+            : {}),
+        })),
+      };
+    });
+
+  for (const variant of [chats, stripData(chats, true), stripData(chats, false)]) {
+    if (await idbSetChats(variant)) return;
+  }
+
+  const tryLocalStorage = (chatsToSave: StoredChat[]) => {
+    try {
+      window.localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(chatsToSave));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (tryLocalStorage(chats)) return;
+  if (tryLocalStorage(stripData(chats, true))) return;
+  tryLocalStorage(stripData(chats, false));
+}
+
+const MAX_ATTACHMENTS = 10;
 const MAX_IMAGE_DIMENSION = 1280;
 const MAX_IMAGE_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_FILE_FILE_BYTES = 4 * 1024 * 1024;
+const MAX_DOC_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_MEDIA_FILE_BYTES = 100 * 1024 * 1024;
+const IMAGE_THUMB_MAX = 400;
+const IMAGE_THUMB_QUALITY = 0.72;
+
+const IMAGE_GALLERY_COLUMNS: Record<number, string> = {
+  2: "grid-cols-2",
+  3: "grid-cols-3",
+  4: "grid-cols-4",
+  5: "grid-cols-5",
+  6: "grid-cols-6",
+  7: "grid-cols-7",
+  8: "grid-cols-8",
+  9: "grid-cols-9",
+  10: "grid-cols-10",
+};
 
 function fileToChatImage(file: File): Promise<ChatImage> {
   return new Promise((resolve, reject) => {
@@ -163,6 +290,54 @@ function fileToChatImage(file: File): Promise<ChatImage> {
   });
 }
 
+function readFileAsDataUrl(file: File, type?: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (file.size > MAX_IMAGE_FILE_BYTES) {
+      reject(new Error("too-big"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl || !dataUrl.startsWith("data:")) {
+        reject(new Error("read"));
+        return;
+      }
+      resolve(dataUrl);
+    };
+    reader.onerror = () => reject(new Error("read"));
+    reader.readAsDataURL(type && type !== file.type ? new File([file], file.name, { type }) : file);
+  });
+}
+
+function imageMimeForName(name: string): string {
+  const match = /\.(png|jpe?g|jfif|webp|gif|avif|bmp)$/i.exec(name || "");
+  const extension = (match?.[1] ?? "").toLowerCase().replace("jfif", "jpeg");
+  switch (extension) {
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "webp":
+      return "image/webp";
+    case "gif":
+      return "image/gif";
+    case "avif":
+      return "image/avif";
+    case "bmp":
+      return "image/bmp";
+    default:
+      return "";
+  }
+}
+
+function isLikelyImage(file: File): boolean {
+  const mimeType = (file.type || "").toLowerCase();
+  if (mimeType.startsWith("image/")) return true;
+  return /\.(png|jpe?g|jfif|webp|gif|avif|bmp)$/i.test(file.name || "");
+}
+
 function fileToChatFile(file: File): Promise<ChatFile> {
   return new Promise((resolve, reject) => {
     if (file.size > MAX_FILE_FILE_BYTES) {
@@ -187,6 +362,157 @@ function fileToChatFile(file: File): Promise<ChatFile> {
     reader.onerror = () => reject(new Error("read"));
     reader.readAsDataURL(file);
   });
+}
+
+function makeImageThumb(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      if (!dataUrl || !dataUrl.startsWith("data:")) {
+        resolve(dataUrl);
+        return;
+      }
+      const image = new Image();
+      image.onload = () => {
+        try {
+          const scale = Math.min(
+            1,
+            IMAGE_THUMB_MAX / Math.max(image.naturalWidth, image.naturalHeight),
+          );
+          const width = Math.max(1, Math.round(image.naturalWidth * scale));
+          const height = Math.max(1, Math.round(image.naturalHeight * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          if (!context) {
+            resolve(dataUrl);
+            return;
+          }
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, width, height);
+          context.drawImage(image, 0, 0, width, height);
+          const thumb = canvas.toDataURL("image/jpeg", IMAGE_THUMB_QUALITY);
+          resolve(thumb.startsWith("data:image/jpeg") ? thumb : dataUrl);
+        } catch {
+          resolve(dataUrl);
+        }
+      };
+      image.onerror = () => resolve(dataUrl);
+      image.src = dataUrl;
+    } catch {
+      resolve(dataUrl);
+    }
+  });
+}
+
+type MessageSegment =
+  { kind: "text"; content: string } | { kind: "code"; content: string; language: string };
+
+function parseMessageSegments(raw: string): MessageSegment[] {
+  const segments: MessageSegment[] = [];
+  const fencePattern = /```([^\n`]*)\n?([\s\S]*?)(?:```|$)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = fencePattern.exec(raw)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ kind: "text", content: raw.slice(lastIndex, match.index) });
+    }
+    segments.push({
+      kind: "code",
+      language: (match[1] || "").trim(),
+      content: (match[2] ?? "").replace(/\n+$/, ""),
+    });
+    lastIndex = match.index + (match[0] ?? "").length;
+  }
+
+  if (lastIndex < raw.length) {
+    segments.push({ kind: "text", content: raw.slice(lastIndex) });
+  }
+
+  return segments;
+}
+
+function CodeBlock({ code, language, isBg }: { code: string; language: string; isBg: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      // Clipboard access can be unavailable; keep the button inert.
+    }
+  };
+
+  return (
+    <div className="my-2 overflow-hidden rounded-xl border border-[var(--tk-border)] bg-[var(--tk-bg)]">
+      <div className="flex items-center justify-between gap-2 border-b border-[var(--tk-border)] bg-[var(--tk-panel)] px-3 py-1.5">
+        <span className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-[var(--tk-muted)]">
+          {language || "code"}
+        </span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label={isBg ? "Копирай кода" : "Copy code"}
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-[0.65rem] font-medium text-[var(--tk-accent-text)] transition-colors hover:bg-[var(--tk-border)]"
+        >
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          <span>{copied ? (isBg ? "Копирано" : "Copied") : isBg ? "Копирай" : "Copy"}</span>
+        </button>
+      </div>
+      <pre className="whitespace-pre-wrap break-words p-3 text-[0.8rem] leading-relaxed">
+        <code className="font-mono [overflow-wrap:anywhere]">{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+function renderInlineCode(text: string, keyPrefix: string) {
+  return text.split(/(`[^`\n]+`)/g).map((part, index) => {
+    const key = `${keyPrefix}-${index}`;
+    if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code
+          key={key}
+          className="rounded bg-[var(--tk-border)] px-1 py-0.5 font-mono text-[0.85em] text-[var(--tk-text)]"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return (
+      <span key={key} className="whitespace-pre-wrap">
+        {part}
+      </span>
+    );
+  });
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
+function MessageContent({ text, isBg }: { text: string; isBg: boolean }) {
+  return (
+    <>
+      {parseMessageSegments(text).map((segment, index) =>
+        segment.kind === "code" ? (
+          <CodeBlock
+            key={`code-${index}`}
+            code={segment.content}
+            language={segment.language}
+            isBg={isBg}
+          />
+        ) : (
+          <span key={`text-${index}`}>{renderInlineCode(segment.content, `t-${index}`)}</span>
+        ),
+      )}
+    </>
+  );
 }
 
 function getCurrentUserEmail(): string {
@@ -545,7 +871,7 @@ function SidebarContent({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2 scrollbar-thin">
         <p className="flex items-center gap-2 px-2 py-2 font-mono text-[0.62rem] uppercase tracking-[0.18em] text-[var(--tk-muted)]">
           <History className="size-3.5" />
           {isBg ? "История" : "History"}
@@ -629,6 +955,26 @@ function SidebarContent({
   );
 }
 
+type SpeechAlternative = { transcript: string };
+type SpeechResultList = { length: number; [index: number]: ArrayLike<SpeechAlternative> };
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  onresult: ((event: { results: SpeechResultList }) => void) | null;
+  onerror: ((event: unknown) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | undefined {
+  const w = globalThis as typeof globalThis & {
+    SpeechRecognition?: new () => SpeechRecognitionLike;
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  };
+  return w.webkitSpeechRecognition ?? w.SpeechRecognition;
+}
+
 function AiPage() {
   const { lang } = useSiteSettings();
   const isBg = lang === "bg";
@@ -637,8 +983,7 @@ function AiPage() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [pendingImages, setPendingImages] = useState<ChatImage[]>([]);
-  const [pendingFiles, setPendingFiles] = useState<ChatFile[]>([]);
+  const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -652,9 +997,13 @@ function AiPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [listening, setListening] = useState(false);
 
   const endRef = useRef<HTMLDivElement>(null);
   const historyLoadedRef = useRef(false);
+  const remoteSyncRef = useRef(false);
+  const lastSyncedScopeRef = useRef<string | null>(null);
+  const syncInProgressRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileFileInputRef = useRef<HTMLInputElement>(null);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
@@ -707,23 +1056,120 @@ function AiPage() {
     if (historyLoadedRef.current) return;
     historyLoadedRef.current = true;
 
-    const stored = readStoredChats();
-    setChats(stored);
+    void (async () => {
+      let stored = await readStoredChats();
+      const scope = getCurrentUserEmail();
 
-    const scope = getCurrentUserEmail();
-    const target = stored.find((chat) => chat.id === chatParam && chat.userEmail === scope);
-    if (target) {
-      setActiveChatId(target.id);
-      setMessages(target.messages);
-    }
+      if (scope) {
+        try {
+          const remote = await serverGetAiChats({ data: { email: scope } });
+          if (remote?.success) {
+            stored = sanitizeStoredChats(remote.chats);
+            void writeStoredChats(stored);
+          }
+        } catch (error) {
+          console.warn("Failed to load AI chats from server.", error);
+        }
+      }
 
-    setHistoryLoaded(true);
+      lastSyncedScopeRef.current = scope || null;
+      remoteSyncRef.current = true;
+
+      setChats(stored);
+
+      const target = stored.find((chat) => chat.id === chatParam && chat.userEmail === scope);
+      if (target) {
+        setActiveChatId(target.id);
+        setMessages(target.messages);
+      }
+
+      setHistoryLoaded(true);
+    })();
   }, [chatParam]);
 
   useEffect(() => {
-    if (!historyLoaded) return;
-    writeStoredChats(chats);
-  }, [chats, historyLoaded]);
+    if (!historyLoaded || messages.length === 0) return;
+    let cancelled = false;
+
+    const heavyImages = messages.flatMap((message, messageIndex) =>
+      (message.images ?? [])
+        .map((image, imageIndex) => ({ messageIndex, imageIndex, image }))
+        .filter(({ image }) => (image.dataUrl || "").length > 250_000),
+    );
+    if (heavyImages.length === 0) return;
+
+    void (async () => {
+      const nextMessages: ChatMessage[] = messages.map((message) => ({ ...message }));
+      for (const { messageIndex, imageIndex, image } of heavyImages) {
+        if (cancelled) return;
+        const thumb = await makeImageThumb(image.dataUrl);
+        if (cancelled || thumb === image.dataUrl) continue;
+        const messageDraft = nextMessages[messageIndex];
+        if (!messageDraft?.images) continue;
+        nextMessages[messageIndex] = {
+          ...messageDraft,
+          images: messageDraft.images.map((item, index) =>
+            index === imageIndex ? { ...item, dataUrl: thumb } : item,
+          ),
+        };
+      }
+      if (cancelled) return;
+      setMessages(nextMessages);
+      setChats((current) =>
+        current.map((chat) =>
+          chat.id === activeChatId ? { ...chat, messages: nextMessages } : chat,
+        ),
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [historyLoaded, messages, activeChatId]);
+
+  useEffect(() => {
+    if (!historyLoaded || !remoteSyncRef.current) return;
+    const scope = (userEmail ?? "").trim().toLowerCase();
+    if (lastSyncedScopeRef.current === scope) return;
+    lastSyncedScopeRef.current = scope;
+    if (!scope) return;
+
+    syncInProgressRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const remote = await serverGetAiChats({ data: { email: scope } });
+        if (cancelled || !remote?.success) return;
+        const next = sanitizeStoredChats(remote.chats);
+        if (cancelled) return;
+        setChats(next);
+        const stillActive = next.some((chat) => chat.id === activeChatId);
+        if (!stillActive) {
+          setActiveChatId(null);
+          setMessages([]);
+        }
+        void writeStoredChats(next);
+      } catch (error) {
+        console.warn("Failed to re-sync AI chats after login.", error);
+      } finally {
+        syncInProgressRef.current = false;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userEmail, historyLoaded, activeChatId]);
+
+  useEffect(() => {
+    if (!historyLoaded || syncInProgressRef.current) return;
+    void writeStoredChats(chats);
+    const scope = (userEmail ?? "").trim().toLowerCase();
+    if (!scope || !remoteSyncRef.current) return;
+    void serverSaveAiChats({ data: { email: scope, chats } }).catch((error) => {
+      console.warn("Failed to save AI chats to server.", error);
+    });
+  }, [chats, historyLoaded, userEmail]);
 
   const scopeEmail = (userEmail ?? "").trim().toLowerCase();
 
@@ -737,80 +1183,122 @@ function AiPage() {
     });
   };
 
-  const addImageFiles = async (files: FileList | File[] | null) => {
+  const addFileItems = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
-    const roomLeft = MAX_ATTACHED_IMAGES - pendingImages.length - pendingFiles.length;
+    const roomLeft = MAX_ATTACHMENTS - pendingItems.length;
     if (roomLeft <= 0) return;
 
-    const converted: ChatImage[] = [];
+    const converted: PendingItem[] = [];
     for (const file of Array.from(files).slice(0, roomLeft)) {
+      const mimeType = (file.type || "").toLowerCase();
       try {
-        converted.push(await fileToChatImage(file));
+        if (isLikelyImage(file)) {
+          try {
+            converted.push({ kind: "image", id: nextItemId(), ...(await fileToChatImage(file)) });
+          } catch {
+            try {
+              const rawDataUrl = await readFileAsDataUrl(file, imageMimeForName(file.name));
+              converted.push({
+                kind: "image",
+                id: nextItemId(),
+                mimeType: file.type || imageMimeForName(file.name) || "image/png",
+                dataUrl: rawDataUrl,
+              });
+            } catch {
+              // Skip files that cannot be decoded into a viewable image.
+            }
+          }
+        } else if (mimeType.startsWith("video/") || mimeType.startsWith("audio/")) {
+          const kind = mimeType.startsWith("video/") ? "video" : "audio";
+          try {
+            const chatFile = await fileToChatFile(file);
+            converted.push({ kind, id: nextItemId(), ...chatFile, size: file.size });
+          } catch {
+            // Persist large media as metadata-only: still shown in the gallery
+            // and described to the AI, but not stored as base64.
+            if (file.size <= MAX_MEDIA_FILE_BYTES) {
+              converted.push({
+                kind,
+                id: nextItemId(),
+                name: file.name,
+                mimeType: file.type || "application/octet-stream",
+                dataUrl: "",
+                size: file.size,
+              });
+            }
+          }
+        } else {
+          try {
+            const chatFile = await fileToChatFile(file);
+            converted.push({ kind: "file", id: nextItemId(), ...chatFile, size: file.size });
+          } catch {
+            // Large documents stay attachable as metadata-only (named chip,
+            // described to the AI server-side, not stored as base64).
+            if (file.size <= MAX_DOC_FILE_BYTES) {
+              converted.push({
+                kind: "file",
+                id: nextItemId(),
+                name: file.name,
+                mimeType: file.type || "application/octet-stream",
+                dataUrl: "",
+                size: file.size,
+              });
+            }
+          }
+        }
       } catch {
-        // Skip files that are not valid images or too large.
+        // Skip files that are not valid images or too large to read.
       }
     }
 
     if (converted.length > 0) {
-      setPendingImages((current) => [...current, ...converted].slice(-MAX_ATTACHED_IMAGES));
+      setPendingItems((current) => [...current, ...converted].slice(-MAX_ATTACHMENTS));
     }
   };
 
-  const removePendingImage = (index: number) => {
-    setPendingImages((current) => current.filter((_, imageIndex) => imageIndex !== index));
+  const removePendingItem = (id: string) => {
+    setPendingItems((current) => current.filter((item) => item.id !== id));
   };
 
-  const addFiles = async (files: FileList | File[] | null) => {
-    if (!files || files.length === 0) return;
-    const roomLeft = MAX_ATTACHED_IMAGES - pendingImages.length - pendingFiles.length;
-    if (roomLeft <= 0) return;
+  const handlePaste = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedFiles = Array.from(event.clipboardData?.items ?? [])
+      .filter((item) => item.kind === "file")
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (pastedFiles.length === 0) return;
 
-    const convertedFiles: ChatFile[] = [];
-    const convertedImages: ChatImage[] = [];
-    for (const file of Array.from(files).slice(0, roomLeft)) {
-      try {
-        if (file.type.startsWith("image/")) {
-          convertedImages.push(await fileToChatImage(file));
-        } else if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
-          if (file.size > MAX_MEDIA_FILE_BYTES) continue;
-          convertedFiles.push({
-            name: file.name,
-            mimeType: file.type || "application/octet-stream",
-            dataUrl: "",
-            size: file.size,
-          });
-        } else {
-          convertedFiles.push(await fileToChatFile(file));
-        }
-      } catch {
-        // Skip files that are too large or unreadable.
-      }
+    event.preventDefault();
+    const pastedText = event.clipboardData.getData("text/plain");
+    if (pastedText.trim()) {
+      setPrompt((current) => (current ? `${current} ${pastedText}` : pastedText));
     }
-
-    if (convertedImages.length > 0) {
-      setPendingImages((current) => [...current, ...convertedImages].slice(-MAX_ATTACHED_IMAGES));
-    }
-    if (convertedFiles.length > 0) {
-      setPendingFiles((current) => [...current, ...convertedFiles].slice(-MAX_ATTACHED_IMAGES));
-    }
-  };
-
-  const removePendingFile = (index: number) => {
-    setPendingFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+    void addFileItems(pastedFiles);
   };
 
   const sendMessage = async (rawText: string) => {
     const text = rawText.trim();
-    const images = pendingImages;
-    const files = pendingFiles;
-    if ((!text && images.length === 0 && files.length === 0) || loading) return;
+    const fullImages: ChatImage[] = pendingItems
+      .filter((item): item is PendingImageItem => item.kind === "image")
+      .map(({ mimeType, dataUrl }) => ({ mimeType, dataUrl }));
+    const fullFiles: ChatFile[] = pendingItems
+      .filter((item): item is PendingFileItem => item.kind !== "image")
+      .map(({ name, mimeType, dataUrl, size }) => ({ name, mimeType, dataUrl, size }));
+    if ((!text && fullImages.length === 0 && fullFiles.length === 0) || loading) return;
+
+    const storedImages: ChatImage[] = [];
+    for (const image of fullImages) {
+      storedImages.push({
+        mimeType: image.mimeType,
+        dataUrl: await makeImageThumb(image.dataUrl),
+      });
+    }
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
       text,
-      ...(images.length > 0 ? { images } : {}),
-      ...(files.length > 0 ? { files } : {}),
+      ...(storedImages.length > 0 ? { images: storedImages } : {}),
+      ...(fullFiles.length > 0 ? { files: fullFiles } : {}),
     };
     const history: AiChatMessage[] = [
       ...messages.map((message) => ({
@@ -822,8 +1310,8 @@ function AiPage() {
       {
         role: "user",
         text,
-        ...(images.length > 0 ? { images } : {}),
-        ...(files.length > 0 ? { files } : {}),
+        ...(fullImages.length > 0 ? { images: fullImages } : {}),
+        ...(fullFiles.length > 0 ? { files: fullFiles } : {}),
       },
     ];
 
@@ -832,8 +1320,7 @@ function AiPage() {
 
     setMessages((current) => [...current, userMessage]);
     setPrompt("");
-    setPendingImages([]);
-    setPendingFiles([]);
+    setPendingItems([]);
     setAttachMenuOpen(false);
     setLoading(true);
     setError(null);
@@ -844,11 +1331,14 @@ function AiPage() {
 
       if (result.success && result.data) {
         const replyImage = "image" in result.data ? result.data.image : undefined;
+        const storedReplyImage = replyImage
+          ? { mimeType: replyImage.mimeType, dataUrl: await makeImageThumb(replyImage.dataUrl) }
+          : undefined;
         replyMessage = {
           id: `model-${Date.now()}`,
           role: "model",
           text: result.data.text,
-          ...(replyImage ? { images: [replyImage] } : {}),
+          ...(storedReplyImage ? { images: [storedReplyImage] } : {}),
         };
         setMessages((current) => [...current, replyMessage as ChatMessage]);
       } else {
@@ -874,7 +1364,7 @@ function AiPage() {
               ? text.length > 48
                 ? `${text.slice(0, 48)}…`
                 : text
-              : images.length > 0
+              : fullImages.length > 0
                 ? isBg
                   ? "Изображение"
                   : "Image"
@@ -904,13 +1394,46 @@ function AiPage() {
     void sendMessage(prompt);
   };
 
+  const startVoiceInput = () => {
+    const SpeechCtor = getSpeechRecognitionCtor();
+    if (!SpeechCtor || loading) {
+      setError(
+        isBg
+          ? "Гласовото въвеждане не е налично в този браузър."
+          : "Voice input is not available in this browser.",
+      );
+      return;
+    }
+    try {
+      const recognition = new SpeechCtor();
+      recognition.lang = isBg ? "bg-BG" : "en-US";
+      recognition.interimResults = false;
+      recognition.onresult = (event) => {
+        let transcript = "";
+        for (let index = 0; index < event.results.length; index += 1) {
+          const alternative = event.results[index];
+          const word = alternative?.[0]?.transcript?.trim();
+          if (word) transcript += transcript ? ` ${word}` : word;
+        }
+        if (transcript) {
+          setPrompt((current) => (current ? `${current} ${transcript}` : transcript));
+        }
+      };
+      recognition.onerror = () => setListening(false);
+      recognition.onend = () => setListening(false);
+      setListening(true);
+      recognition.start();
+    } catch {
+      setListening(false);
+    }
+  };
+
   const startNewChat = () => {
     setActiveChatId(null);
     setMessages([]);
     setError(null);
     setPrompt("");
-    setPendingImages([]);
-    setPendingFiles([]);
+    setPendingItems([]);
     setAttachMenuOpen(false);
     setSidebarOpen(false);
     navigate({ to: "/ai", search: { chat: "" }, replace: true });
@@ -921,8 +1444,7 @@ function AiPage() {
     setMessages(chat.messages);
     setError(null);
     setPrompt("");
-    setPendingImages([]);
-    setPendingFiles([]);
+    setPendingItems([]);
     setAttachMenuOpen(false);
     setSidebarOpen(false);
     navigate({ to: "/ai", search: { chat: chat.id }, replace: true });
@@ -935,8 +1457,7 @@ function AiPage() {
       setMessages([]);
       setError(null);
       setPrompt("");
-      setPendingImages([]);
-      setPendingFiles([]);
+      setPendingItems([]);
       setAttachMenuOpen(false);
       navigate({ to: "/ai", search: { chat: "" }, replace: true });
     }
@@ -967,9 +1488,294 @@ function AiPage() {
     onDeleteChat: deleteChat,
   };
 
+  const composer = (variant: "center" | "bottom") => {
+    const isCenter = variant === "center";
+    const hasAttachments = pendingItems.length > 0;
+    const submitDisabled = (!prompt.trim() && !hasAttachments) || loading;
+    const canAttach = !loading && pendingItems.length < MAX_ATTACHMENTS;
+    const pendingTotal = pendingItems.length;
+
+    const textareaPlaceholder = isCenter
+      ? isBg
+        ? "Попитай Gemini"
+        : "Ask Gemini"
+      : isBg
+        ? "Попитай нещо за канала или игрите…"
+        : "Ask about the channel or games…";
+
+    const attachControl = (
+      <div className={isCenter ? "relative shrink-0" : "relative"}>
+        <button
+          type="button"
+          aria-label={isBg ? "Прикачи изображение или файл" : "Attach image or file"}
+          aria-haspopup="menu"
+          aria-expanded={attachMenuOpen}
+          disabled={!canAttach}
+          onClick={() => setAttachMenuOpen((current) => !current)}
+          className={`grid size-9 place-items-center rounded-full text-[var(--tk-accent-text)] transition-colors hover:bg-[var(--tk-border)] disabled:opacity-40 ${
+            attachMenuOpen ? "bg-[var(--tk-border)]" : ""
+          }`}
+        >
+          <Plus
+            className={`size-5 transition-transform duration-200 ${
+              attachMenuOpen ? "rotate-45" : ""
+            }`}
+          />
+        </button>
+
+        {attachMenuOpen ? (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              aria-hidden="true"
+              onClick={() => setAttachMenuOpen(false)}
+            />
+            <div
+              role="menu"
+              className="absolute bottom-full left-0 z-50 mb-2 w-56 overflow-hidden rounded-2xl border border-[var(--tk-border)] bg-[var(--tk-sidebar)] p-1.5 shadow-[0_18px_45px_rgba(0,0,0,0.5)]"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setAttachMenuOpen(false);
+                  fileInputRef.current?.click();
+                }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
+              >
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
+                  <ImageIcon className="size-4" />
+                </span>
+                {isBg ? "Прикачи изображение" : "Attach image"}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setAttachMenuOpen(false);
+                  fileFileInputRef.current?.click();
+                }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
+              >
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
+                  <FileText className="size-4" />
+                </span>
+                {isBg ? "Прикачи файл" : "Attach file"}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setAttachMenuOpen(false);
+                  videoFileInputRef.current?.click();
+                }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
+              >
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
+                  <Video className="size-4" />
+                </span>
+                {isBg ? "Прикачи видео" : "Attach video"}
+              </button>
+
+              <div className="my-1 h-px bg-[var(--tk-border)]" aria-hidden="true" />
+              {suggestionItems(isBg).map(({ icon: Icon, label }) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    void sendMessage(label);
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
+                >
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="flex-1">{label}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </div>
+    );
+
+    const microphoneControl = (
+      <button
+        type="button"
+        aria-label={isBg ? "Микрофон" : "Microphone"}
+        title={isBg ? "Гласов въпрос" : "Voice input"}
+        onClick={startVoiceInput}
+        className={`grid size-9 shrink-0 place-items-center rounded-full transition-colors hover:bg-[var(--tk-border)] ${
+          listening ? "text-[var(--tk-accent)]" : "text-[var(--tk-accent-text)]"
+        }`}
+      >
+        <Mic className={`size-5 ${listening ? "animate-pulse" : ""}`} />
+      </button>
+    );
+
+    const sendControl = (
+      <button
+        type="submit"
+        aria-label={isBg ? "Изпрати" : "Send"}
+        disabled={submitDisabled}
+        className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--tk-accent)] text-[#fff] transition-all duration-200 hover:bg-[var(--tk-accent-hover)] hover:shadow-[0_0_16px_var(--tk-accent-50)] disabled:opacity-40 disabled:hover:shadow-none"
+      >
+        {loading ? <Send className="size-4 animate-pulse" /> : <ArrowUp className="size-4.5" />}
+      </button>
+    );
+
+    return (
+      <form
+        onSubmit={handleSubmit}
+        className={`shrink-0 border border-[var(--tk-border)] bg-[var(--tk-panel)] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.4)] transition-colors focus-within:border-[var(--tk-accent)]/50 ${
+          isCenter
+            ? `mt-8 w-full max-w-[640px] ${
+                pendingTotal > 0 ? "rounded-[1.75rem] px-3 py-3" : "rounded-full px-3 py-2.5"
+              }`
+            : "rounded-[1.75rem] px-4 py-3"
+        }`}
+      >
+        {pendingTotal > 0 ? (
+          <div className="mb-1.5 flex h-[54px] w-full flex-nowrap items-center gap-2 overflow-x-auto scrollbar-thin">
+            {pendingItems.map((item) => {
+              const extension =
+                item.kind === "image"
+                  ? ""
+                  : item.name.includes(".")
+                    ? (item.name.split(".").pop()?.toUpperCase() ?? "")
+                    : "";
+              return (
+                <div
+                  key={item.id}
+                  className="relative shrink-0"
+                  title={item.kind === "image" ? undefined : item.name}
+                >
+                  <div className="size-12 overflow-hidden rounded-xl border border-[var(--tk-border)] bg-black/25">
+                    {item.kind === "image" ? (
+                      <img src={item.dataUrl} alt="" className="size-full object-cover" />
+                    ) : (
+                      <span className="grid size-full place-items-center text-[var(--tk-accent-text)]">
+                        {item.kind === "video" ? (
+                          <Video className="size-5" />
+                        ) : item.kind === "audio" ? (
+                          <Music className="size-5" />
+                        ) : (
+                          <FileText className="size-5" />
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  {extension ? (
+                    <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 py-px font-mono text-[0.5rem] font-semibold leading-none text-white">
+                      {extension}
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    aria-label={isBg ? "Премахни" : "Remove"}
+                    onClick={() => removePendingItem(item.id)}
+                    className="absolute right-0 top-0 grid size-4 place-items-center rounded-full border border-[var(--tk-border)] bg-[var(--tk-bg)] text-[var(--tk-text)] shadow transition-colors hover:bg-[var(--tk-border)]"
+                  >
+                    <X className="size-2.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(event) => {
+            void addFileItems(event.target.files);
+            event.target.value = "";
+          }}
+        />
+
+        <input
+          ref={fileFileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(event) => {
+            void addFileItems(event.target.files);
+            event.target.value = "";
+          }}
+        />
+
+        <input
+          ref={videoFileInputRef}
+          type="file"
+          accept="video/*"
+          multiple
+          className="hidden"
+          onChange={(event) => {
+            void addFileItems(event.target.files);
+            event.target.value = "";
+          }}
+        />
+
+        {isCenter ? (
+          <div className="flex items-center gap-1.5">
+            {attachControl}
+            <textarea
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  (event.currentTarget.form as HTMLFormElement).requestSubmit();
+                }
+              }}
+              onPaste={handlePaste}
+              rows={1}
+              placeholder={textareaPlaceholder}
+              className="max-h-[160px] min-h-[24px] w-full resize-none bg-transparent px-1 py-2 text-[0.95rem] text-[var(--tk-text)] outline-none placeholder:text-[var(--tk-muted)]"
+            />
+            {microphoneControl}
+            {sendControl}
+          </div>
+        ) : (
+          <>
+            <textarea
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  (event.currentTarget.form as HTMLFormElement).requestSubmit();
+                }
+              }}
+              onPaste={handlePaste}
+              rows={1}
+              placeholder={textareaPlaceholder}
+              className="max-h-[160px] w-full resize-none bg-transparent px-1 py-1 text-[0.95rem] text-[var(--tk-text)] outline-none placeholder:text-[var(--tk-muted)]"
+            />
+            <div className="mt-2 flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                {attachControl}
+                {microphoneControl}
+                <span className="pl-1 text-[0.65rem] font-mono uppercase tracking-[0.15em] text-[var(--tk-muted)]">
+                  {"Powered by Google"}
+                </span>
+              </div>
+              {sendControl}
+            </div>
+          </>
+        )}
+      </form>
+    );
+  };
+
   return (
     <div
-      className="fixed inset-0 z-[50] flex overflow-hidden bg-[var(--tk-bg)] text-[var(--tk-text)]"
+      className="ai-chat-root fixed inset-0 z-[50] flex overflow-hidden bg-[var(--tk-bg)] text-[var(--tk-text)]"
       style={themeVars as unknown as CSSProperties}
     >
       <aside className="h-full w-[264px] shrink-0 border-r border-[var(--tk-border)] bg-[var(--tk-sidebar)] max-md:hidden">
@@ -1019,7 +1825,7 @@ function AiPage() {
         onDrop={(event) => {
           event.preventDefault();
           setDragOver(false);
-          void addFiles(event.dataTransfer.files);
+          void addFileItems(event.dataTransfer.files);
         }}
       >
         {dragOver ? (
@@ -1033,8 +1839,8 @@ function AiPage() {
               </p>
               <p className="text-sm text-[var(--tk-muted)]">
                 {isBg
-                  ? "Изображения и файлове — до 4 прикачени елемента"
-                  : "Images and files — up to 4 attachments"}
+                  ? "Изображения и файлове — до 10 прикачени елемента"
+                  : "Images and files — up to 10 attachments"}
               </p>
             </div>
           </div>
@@ -1055,61 +1861,146 @@ function AiPage() {
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
               <h1 className="max-w-[640px] text-center font-display text-[clamp(1.8rem,5vw,3rem)] font-bold leading-tight">
                 <span className="bg-gradient-to-r from-[var(--tk-accent)] via-[var(--tk-accent-2)] to-[var(--tk-accent)] bg-clip-text text-transparent">
-                  {isBg ? "С какво мога да ти помогна днес?" : "How can I help you today?"}
+                  {isBg
+                    ? "Имате ли нови идеи за разглеждане?"
+                    : "Do you have any new ideas to explore?"}
                 </span>
               </h1>
-              <p className="mt-4 max-w-[520px] text-center text-sm text-[var(--tk-muted)]">
-                {isBg
-                  ? "Въпросите се изпращат в реално време към Google Gemini от сайта."
-                  : "Questions are sent in real time to Google Gemini from this site."}
-              </p>
+              {composer("center")}
             </div>
           ) : null}
 
-          <div className={`${hasMessages ? "mt-8 min-h-0 flex-1" : ""} space-y-4 overflow-y-auto`}>
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-              >
+          <div
+            className={`${hasMessages ? "mt-8 min-h-0 flex-1" : ""} space-y-4 overflow-y-auto overflow-x-hidden scrollbar-thin`}
+          >
+            {messages.map((message) => {
+              const imageCount = message.images?.length ?? 0;
+              const fileCount = message.files?.length ?? 0;
+              const shownImageCount =
+                message.images?.filter(
+                  (image) => image.dataUrl && image.dataUrl.startsWith("data:"),
+                ).length ?? 0;
+              const shownFileCount = message.files?.length ?? 0;
+              return (
                 <div
-                  className={`max-w-[88%] whitespace-pre-wrap rounded-[1.25rem] px-4 py-3 text-[0.92rem] leading-relaxed ${
-                    message.role === "user"
-                      ? "rounded-br-md bg-[var(--tk-accent)] text-white"
-                      : "rounded-bl-md border border-[var(--tk-border)] bg-[var(--tk-panel)] text-[var(--tk-text)]"
-                  }`}
+                  key={message.id}
+                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  {message.images && message.images.length > 0 ? (
-                    <div className="mb-2 grid gap-1.5">
-                      {message.images.map((image, imageIndex) => (
-                        <img
-                          key={`${image.dataUrl.slice(0, 24)}-${imageIndex}`}
-                          src={image.dataUrl}
-                          alt=""
-                          className="max-h-48 w-auto max-w-full rounded-xl object-cover"
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                  {message.files && message.files.length > 0 ? (
-                    <div className="mb-2 flex flex-wrap gap-1.5">
-                      {message.files.map((file, fileIndex) => (
-                        <a
-                          key={`${file.dataUrl.slice(0, 24)}-${fileIndex}`}
-                          href={file.dataUrl}
-                          download={file.name}
-                          className="flex max-w-full items-center gap-2 rounded-xl border border-[var(--tk-border)] bg-[var(--tk-bg)] px-3 py-2 text-[0.75rem] text-[var(--tk-accent-text)] transition-colors hover:border-[var(--tk-accent)]/40"
-                        >
-                          <FileText className="size-3.5 shrink-0" />
-                          <span className="max-w-[180px] truncate">{file.name}</span>
-                        </a>
-                      ))}
-                    </div>
-                  ) : null}
-                  {message.text}
+                  <div
+                    className={`max-w-[88%] whitespace-pre-wrap break-words rounded-[1.25rem] px-4 py-3 text-[0.92rem] leading-relaxed ${
+                      message.role === "user"
+                        ? "rounded-br-md bg-[var(--tk-accent)] text-white"
+                        : "rounded-bl-md border border-[var(--tk-border)] bg-[var(--tk-panel)] text-[var(--tk-text)]"
+                    }`}
+                  >
+                    {message.images && message.images.length > 0 ? (
+                      <div
+                        className={
+                          imageCount === 1
+                            ? "mb-2"
+                            : `mb-2 grid ${
+                                IMAGE_GALLERY_COLUMNS[Math.min(imageCount, 10)] ?? "grid-cols-2"
+                              } gap-1.5`
+                        }
+                      >
+                        {message.images
+                          .filter((image) => image.dataUrl && image.dataUrl.startsWith("data:"))
+                          .map((image, imageIndex) => (
+                            <img
+                              key={`${image.dataUrl.slice(0, 24)}-${imageIndex}`}
+                              src={image.dataUrl}
+                              alt=""
+                              className={
+                                imageCount >= 2
+                                  ? "aspect-square w-full rounded-xl border border-[var(--tk-border)]/40 object-cover"
+                                  : "max-h-48 w-auto max-w-full rounded-xl object-cover"
+                              }
+                            />
+                          ))}
+                      </div>
+                    ) : null}
+                    {message.files && message.files.length > 0 ? (
+                      <div
+                        className={
+                          fileCount >= 2
+                            ? "mb-2 grid grid-cols-2 gap-2"
+                            : "mb-2 flex flex-wrap gap-1.5"
+                        }
+                      >
+                        {message.files.map((file, fileIndex) => {
+                          const hasContent = file.dataUrl && file.dataUrl.startsWith("data:");
+                          const mimeType = (file.mimeType || "").toLowerCase();
+                          const isVideo = mimeType.startsWith("video/");
+                          const isAudio = mimeType.startsWith("audio/");
+                          if (isVideo && hasContent) {
+                            return (
+                              <video
+                                key={`${(file.dataUrl || file.name).slice(0, 24)}-${fileIndex}`}
+                                src={file.dataUrl}
+                                controls
+                                className={
+                                  fileCount >= 2
+                                    ? "col-span-2 aspect-video w-full rounded-xl border border-[var(--tk-border)]"
+                                    : "max-h-56 w-auto max-w-full rounded-xl border border-[var(--tk-border)]"
+                                }
+                              />
+                            );
+                          }
+                          if (isAudio && hasContent) {
+                            return (
+                              <audio
+                                key={`${(file.dataUrl || file.name).slice(0, 24)}-${fileIndex}`}
+                                src={file.dataUrl}
+                                controls
+                                className={fileCount >= 2 ? "col-span-2 w-full" : "max-w-full"}
+                              />
+                            );
+                          }
+                          return (
+                            <a
+                              key={`${(file.dataUrl || file.name).slice(0, 24)}-${fileIndex}`}
+                              href={hasContent ? file.dataUrl : undefined}
+                              download={file.name}
+                              className="flex min-w-0 items-center gap-2 rounded-xl border border-[var(--tk-border)] bg-[var(--tk-bg)] p-2.5 text-[var(--tk-text)] transition-colors hover:border-[var(--tk-accent)]/40"
+                            >
+                              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--tk-panel)] text-[var(--tk-accent-text)]">
+                                <FileText className="size-4" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[0.75rem] text-[var(--tk-accent-text)]">
+                                  {file.name}
+                                </span>
+                                {file.size ? (
+                                  <span className="block text-[0.65rem] text-[var(--tk-muted)]">
+                                    {formatFileSize(file.size)}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                    {message.role === "model" ? (
+                      <MessageContent text={message.text} isBg={isBg} />
+                    ) : (
+                      message.text ||
+                      (imageCount > 0 || fileCount > 0
+                        ? shownImageCount > 0 || shownFileCount > 0
+                          ? ""
+                          : isBg
+                            ? imageCount > 0
+                              ? "Изображение"
+                              : "Файл"
+                            : imageCount > 0
+                              ? "Image"
+                              : "File"
+                        : "")
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {loading ? (
               <div className="flex justify-start">
@@ -1132,236 +2023,7 @@ function AiPage() {
             <div ref={endRef} />
           </div>
 
-          <form
-            onSubmit={handleSubmit}
-            className="shrink-0 rounded-[1.75rem] border border-[var(--tk-border)] bg-[var(--tk-panel)] px-4 py-3 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.4)] transition-colors focus-within:border-[var(--tk-accent)]/50"
-          >
-            {pendingImages.length > 0 ? (
-              <div className="mb-2 flex flex-wrap gap-2">
-                {pendingImages.map((image, imageIndex) => (
-                  <div key={`${image.dataUrl.slice(0, 24)}-${imageIndex}`} className="relative">
-                    <img
-                      src={image.dataUrl}
-                      alt=""
-                      className="h-16 w-16 rounded-lg border border-[var(--tk-border)] bg-black/20 object-cover"
-                    />
-                    <button
-                      type="button"
-                      aria-label={isBg ? "Премахни изображението" : "Remove image"}
-                      onClick={() => removePendingImage(imageIndex)}
-                      className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full border border-[var(--tk-border)] bg-[var(--tk-bg)] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            {pendingFiles.length > 0 ? (
-              <div className="mb-2 flex flex-wrap gap-2">
-                {pendingFiles.map((file, fileIndex) => (
-                  <div
-                    key={`${file.dataUrl.slice(0, 24)}-${fileIndex}`}
-                    className="flex items-center gap-2 rounded-lg border border-[var(--tk-border)] bg-black/20 px-3 py-2"
-                  >
-                    <FileText className="size-4 shrink-0 text-[var(--tk-accent-text)]" />
-                    <span className="max-w-[160px] truncate text-[0.75rem] text-[var(--tk-text)]">
-                      {file.name}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={isBg ? "Премахни файла" : "Remove file"}
-                      onClick={() => removePendingFile(fileIndex)}
-                      className="grid size-5 place-items-center rounded-full text-[var(--tk-muted)] transition-colors hover:bg-[var(--tk-border)] hover:text-[var(--tk-text)]"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                void addImageFiles(event.target.files);
-                event.target.value = "";
-              }}
-            />
-
-            <input
-              ref={fileFileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                void addFiles(event.target.files);
-                event.target.value = "";
-              }}
-            />
-
-            <input
-              ref={videoFileInputRef}
-              type="file"
-              accept="video/*"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                void addFiles(event.target.files);
-                event.target.value = "";
-              }}
-            />
-
-            <textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  (event.currentTarget.form as HTMLFormElement).requestSubmit();
-                }
-              }}
-              onPaste={(event) => {
-                const files = Array.from(event.clipboardData?.items ?? [])
-                  .filter((item) => item.kind === "file")
-                  .map((item) => item.getAsFile())
-                  .filter((file): file is File => file !== null);
-                if (files.length > 0) {
-                  event.preventDefault();
-                  void addFiles(files);
-                }
-              }}
-              rows={1}
-              placeholder={
-                isBg ? "Попитай нещо за канала или игрите…" : "Ask about the channel or games…"
-              }
-              className="max-h-[160px] w-full resize-none bg-transparent px-1 py-1 text-[0.95rem] text-[var(--tk-text)] outline-none placeholder:text-[var(--tk-muted)]"
-            />
-            <div className="mt-2 flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <div className="relative">
-                  <button
-                    type="button"
-                    aria-label={isBg ? "Прикачи изображение или файл" : "Attach image or file"}
-                    aria-haspopup="menu"
-                    aria-expanded={attachMenuOpen}
-                    disabled={
-                      loading || pendingImages.length + pendingFiles.length >= MAX_ATTACHED_IMAGES
-                    }
-                    onClick={() => setAttachMenuOpen((current) => !current)}
-                    className={`grid size-9 place-items-center rounded-full text-[var(--tk-accent-text)] transition-colors hover:bg-[var(--tk-border)] disabled:opacity-40 ${
-                      attachMenuOpen ? "bg-[var(--tk-border)]" : ""
-                    }`}
-                  >
-                    <Plus
-                      className={`size-5 transition-transform duration-200 ${
-                        attachMenuOpen ? "rotate-45" : ""
-                      }`}
-                    />
-                  </button>
-
-                  {attachMenuOpen ? (
-                    <>
-                      <div
-                        className="fixed inset-0 z-40"
-                        aria-hidden="true"
-                        onClick={() => setAttachMenuOpen(false)}
-                      />
-                      <div
-                        role="menu"
-                        className="absolute bottom-full left-0 z-50 mb-2 w-56 overflow-hidden rounded-2xl border border-[var(--tk-border)] bg-[var(--tk-sidebar)] p-1.5 shadow-[0_18px_45px_rgba(0,0,0,0.5)]"
-                      >
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setAttachMenuOpen(false);
-                            fileInputRef.current?.click();
-                          }}
-                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
-                        >
-                          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
-                            <ImageIcon className="size-4" />
-                          </span>
-                          {isBg ? "Прикачи изображение" : "Attach image"}
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setAttachMenuOpen(false);
-                            fileFileInputRef.current?.click();
-                          }}
-                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
-                        >
-                          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
-                            <FileText className="size-4" />
-                          </span>
-                          {isBg ? "Прикачи файл" : "Attach file"}
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setAttachMenuOpen(false);
-                            videoFileInputRef.current?.click();
-                          }}
-                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
-                        >
-                          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
-                            <Video className="size-4" />
-                          </span>
-                          {isBg ? "Прикачи видео" : "Attach video"}
-                        </button>
-
-                        <div className="my-1 h-px bg-[var(--tk-border)]" aria-hidden="true" />
-                        {suggestionItems(isBg).map(({ icon: Icon, label }) => (
-                          <button
-                            key={label}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setAttachMenuOpen(false);
-                              void sendMessage(label);
-                            }}
-                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
-                          >
-                            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
-                              <Icon className="size-4" />
-                            </span>
-                            <span className="flex-1">{label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-                <span className="pl-1 text-[0.65rem] font-mono uppercase tracking-[0.15em] text-[var(--tk-muted)]">
-                  {"Powered by Google"}
-                </span>
-              </div>
-              <button
-                type="submit"
-                aria-label={isBg ? "Изпрати" : "Send"}
-                disabled={
-                  (!prompt.trim() && pendingImages.length === 0 && pendingFiles.length === 0) ||
-                  loading
-                }
-                className="grid size-9 place-items-center rounded-full bg-[var(--tk-accent)] text-[#fff] transition-all duration-200 hover:bg-[var(--tk-accent-hover)] hover:shadow-[0_0_16px_var(--tk-accent-50)] disabled:opacity-40 disabled:hover:shadow-none"
-              >
-                {loading ? (
-                  <Send className="size-4 animate-pulse" />
-                ) : (
-                  <ArrowUp className="size-4.5" />
-                )}
-              </button>
-            </div>
-          </form>
+          {hasMessages ? composer("bottom") : null}
         </div>
       </main>
     </div>

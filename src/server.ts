@@ -65,6 +65,15 @@ function withHsts(response: Response): Response {
 
 function redirectToHttps(request: Request): Response | null {
   const url = new URL(request.url);
+
+  // The production Workers edge terminates TLS and this handler is the origin
+  // that must upgrade http to https. During `vite dev` (including the LAN IP and
+  // cloudflared trycloudflare tunnels) the origin is plain http — redirecting to
+  // https would loop forever against the same host.
+  if (import.meta.env.DEV) {
+    return null;
+  }
+
   const forwardedProto = request.headers.get("x-forwarded-proto");
   const isHttpRequest = forwardedProto === "http" || url.protocol === "http:";
 

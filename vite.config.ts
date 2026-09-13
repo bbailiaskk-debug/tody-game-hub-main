@@ -11,6 +11,28 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    server: {
+      host: true,
+      allowedHosts: true,
+    },
+    plugins: [
+      {
+        name: "cloudflare-workers-dev-env",
+        apply: "serve",
+        enforce: "pre",
+        resolveId(id) {
+          if (id === "cloudflare:workers") return "\0cloudflare-workers";
+          return undefined;
+        },
+        load(id) {
+          if (id !== "\0cloudflare-workers") return;
+          return [
+            "const processEnv = typeof process !== 'undefined' && process.env ? process.env : {};",
+            "export const env = processEnv;",
+          ].join("\n");
+        },
+      },
+    ],
     build: {
       rollupOptions: {
         external: ["cloudflare:workers"],

@@ -1,14 +1,21 @@
 import { useEffect, useState } from "react";
 
-const FILL_DURATION_MS = 1800;
-const FADE_DURATION_MS = 700;
+const FILL_DURATION_MS = 700;
+const FADE_DURATION_MS = 350;
+const SPLASH_DONE_KEY = "tk-splash-done";
 
 export function SplashScreen() {
   const [progress, setProgress] = useState(0);
   const [fading, setFading] = useState(false);
-  const [removed, setRemoved] = useState(false);
+  const [removed, setRemoved] = useState(true);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.sessionStorage.getItem(SPLASH_DONE_KEY)) return;
+
+    window.sessionStorage.setItem(SPLASH_DONE_KEY, "1");
+    setRemoved(false);
+
     let rafId = 0;
     const startTime = performance.now();
 
@@ -39,8 +46,8 @@ export function SplashScreen() {
   return (
     <div
       aria-hidden="true"
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#161B16] transition-opacity duration-700 ease-out ${
-        fading ? "pointer-events-none opacity-0" : "opacity-100"
+      className={`pointer-events-none fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#161B16] transition-opacity duration-300 ease-out ${
+        fading ? "opacity-0" : "opacity-100"
       }`}
     >
       <svg

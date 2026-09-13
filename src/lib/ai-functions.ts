@@ -26,7 +26,9 @@ type AiChatInput = {
 
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta";
 
-const MAX_ATTACHMENTS = 4;
+const MAX_ATTACHMENTS = 10;
+
+const MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024;
 
 const IMAGE_GEN_MODEL_DEFAULT = "gemini-3.1-flash-image";
 
@@ -51,6 +53,8 @@ const IMAGE_PROMPT_STRIP = new RegExp(
 
 const SYSTEM_PROMPT = `Ти си TK-Bot — официалният AI асистент на Todor Khristov Gaming.
 Отговаряй кратко, ясно и полезно. По подразбиране отговаряй на български; ако потребителят пише на друг език, отговори на същия език.
+
+Когато отговорът съдържа код, конфигурационни променливи (например .env ключове), команди за терминал или друг текст, който потребителят би искал да копира, ВИНАГИ го поставяй в markdown код блок, ограден с тройни обратни кавички (\`\`\`), като посочиш езика за синтаксис (например \`\`\`bash, \`\`\`ts, \`\`\`env, \`\`\`json). Никога не показвай такива стойности като обикновен текст в изречение — винаги ги слагай в отделен код блок.
 
 Никога не казвай, че не можеш да отваряш или четеш линкове. Когато получиш линк, разпознай към какво сочи и отговори полезно.
 
@@ -163,7 +167,7 @@ async function requestImageGeneration(
       body: requestBody,
     });
 
-    if (response.status === 429 && attempt < MAX_GEMINI_RETRIES) {
+    if ((response.status === 429 || response.status === 503) && attempt < MAX_GEMINI_RETRIES) {
       await waitForGeminiRetry(response, attempt);
       continue;
     }
@@ -185,6 +189,14 @@ async function requestImageGeneration(
         success: false,
         error:
           "Генерирането на изображения временно не е налично (лимит на заявките). Моля, опитай по-късно.",
+      };
+    }
+
+    if (response.status === 503) {
+      return {
+        success: false,
+        error:
+          "Моделът за изображения е претоварен в момента (503). Моля, опитай отново след малко.",
       };
     }
 
@@ -229,6 +241,12 @@ function waitForGeminiRetry(response: Response, attempt: number): Promise<void> 
     20000,
   );
   return new Promise((resolve) => setTimeout(resolve, backoffMs));
+}
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
 }
 
 function parseImageDataUrl(dataUrl: string): { mimeType: string; base64: string } | null {
@@ -288,14 +306,30 @@ export const serverAiChat = createServerFn({ method: "POST" })
         ["inline_data"]?: { ["mime_type"]: string; data: string };
       }> = [];
       const mediaNotes: string[] = [];
+      let inlineCount = 0;
+      let inlineBytes = 0;
+
+      const canInline = (base64Length: number) =>
+        inlineCount < MAX_ATTACHMENTS && inlineBytes + base64Length <= MAX_INLINE_MEDIA_BYTES;
 
       if (message.role === "user") {
         for (const image of Array.isArray(message.images) ? message.images : []) {
-          if (parts.filter((part) => part["inline_data"]).length >= MAX_ATTACHMENTS) {
-            break;
-          }
+          if (!image) continue;
           const parsed = parseImageDataUrl(image?.dataUrl);
-          if (!parsed) continue;
+          if (!parsed) {
+            mediaNotes.push(
+              "Потребителят е прикачил изображение, но съдържанието му не е налично.",
+            );
+            continue;
+          }
+          if (!canInline(parsed.base64.length)) {
+            mediaNotes.push(
+              `Прикачено изображение (${parsed.mimeType}) е пропуснато поради ограничение на общия размер.`,
+            );
+            continue;
+          }
+          inlineCount += 1;
+          inlineBytes += parsed.base64.length;
           parts.push({
             ["inline_data"]: { ["mime_type"]: parsed.mimeType, data: parsed.base64 },
           });
@@ -303,27 +337,28 @@ export const serverAiChat = createServerFn({ method: "POST" })
         for (const file of Array.isArray(message.files) ? message.files : []) {
           if (!file) continue;
           const mimeType = typeof file.mimeType === "string" ? file.mimeType.toLowerCase() : "";
+          const size = typeof file.size === "number" && file.size > 0 ? file.size : 0;
+          const sizeLabel = formatSize(size);
+
           if (mimeType.startsWith("video/") || mimeType.startsWith("audio/")) {
-            const size = typeof file.size === "number" && file.size > 0 ? file.size : 0;
-            const sizeLabel =
-              size >= 1024 * 1024
-                ? `${(size / (1024 * 1024)).toFixed(1)} MB`
-                : size >= 1024
-                  ? `${Math.round(size / 1024)} KB`
-                  : `${size} B`;
             mediaNotes.push(
               `Прикачен медиен файл: ${file.name || "файл"}, тип: ${mimeType}, размер: ${sizeLabel}.`,
             );
             continue;
           }
-          if (parts.filter((part) => part["inline_data"]).length >= MAX_ATTACHMENTS) {
-            break;
-          }
+
           const parsed = parseFileDataUrl(file?.dataUrl);
-          if (!parsed || parsed.mimeType.startsWith("image/")) continue;
-          parts.push({
-            ["inline_data"]: { ["mime_type"]: parsed.mimeType, data: parsed.base64 },
-          });
+          if (parsed && !parsed.mimeType.startsWith("image/") && canInline(parsed.base64.length)) {
+            inlineCount += 1;
+            inlineBytes += parsed.base64.length;
+            parts.push({
+              ["inline_data"]: { ["mime_type"]: parsed.mimeType, data: parsed.base64 },
+            });
+          } else {
+            mediaNotes.push(
+              `Прикачен файл: ${file.name || "файл"}, тип: ${mimeType}, размер: ${sizeLabel}.`,
+            );
+          }
         }
       }
 
@@ -365,7 +400,7 @@ export const serverAiChat = createServerFn({ method: "POST" })
           body: requestBody,
         });
 
-        if (response.status === 429 && attempt < MAX_GEMINI_RETRIES) {
+        if ((response.status === 429 || response.status === 503) && attempt < MAX_GEMINI_RETRIES) {
           await waitForGeminiRetry(response, attempt);
           continue;
         }
@@ -389,11 +424,13 @@ export const serverAiChat = createServerFn({ method: "POST" })
           error:
             response.status === 429
               ? "Gemini API достигна лимита на заявките (429). Моля, опитай отново след малко."
-              : response.status === 404 || response.status === 400
-                ? hasImages
-                  ? `Грешка при обработка на изображението (${response.status}). ${detail || `Моделът "${model}" може да не поддържа снимки.`}`
-                  : `AI моделът "${model}" не е достъпен (${response.status}). Провери GEMINI_MODEL / GEMINI_API_KEY.`
-                : `Грешка от Gemini API (${response.status}): ${detail || "неизвестна грешка"}`,
+              : response.status === 503
+                ? "AI моделът е претоварен в момента (503). Моля, опитай отново след малко."
+                : response.status === 404 || response.status === 400
+                  ? hasImages
+                    ? `Грешка при обработка на изображението (${response.status}). ${detail || `Моделът "${model}" може да не поддържа снимки.`}`
+                    : `AI моделът "${model}" не е достъпен (${response.status}). Провери GEMINI_MODEL / GEMINI_API_KEY.`
+                  : `Грешка от Gemini API (${response.status}): ${detail || "неизвестна грешка"}`,
         };
       }
 
