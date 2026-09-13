@@ -24,6 +24,7 @@ type UserRecord = {
   birthday?: string;
   gender?: string;
   accentColor?: string;
+  avatar?: string;
 };
 
 export type AuthStore = {
@@ -240,6 +241,7 @@ export const serverLogin = createServerFn({ method: "POST" })
         birthday: user.birthday ?? "",
         gender: user.gender ?? "",
         accentColor: user.accentColor ?? "#40cc3c",
+        avatar: user.avatar ?? "",
         token: generateToken(),
       },
     };
@@ -266,6 +268,7 @@ export const serverGetUserProfile = createServerFn({ method: "POST" })
         birthday: user.birthday ?? "",
         gender: user.gender ?? "",
         accentColor: user.accentColor ?? "#40cc3c",
+        avatar: user.avatar ?? "",
       },
     };
   });
@@ -279,6 +282,7 @@ export const serverSyncUserProfile = createServerFn({ method: "POST" })
       birthday?: string;
       gender?: string;
       accentColor?: string;
+      avatar?: string;
     }) => data,
   )
   .handler(async ({ data }) => {
@@ -322,6 +326,10 @@ export const serverSyncUserProfile = createServerFn({ method: "POST" })
       else delete user.gender;
     }
     if (data.accentColor) user.accentColor = data.accentColor;
+    if (data.avatar !== undefined) {
+      if (data.avatar) user.avatar = data.avatar;
+      else delete user.avatar;
+    }
 
     await persistStore(store);
 
@@ -333,6 +341,7 @@ export const serverSyncUserProfile = createServerFn({ method: "POST" })
         birthday: user.birthday ?? "",
         gender: user.gender ?? "",
         accentColor: user.accentColor ?? "#40cc3c",
+        avatar: user.avatar ?? "",
       },
     };
   });

@@ -10,6 +10,7 @@ export type AiChatFile = {
   name: string;
   mimeType: string;
   dataUrl: string;
+  size?: number;
 };
 
 export type AiChatMessage = {
@@ -52,6 +53,10 @@ const SYSTEM_PROMPT = `Ти си TK-Bot — официалният AI асист
 Отговаряй кратко, ясно и полезно. По подразбиране отговаряй на български; ако потребителят пише на друг език, отговори на същия език.
 
 Никога не казвай, че не можеш да отваряш или четеш линкове. Когато получиш линк, разпознай към какво сочи и отговори полезно.
+
+Можеш да приемаш и анализираш снимки и файлове, изпратени чрез бутона „Прикачи" или копирани и поставени (paste, Ctrl+V) директно в чата. Когато получиш изображение, го разгледай детайлно, извади нужната информация и отговори на въпросите на потребителя на базата на съдържанието му. Когато получиш файл (например текст, код или документ), го прочети внимателно и го използвай, за да помогнеш на потребителя.
+
+Можеш да приемаш, копираш и поставяш (paste) видеоклипове и мултимедийни файлове директно в чата. Когато получиш видео, го анализирай по неговите кадри или метаданта, извлечи полезна информация и отговори на базата на съдържанието му.
 
 Структура на сайта Tody Game Hub:
 - / — начална страница.
@@ -282,6 +287,7 @@ export const serverAiChat = createServerFn({ method: "POST" })
         text?: string;
         ["inline_data"]?: { ["mime_type"]: string; data: string };
       }> = [];
+      const mediaNotes: string[] = [];
 
       if (message.role === "user") {
         for (const image of Array.isArray(message.images) ? message.images : []) {
@@ -295,6 +301,21 @@ export const serverAiChat = createServerFn({ method: "POST" })
           });
         }
         for (const file of Array.isArray(message.files) ? message.files : []) {
+          if (!file) continue;
+          const mimeType = typeof file.mimeType === "string" ? file.mimeType.toLowerCase() : "";
+          if (mimeType.startsWith("video/") || mimeType.startsWith("audio/")) {
+            const size = typeof file.size === "number" && file.size > 0 ? file.size : 0;
+            const sizeLabel =
+              size >= 1024 * 1024
+                ? `${(size / (1024 * 1024)).toFixed(1)} MB`
+                : size >= 1024
+                  ? `${Math.round(size / 1024)} KB`
+                  : `${size} B`;
+            mediaNotes.push(
+              `Прикачен медиен файл: ${file.name || "файл"}, тип: ${mimeType}, размер: ${sizeLabel}.`,
+            );
+            continue;
+          }
           if (parts.filter((part) => part["inline_data"]).length >= MAX_ATTACHMENTS) {
             break;
           }
@@ -306,7 +327,9 @@ export const serverAiChat = createServerFn({ method: "POST" })
         }
       }
 
-      if (text) parts.push({ text });
+      const combinedText =
+        mediaNotes.length > 0 ? [...(text ? [text] : []), ...mediaNotes].join("\n") : text;
+      if (combinedText) parts.push({ text: combinedText });
       if (parts.length === 0) continue;
 
       sanitizedMessages.push({ role: message.role, parts });

@@ -67,8 +67,10 @@
 
 :root {
   --site-background-image: none;
-  --site-background-overlay: linear-gradient(color-mix(in oklab, var(--brand) 9%, transparent),
-      color-mix(in oklab, var(--brand) 9%, transparent));
+  --site-background-overlay: linear-gradient(
+    color-mix(in oklab, var(--brand) 9%, transparent),
+    color-mix(in oklab, var(--brand) 9%, transparent)
+  );
   --radius: 0.9rem;
   --background: oklch(0.18 0.008 150);
   --foreground: oklch(0.97 0.005 150);
@@ -134,15 +136,21 @@
 
 @utility grid-bg {
   background-image:
-    radial-gradient(circle at 70% 20%,
+    radial-gradient(
+      circle at 70% 20%,
       color-mix(in oklab, var(--brand) 12%, transparent),
-      transparent 55%),
-    linear-gradient(to right,
+      transparent 55%
+    ),
+    linear-gradient(
+      to right,
       color-mix(in oklab, var(--border) 60%, transparent) 1px,
-      transparent 1px),
-    linear-gradient(to bottom,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
       color-mix(in oklab, var(--border) 60%, transparent) 1px,
-      transparent 1px);
+      transparent 1px
+    );
   background-size:
     100% 100%,
     64px 64px,
@@ -160,7 +168,7 @@
 }
 
 .welcome-slide-0 {
-  background-image: url("/undraw_happy-music_na4p.png");
+  background-image: url("/undraw_ai-response_gaip.png");
 }
 
 .welcome-slide-1 {
@@ -172,7 +180,7 @@
 }
 
 .welcome-slide-3 {
-  background-image: url("/undraw_media-player_kxtm.png");
+  background-image: url("/undraw_retro-video-game_l9zp.png");
 }
 
 @keyframes splash-fill-shine {

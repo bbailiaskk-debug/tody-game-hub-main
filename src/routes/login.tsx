@@ -23,11 +23,12 @@ import {
   storageSet,
 } from "../lib/local-persistence";
 import { verifyGoogleToken } from "../lib/verify-google-token";
-import { sendEmailJsWithFallback } from "../lib/emailjs-send";
-
-const EMAILJS_SERVICE_ID = "service_hwzypm3";
-const EMAILJS_PASSWORD_TEMPLATE_ID = "template_3gxwtdg";
-const EMAILJS_AUTH_PUBLIC_KEY = "kuYT07vdIE5ggU-D7";
+import {
+  EMAILJS_PASSWORD_RESET_TEMPLATE_ID,
+  EMAILJS_PUBLIC_KEY,
+  EMAILJS_SERVICE_ID,
+} from "../lib/emailjs-config";
+import { describeEmailJsError, sendEmailJsWithFallback } from "../lib/emailjs-send";
 
 type GoogleCredentialResponse = { credential: string };
 type GoogleIdentity = {
@@ -50,10 +51,10 @@ type StoredUser = {
 };
 
 const welcomeSlides = [
-  "/undraw_happy-music_na4p.png",
+  "/undraw_ai-response_gaip.png",
   "/undraw_audio-player_7uwh.png",
   "/undraw_listening_fz9g.png",
-  "/undraw_media-player_kxtm.png",
+  "/undraw_retro-video-game_l9zp.png",
 ] as const;
 
 export const Route = createFileRoute("/login")({
@@ -258,8 +259,17 @@ function Login() {
         ...(safeToken ? { token: safeToken } : {}),
       });
 
+      const avatarPromise = serverGetUserProfile({ data: { email: user.email } })
+        .then((result) => {
+          if (result.success && result.data && result.data.avatar) {
+            writePersistedUserProfile({ avatar: result.data.avatar });
+          }
+          return null;
+        })
+        .catch(() => null);
+
       window.dispatchEvent(new Event("userStateChanged"));
-      void syncPromise.finally(() => window.location.replace("/"));
+      void Promise.all([syncPromise, avatarPromise]).finally(() => window.location.replace("/"));
     },
     [syncStoredUserProfile],
   );
@@ -352,15 +362,22 @@ function Login() {
       const resetUrl = `${window.location.origin}/reset-password?email=${encodeURIComponent(normalizedEmail)}&token=${encodeURIComponent(result.data.token)}`;
       await sendEmailJsWithFallback(
         EMAILJS_SERVICE_ID,
-        EMAILJS_PASSWORD_TEMPLATE_ID,
+        EMAILJS_PASSWORD_RESET_TEMPLATE_ID,
         {
           email: normalizedEmail,
           name: result.data.name,
+          to_email: normalizedEmail,
+          to_name: result.data.name,
           passcode: resetUrl,
+          code: resetUrl,
+          link: resetUrl,
+          url: resetUrl,
           resetUrl,
           reset_url: resetUrl,
+          reset_link: resetUrl,
+          resetLink: resetUrl,
         },
-        EMAILJS_AUTH_PUBLIC_KEY,
+        EMAILJS_PUBLIC_KEY,
       );
 
       setNotice(
@@ -368,13 +385,10 @@ function Login() {
       );
     } catch (caughtError) {
       console.warn("Password reset email failed.", caughtError);
-      setErrorTone("neutral");
+      setErrorTone("error");
+      const detail = describeEmailJsError(caughtError);
       setError(
-        isBg
-          ? "Имейлът не можа да бъде изпратен в момента. Опитайте отново."
-          : isZh
-            ? "邮件暂时无法发送，请稍后重试。"
-            : "The email could not be sent right now. Please try again.",
+        `${isBg ? "Имейлът не можа да бъде изпратен. Опитайте отново." : isZh ? "邮件暂时无法发送，请稍后重试。" : "The email could not be sent right now. Please try again."} (${detail})`,
       );
     } finally {
       setSubmitting(false);

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Bot, ChevronDown, MessageCircle, Send, Sparkles, X } from "lucide-react";
-import { memo, useCallback, useState, type FormEvent } from "react";
+import { memo, useCallback, useEffect, useState, type FormEvent } from "react";
+import { storageGet, storageSet } from "../../lib/local-persistence";
 
 type ChatMessage = {
   id: number;
@@ -8,6 +9,29 @@ type ChatMessage = {
   text: string;
   links?: Array<"contact" | "discord" | "socials" | "music">;
 };
+
+const CHAT_WIDGET_STORAGE_KEY = "tody_chat_widget_messages_v1";
+
+function readStoredWidgetMessages(): ChatMessage[] | null {
+  const raw = storageGet(CHAT_WIDGET_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const messages = parsed.filter(
+      (item): item is ChatMessage =>
+        !!item &&
+        typeof item === "object" &&
+        typeof (item as ChatMessage).id === "number" &&
+        ((item as ChatMessage).from === "bot" || (item as ChatMessage).from === "user") &&
+        typeof (item as ChatMessage).text === "string",
+    );
+    if (messages.length === 0) return null;
+    return messages;
+  } catch {
+    return null;
+  }
+}
 
 const discordUrl = "https://discord.gg/uRNGhKf7vC";
 const socialLinks = [
@@ -93,15 +117,18 @@ export function ChatWidget({
 }) {
   const [open, setOpen] = useState(embedded);
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 1,
-      from: "bot",
-      text: musicContext
-        ? "Здравей! Аз съм TK-Bot. Питай ме за траковете, плейлиста или музикалните линкове в Music секцията."
-        : "Здравей! Аз съм TK-Bot. Питай ме за новите видеа, Discord или видео монтаж.",
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    () =>
+      readStoredWidgetMessages() ?? [
+        {
+          id: 1,
+          from: "bot",
+          text: musicContext
+            ? "Здравей! Аз съм TK-Bot. Питай ме за траковете, плейлиста или музикалните линкове в Music секцията."
+            : "Здравей! Аз съм TK-Bot. Питай ме за новите видеа, Discord или видео монтаж.",
+        },
+      ],
+  );
 
   const sendMessage = useCallback(
     (message: string) => {
@@ -127,6 +154,10 @@ export function ChatWidget({
 
   const handleQuickAction = useCallback((message: string) => sendMessage(message), [sendMessage]);
   const handleInputChange = useCallback((value: string) => setInput(value), []);
+
+  useEffect(() => {
+    storageSet(CHAT_WIDGET_STORAGE_KEY, JSON.stringify(messages));
+  }, [messages]);
 
   const panel = (
     <section

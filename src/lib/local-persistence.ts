@@ -196,7 +196,7 @@ export function writePersistedUserProfile(profile: Partial<PersistedUserProfile>
       .toLowerCase(),
     birthday: profile.birthday ?? existing.birthday ?? "",
     gender: profile.gender ?? existing.gender ?? "",
-    avatar: profile.avatar ?? existing.avatar ?? null,
+    avatar: profile.avatar === undefined ? (existing.avatar ?? null) : (profile.avatar ?? null),
     ...((profile.accentColor ?? existing.accentColor)
       ? { accentColor: profile.accentColor ?? existing.accentColor }
       : {}),

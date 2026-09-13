@@ -16,6 +16,11 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { useSiteSettings } from "../components/site/theme";
+import {
+  EMAILJS_CONTACT_PUBLIC_KEY,
+  EMAILJS_CONTACT_SERVICE_ID,
+  EMAILJS_CONTACT_TEMPLATE_ID,
+} from "../lib/emailjs-config";
 import { sendEmailJsWithFallback } from "../lib/emailjs-send";
 
 export const Route = createFileRoute("/info")({
@@ -154,10 +159,6 @@ const contentItems = {
   ],
 } as const;
 
-const EMAILJS_SERVICE_ID = "service_k20134z";
-const EMAILJS_CONTACT_TEMPLATE_ID = "template_ls0ocsm";
-const EMAILJS_CONTACT_PUBLIC_KEY = "pPXV2aJ44QdXUxZ25";
-
 function InfoPage() {
   const { lang } = useSiteSettings();
   const isBg = lang === "bg";
@@ -184,11 +185,13 @@ function InfoPage() {
 
     try {
       await sendEmailJsWithFallback(
-        EMAILJS_SERVICE_ID,
+        EMAILJS_CONTACT_SERVICE_ID,
         EMAILJS_CONTACT_TEMPLATE_ID,
         {
           email: contactEmail.trim(),
           name: contactName.trim(),
+          to_email: contactEmail.trim(),
+          to_name: contactName.trim(),
           message: contactMessage.trim(),
           title: "Contact Us",
         },

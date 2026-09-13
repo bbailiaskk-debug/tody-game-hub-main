@@ -21,11 +21,12 @@ import {
   storageSet,
 } from "../lib/local-persistence";
 import { compressImageFile } from "../lib/image-utils";
-import { sendEmailJsWithFallback } from "../lib/emailjs-send";
-
-const EMAILJS_SERVICE_ID = "service_hwzypm3";
-const EMAILJS_DELETE_TEMPLATE_ID = "template_81eb3mc";
-const EMAILJS_AUTH_PUBLIC_KEY = "kuYT07vdIE5ggU-D7";
+import {
+  EMAILJS_CODE_TEMPLATE_ID,
+  EMAILJS_PUBLIC_KEY,
+  EMAILJS_SERVICE_ID,
+} from "../lib/emailjs-config";
+import { describeEmailJsError, sendEmailJsWithFallback } from "../lib/emailjs-send";
 
 type StoredUser = {
   name: string;
@@ -80,6 +81,7 @@ function Profile() {
       let nextBirthday = activeUser?.birthday ?? storageGet("userBirthday") ?? "";
       let nextGender = activeUser?.gender ?? storageGet("userGender") ?? "";
       let nextName = storageGet("userName") ?? activeUser?.name ?? "";
+      let nextAvatar = storageGet("userAvatar") ?? null;
 
       if (profileEmail) {
         try {
@@ -88,12 +90,14 @@ function Profile() {
             nextName = result.data.name || nextName;
             nextBirthday = result.data.birthday || nextBirthday;
             nextGender = result.data.gender || nextGender;
+            if (result.data.avatar) nextAvatar = result.data.avatar;
             writePersistedUserProfile({
               name: result.data.name,
               email: result.data.email,
               birthday: result.data.birthday,
               gender: result.data.gender,
               accentColor: result.data.accentColor,
+              ...(result.data.avatar ? { avatar: result.data.avatar } : {}),
             });
           }
         } catch (error) {
@@ -105,7 +109,7 @@ function Profile() {
       setEmail(nextEmail);
       setBirthday(nextBirthday);
       setGender(nextGender);
-      setAvatar(storageGet("userAvatar"));
+      setAvatar(nextAvatar);
     };
 
     loadProfile();
@@ -129,6 +133,13 @@ function Profile() {
 
       setAvatar(compressed);
       storageSet("userAvatar", compressed);
+      writePersistedUserProfile({ avatar: compressed });
+      const activeEmail = (email || storageGet("currentUserEmail") || "").trim().toLowerCase();
+      if (activeEmail) {
+        void serverSyncUserProfile({ data: { email: activeEmail, avatar: compressed } }).catch(
+          (syncError) => console.warn("Avatar sync failed.", syncError),
+        );
+      }
       window.dispatchEvent(new Event("userStateChanged"));
     } catch {
       setError(isBg ? "Неуспешно качване на снимка." : "Image upload failed.");
@@ -140,6 +151,13 @@ function Profile() {
   const removeAvatar = () => {
     setAvatar(null);
     storageRemove("userAvatar");
+    writePersistedUserProfile({ avatar: null });
+    const activeEmail = (email || storageGet("currentUserEmail") || "").trim().toLowerCase();
+    if (activeEmail) {
+      void serverSyncUserProfile({ data: { email: activeEmail, avatar: "" } }).catch((syncError) =>
+        console.warn("Avatar sync failed.", syncError),
+      );
+    }
     window.dispatchEvent(new Event("userStateChanged"));
   };
 
@@ -166,6 +184,7 @@ function Profile() {
       ...(birthday ? { birthday } : {}),
       ...(gender ? { gender } : {}),
       ...(accentColor ? { accentColor } : {}),
+      ...(avatar ? { avatar } : {}),
     };
 
     void serverSyncUserProfile({ data: profileData }).catch((error) => {
@@ -240,13 +259,19 @@ function Profile() {
 
       await sendEmailJsWithFallback(
         EMAILJS_SERVICE_ID,
-        EMAILJS_DELETE_TEMPLATE_ID,
+        EMAILJS_CODE_TEMPLATE_ID,
         {
           email: currentEmail,
           name,
+          to_email: currentEmail,
+          to_name: name,
           passcode: result.data.passcode,
+          code: result.data.passcode,
+          verification_code: result.data.passcode,
+          verificationCode: result.data.passcode,
+          otp: result.data.passcode,
         },
-        EMAILJS_AUTH_PUBLIC_KEY,
+        EMAILJS_PUBLIC_KEY,
       );
       setDeletionCode("");
       setDeletionCodeSent(true);
@@ -254,8 +279,9 @@ function Profile() {
       setDeletionMessage(isBg ? "Кодът е изпратен успешно!" : "The code was sent successfully.");
     } catch (error) {
       console.warn("Account deletion code request failed.", error);
+      const detail = describeEmailJsError(error);
       setDeletionMessage(
-        isBg ? "Кодът не можа да бъде изпратен." : "The confirmation code could not be sent.",
+        `${isBg ? "Кодът не можа да бъде изпратен." : "The confirmation code could not be sent."} (${detail})`,
       );
     } finally {
       setRequestingDeletionCode(false);

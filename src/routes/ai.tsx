@@ -16,6 +16,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Video,
   Volume2,
   X,
 } from "lucide-react";
@@ -53,6 +54,7 @@ type ChatFile = {
   name: string;
   mimeType: string;
   dataUrl: string;
+  size?: number;
 };
 
 type ChatMessage = {
@@ -109,6 +111,7 @@ const MAX_ATTACHED_IMAGES = 4;
 const MAX_IMAGE_DIMENSION = 1280;
 const MAX_IMAGE_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_FILE_FILE_BYTES = 4 * 1024 * 1024;
+const MAX_MEDIA_FILE_BYTES = 100 * 1024 * 1024;
 
 function fileToChatImage(file: File): Promise<ChatImage> {
   return new Promise((resolve, reject) => {
@@ -178,6 +181,7 @@ function fileToChatFile(file: File): Promise<ChatFile> {
         name: file.name,
         mimeType: file.type || "application/octet-stream",
         dataUrl,
+        size: file.size,
       });
     };
     reader.onerror = () => reject(new Error("read"));
@@ -653,6 +657,7 @@ function AiPage() {
   const historyLoadedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileFileInputRef = useRef<HTMLInputElement>(null);
+  const videoFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -766,6 +771,14 @@ function AiPage() {
       try {
         if (file.type.startsWith("image/")) {
           convertedImages.push(await fileToChatImage(file));
+        } else if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+          if (file.size > MAX_MEDIA_FILE_BYTES) continue;
+          convertedFiles.push({
+            name: file.name,
+            mimeType: file.type || "application/octet-stream",
+            dataUrl: "",
+            size: file.size,
+          });
         } else {
           convertedFiles.push(await fileToChatFile(file));
         }
@@ -1119,23 +1132,6 @@ function AiPage() {
             <div ref={endRef} />
           </div>
 
-          <div className="mb-3 shrink-0">
-            <div className="flex flex-wrap gap-2">
-              {suggestionItems(isBg).map(({ icon: Icon, label }) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => void sendMessage(label)}
-                  disabled={loading}
-                  className="inline-flex items-center gap-2 rounded-full border border-[var(--tk-border)] bg-[var(--tk-panel)] px-3.5 py-2 text-[0.8rem] leading-snug text-[var(--tk-text)] transition-all duration-200 hover:border-[var(--tk-accent)]/40 hover:bg-[var(--tk-border)] disabled:opacity-50"
-                >
-                  <Icon className="size-3.5 shrink-0 text-[var(--tk-accent-text)]" />
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <form
             onSubmit={handleSubmit}
             className="shrink-0 rounded-[1.75rem] border border-[var(--tk-border)] bg-[var(--tk-panel)] px-4 py-3 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.4)] transition-colors focus-within:border-[var(--tk-accent)]/50"
@@ -1209,6 +1205,18 @@ function AiPage() {
               }}
             />
 
+            <input
+              ref={videoFileInputRef}
+              type="file"
+              accept="video/*"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                void addFiles(event.target.files);
+                event.target.value = "";
+              }}
+            />
+
             <textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
@@ -1216,6 +1224,16 @@ function AiPage() {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
                   (event.currentTarget.form as HTMLFormElement).requestSubmit();
+                }
+              }}
+              onPaste={(event) => {
+                const files = Array.from(event.clipboardData?.items ?? [])
+                  .filter((item) => item.kind === "file")
+                  .map((item) => item.getAsFile())
+                  .filter((file): file is File => file !== null);
+                if (files.length > 0) {
+                  event.preventDefault();
+                  void addFiles(files);
                 }
               }}
               rows={1}
@@ -1286,6 +1304,39 @@ function AiPage() {
                           </span>
                           {isBg ? "Прикачи файл" : "Attach file"}
                         </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setAttachMenuOpen(false);
+                            videoFileInputRef.current?.click();
+                          }}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
+                        >
+                          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
+                            <Video className="size-4" />
+                          </span>
+                          {isBg ? "Прикачи видео" : "Attach video"}
+                        </button>
+
+                        <div className="my-1 h-px bg-[var(--tk-border)]" aria-hidden="true" />
+                        {suggestionItems(isBg).map(({ icon: Icon, label }) => (
+                          <button
+                            key={label}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setAttachMenuOpen(false);
+                              void sendMessage(label);
+                            }}
+                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
+                          >
+                            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
+                              <Icon className="size-4" />
+                            </span>
+                            <span className="flex-1">{label}</span>
+                          </button>
+                        ))}
                       </div>
                     </>
                   ) : null}
