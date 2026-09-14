@@ -9,6 +9,7 @@ export function SplashScreen() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (window.matchMedia("(max-width: 767px)").matches) return;
     if (window.sessionStorage.getItem(SPLASH_DONE_KEY)) return;
 
     window.sessionStorage.setItem(SPLASH_DONE_KEY, "1");
@@ -44,7 +45,7 @@ export function SplashScreen() {
           textAnchor="middle"
           fill="#ffffff"
           fontSize="70"
-          fontFamily="'Archivo Black', 'LIGHTZ', 'Arial Black', sans-serif"
+          fontFamily="system-ui, -apple-system, 'Segoe UI', sans-serif"
           fontWeight="700"
           letterSpacing="-3"
         >

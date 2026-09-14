@@ -15,14 +15,6 @@ import { SiteHeader } from "../components/site/SiteHeader";
 import { SiteSettingsProvider } from "../components/site/theme";
 import { SplashScreen } from "../components/site/SplashScreen";
 
-const FONT_PRELOADS = [
-  { href: "/fonts/archivoblack-latin.woff2", type: "font/woff2" },
-  { href: "/fonts/manrope-latin.woff2", type: "font/woff2" },
-  { href: "/fonts/manrope-cyrillic.woff2", type: "font/woff2" },
-  { href: "/fonts/jetbrainsmono-latin.woff2", type: "font/woff2" },
-  { href: "/fonts/jetbrainsmono-cyrillic.woff2", type: "font/woff2" },
-];
-
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -127,16 +119,6 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
         <style dangerouslySetInnerHTML={{ __html: criticalCss }} />
         <style dangerouslySetInnerHTML={{ __html: appCss }} />
-        {FONT_PRELOADS.map((font) => (
-          <link
-            key={font.href}
-            rel="preload"
-            as="font"
-            href={font.href}
-            type={font.type}
-            crossOrigin="anonymous"
-          />
-        ))}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

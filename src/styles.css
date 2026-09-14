@@ -2,51 +2,6 @@
 @source "../src";
 @import "tw-animate-css";
 
-@font-face {
-  font-family: "Archivo Black";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/archivoblack-latin.woff2") format("woff2");
-  unicode-range: U+0000-00FF, U+0100-024F, U+0400-04FF, U+1E00-1EFF;
-}
-
-@font-face {
-  font-family: "Manrope";
-  font-style: normal;
-  font-weight: 400 800;
-  font-display: swap;
-  src: url("/fonts/manrope-latin.woff2") format("woff2");
-  unicode-range: U+0000-00FF, U+0100-024F, U+0400-04FF, U+1E00-1EFF;
-}
-
-@font-face {
-  font-family: "Manrope";
-  font-style: normal;
-  font-weight: 400 800;
-  font-display: swap;
-  src: url("/fonts/manrope-cyrillic.woff2") format("woff2");
-  unicode-range: U+0400-04FF;
-}
-
-@font-face {
-  font-family: "JetBrains Mono";
-  font-style: normal;
-  font-weight: 400 800;
-  font-display: swap;
-  src: url("/fonts/jetbrainsmono-latin.woff2") format("woff2");
-  unicode-range: U+0000-00FF, U+0100-024F, U+0400-04FF, U+1E00-1EFF;
-}
-
-@font-face {
-  font-family: "JetBrains Mono";
-  font-style: normal;
-  font-weight: 400 800;
-  font-display: swap;
-  src: url("/fonts/jetbrainsmono-cyrillic.woff2") format("woff2");
-  unicode-range: U+0400-04FF;
-}
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -84,9 +39,9 @@
   --color-tiktok: var(--tiktok);
   --color-spotify: var(--spotify);
   --color-discord: var(--discord);
-  --font-display: "Archivo Black", system-ui, sans-serif;
-  --font-sans: "Manrope", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-rotwimch: "RoTwimch", system-ui, sans-serif;
   --shadow-glow: 0 18px 50px -18px color-mix(in oklab, var(--brand) 55%, transparent);
   --animate-tk-bounce: tk-bounce 1.1s ease-in-out infinite;
@@ -331,5 +286,13 @@
 
   .scrollbar-thin::-webkit-scrollbar-corner {
     background: transparent;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --font-display: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
 }
