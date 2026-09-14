@@ -90,7 +90,14 @@ export function findKing(board: Board, color: Color): Square {
   return [-1, -1];
 }
 
-function pieceAttacks(board: Board, p: Piece, fr: number, fc: number, tr: number, tc: number): boolean {
+function pieceAttacks(
+  board: Board,
+  p: Piece,
+  fr: number,
+  fc: number,
+  tr: number,
+  tc: number,
+): boolean {
   if (!p) return false;
   const dr = tr - fr;
   const dc = tc - fc;
@@ -286,7 +293,8 @@ export function castlingMoves(
   if (isInCheck(board, color)) return [];
   const enemy = opposite(color);
   const moves: Square[] = [];
-  const right = color === "w" ? { k: "wk" as const, q: "wq" as const } : { k: "bk" as const, q: "bq" as const };
+  const right =
+    color === "w" ? { k: "wk" as const, q: "wq" as const } : { k: "bk" as const, q: "bq" as const };
 
   if (castling[right.k] && !board[rank]![5] && !board[rank]![6]) {
     if (!attacksSquare(board, enemy, rank, 5) && !attacksSquare(board, enemy, rank, 6)) {
@@ -305,7 +313,8 @@ export function legalMovesForSquare(state: GameState, fr: number, fc: number): S
   const p = state.board[fr]![fc]!;
   if (!p) return [];
   const pseudo = pseudoMoves(state.board, fr, fc, state.enPassant);
-  const castling = p.type === "k" ? castlingMoves(state.board, p.color, state.castling, state.enPassant) : [];
+  const castling =
+    p.type === "k" ? castlingMoves(state.board, p.color, state.castling, state.enPassant) : [];
   const candidates = [...pseudo, ...castling];
   return candidates.filter(([tr, tc]) => {
     const result = applyMoveCore(state.board, [fr, fc], [tr, tc], state.enPassant, state.castling);
@@ -344,7 +353,12 @@ export function gameStatus(state: GameState, color: Color = state.turn): GameSta
   return inCheck ? "check" : "playing";
 }
 
-export function makeMoveSimple(state: GameState, from: Square, to: Square, promotion: PieceType = "q"): GameState {
+export function makeMoveSimple(
+  state: GameState,
+  from: Square,
+  to: Square,
+  promotion: PieceType = "q",
+): GameState {
   const p = state.board[from[0]]![from[1]]!;
   const result = applyMoveCore(state.board, from, to, state.enPassant, state.castling);
   if (p && p.type === "p" && (to[0] === 0 || to[0] === 7)) {

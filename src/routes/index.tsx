@@ -17,14 +17,23 @@ export const Route = createFileRoute("/")({
         content: "Игри, моменти и енергия директно от командния център на Todor Khristov Gaming.",
       },
       { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/" },
+      { property: "og:type", content: "website" },
       {
         property: "og:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/profile-photo.jpg",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
       },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:type", content: "image/jpeg" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Яки игри и забавление — Todor Khristov Gaming" },
+      {
+        name: "twitter:description",
+        content: "Игри, моменти и енергия директно от командния център на Todor Khristov Gaming.",
+      },
       {
         name: "twitter:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/profile-photo.jpg",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
       },
     ],
     links: [
@@ -153,7 +162,7 @@ function Index() {
               href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ"
               target="_blank"
               rel="noreferrer noopener"
-              className="inline-flex items-center gap-2 rounded-full bg-youtube px-6 py-4 font-mono text-xs tracking-[0.15em] text-primary-foreground transition-transform hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 rounded-full bg-youtube px-6 py-4 font-mono text-xs tracking-[0.15em] text-[#ffffff] transition-transform hover:-translate-y-0.5"
             >
               {isBg ? "YOUTUBE КАНАЛ" : isZh ? "YouTube 频道" : "YOUTUBE CHANNEL"}
               <ArrowUpRight className="size-4" />

@@ -28,11 +28,12 @@ ssh "DEPLOY_USER@REMOTE_SERVER" "docker cp /tmp/tody-unit-config.json unit:/tmp/
 
 Replace `unit` with the actual container name from `docker ps --format '{{.Names}}'`.
 
-The config proxies:
+The config proxies all requests to `https://tody-game-hub.bbailiaskk.workers.dev` with:
 
-- `/assets/*` and static file extensions to `https://tody-game-hub.bbailiaskk.workers.dev`
-- all other requests to the same Worker origin
-- static files with a one-week immutable browser cache policy
+- **Hashed bundles** (`.css`, `.js`, `.mjs`) — `Cache-Control: max-age=31536000, immutable` (1 year, safe because Vite content-hashes filenames)
+- **Images & fonts** — `Cache-Control: max-age=604800, immutable` (1 week)
+- **Source maps** (`.map`) — `Cache-Control: max-age=0, must-revalidate` (never cached)
+- **HTML & other routes** — security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`), no explicit cache (browser default)
 
 ## HTTPS
 
@@ -52,6 +53,22 @@ The supplied config listens on HTTP so it can be tested without certificate valu
 ```
 
 The certificate must first exist in Unit's certificate store. Do not expose the Unit control socket publicly.
+
+## Performance tips
+
+- **Enable gzip/brotli on Cloudflare** — since the Worker origin is on Cloudflare, enable "Auto Minify" and Brotli compression in the Cloudflare dashboard (Speed > Optimization > Content Optimization). NGINX Unit itself does not compress proxied responses.
+- **Cloudflare Cache Level** — set to "Standard" or "Aggressive" in the dashboard (Caching > Configuration) so Cloudflare caches HTML at the edge too.
+- **Unit HTTP/2** — if using Unit 1.31+, enable HTTP/2 on the listener for multiplexed connections:
+
+```json
+"listeners": {
+  "*:443": {
+    "pass": "routes/site",
+    "tls": { "certificate": "files.aquamiral.org" },
+    "http2": true
+  }
+}
+```
 
 ## Important limitation
 

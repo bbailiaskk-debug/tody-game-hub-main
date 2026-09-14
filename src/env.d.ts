@@ -71,8 +71,16 @@ declare module "cloudflare:workers" {
     protected readonly env: E;
     fetch?(request: Request): Response | Promise<Response>;
     alarm?(alarmInfo: AlarmInfo): void | Promise<void>;
-    webSocketMessage?(ws: WebSocket, message: string | ArrayBuffer | ArrayBufferView): void | Promise<void>;
-    webSocketClose?(ws: WebSocket, code: number, reason: string, wasClean: boolean): void | Promise<void>;
+    webSocketMessage?(
+      ws: WebSocket,
+      message: string | ArrayBuffer | ArrayBufferView,
+    ): void | Promise<void>;
+    webSocketClose?(
+      ws: WebSocket,
+      code: number,
+      reason: string,
+      wasClean: boolean,
+    ): void | Promise<void>;
     webSocketError?(ws: WebSocket, error: unknown): void | Promise<void>;
   }
 }

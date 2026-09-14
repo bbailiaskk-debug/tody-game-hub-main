@@ -74,14 +74,18 @@ export const Route = createFileRoute("/login")({
           "Влез в своя акаунт в Todor Khristov Gaming. Достъп до игри, музика и ексклузивно съдържание.",
       },
       { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/login" },
+      { property: "og:type", content: "website" },
       {
         property: "og:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/profile-photo.jpg",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
       },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:type", content: "image/jpeg" },
       { name: "twitter:card", content: "summary_large_image" },
       {
         name: "twitter:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/profile-photo.jpg",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
       },
     ],
     links: [
@@ -543,11 +547,11 @@ function Login() {
       <section className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-border bg-card/80 shadow-2xl backdrop-blur-md lg:grid-cols-[0.95fr_1.05fr]">
         <div className="relative hidden min-h-[620px] overflow-hidden bg-brand p-10 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
           <div className="relative z-10">
-            <p className="label-mono text-primary-foreground/70">TK GAMING</p>
+            <p className="label-mono text-primary-foreground">TK GAMING</p>
             <p className="mt-5 max-w-sm font-display text-4xl leading-tight">
               {isBg ? "Влез в своя свят" : isZh ? "进入你的世界" : "Enter your world."}
             </p>
-            <p className="mt-4 max-w-xs text-sm text-primary-foreground/75">
+            <p className="mt-4 max-w-xs text-sm text-primary-foreground">
               {isBg
                 ? "Игри, музика и твоят профил на едно място."
                 : isZh

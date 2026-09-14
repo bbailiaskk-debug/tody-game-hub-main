@@ -286,7 +286,7 @@ function DinoGamePage() {
           </span>
         </div>
 
-        <div className="relative mt-8 overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+        <div className="night-panel relative mt-8 overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
           <div className="flex items-center justify-between px-5 py-3">
             <span className="font-mono text-[0.65rem] tracking-[0.2em] text-muted-foreground uppercase">
               {isBg ? "НАЙ-ДОБЪР РЕЗУЛТАТ" : "HIGH SCORE"} — {best}
@@ -304,14 +304,14 @@ function DinoGamePage() {
           />
 
           {!isRunning && !isGameOver && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-background/70 backdrop-blur-sm">
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#161B16]/70 backdrop-blur-sm">
               <span className="font-mono text-sm tracking-[0.3em] text-muted-foreground uppercase">
                 {isBg ? "Натисни SPACE или докосни, за да започнеш" : "Press SPACE or tap to start"}
               </span>
               <button
                 type="button"
                 onClick={startGame}
-                className="inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-brand uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5"
+                className="inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-[var(--brand-bright)] uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5"
               >
                 {isBg ? "СТАРТ" : "START"}
               </button>
@@ -329,7 +329,7 @@ function DinoGamePage() {
               <button
                 type="button"
                 onClick={startGame}
-                className="mt-2 inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-brand uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5"
+                className="mt-2 inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-[var(--brand-bright)] uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5"
               >
                 <RotateCcw className="size-4" />
                 {isBg ? "ОЩЕ ВЕДНЪЖ" : "PLAY AGAIN"}

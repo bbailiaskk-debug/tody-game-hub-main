@@ -9,10 +9,54 @@ export const Route = createFileRoute("/games")({
       { title: "Игри — Todor Khristov Gaming" },
       {
         name: "description",
-        content: "Страница с игри от Todor Khristov Gaming.",
+        content:
+          "Играй онлайн безплатно: шах, 2048, Tic Tac Toe и Chrome Dinosaur. Игри на Todor Khristov Gaming — директно в браузъра.",
+      },
+      { property: "og:title", content: "Игри — Todor Khristov Gaming" },
+      {
+        property: "og:description",
+        content:
+          "Шах, 2048, Tic Tac Toe, Chrome Dinosaur Game — играй безплатно направо в браузъра.",
+      },
+      { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/games" },
+      { property: "og:type", content: "website" },
+      {
+        property: "og:image",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
+      },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:type", content: "image/jpeg" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Игри — Todor Khristov Gaming" },
+      {
+        name: "twitter:description",
+        content:
+          "Шах, 2048, Tic Tac Toe, Chrome Dinosaur Game — играй безплатно направо в браузъра.",
+      },
+      {
+        name: "twitter:image",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
       },
     ],
-    links: [{ rel: "canonical", href: "https://tody-game-hub.bbailiaskk.workers.dev/games" }],
+    links: [
+      { rel: "canonical", href: "https://tody-game-hub.bbailiaskk.workers.dev/games" },
+      {
+        rel: "alternate",
+        hrefLang: "bg",
+        href: "https://tody-game-hub.bbailiaskk.workers.dev/games",
+      },
+      {
+        rel: "alternate",
+        hrefLang: "en",
+        href: "https://tody-game-hub.bbailiaskk.workers.dev/games?lang=en",
+      },
+      {
+        rel: "alternate",
+        hrefLang: "zh",
+        href: "https://tody-game-hub.bbailiaskk.workers.dev/games?lang=zh",
+      },
+    ],
   }),
   component: GamesPage,
 });
@@ -128,7 +172,7 @@ function GamesPage() {
                   </div>
                   <h3 className="mt-10 text-2xl">{game.title[lang]}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">{game.note[lang]}</p>
-                  <span className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#1DB954]/30 bg-[#161B16] px-4 py-2 font-mono text-[0.65rem] font-bold tracking-[0.15em] text-brand uppercase transition-all duration-200 group-hover:bg-[#1DB954]/10 group-hover:shadow-[0_0_12px_rgba(29,185,84,0.2)]">
+                  <span className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#1DB954]/30 bg-[#161B16] px-4 py-2 font-mono text-[0.65rem] font-bold tracking-[0.15em] text-[var(--brand-bright)] uppercase transition-all duration-200 group-hover:bg-[#1DB954]/10 group-hover:shadow-[0_0_12px_rgba(29,185,84,0.2)]">
                     {isBg ? "ИГРАЙ" : isZh ? "开始" : "PLAY"}
                     <span className="text-[0.8rem]">›</span>
                   </span>

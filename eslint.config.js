@@ -14,6 +14,7 @@ export default tseslint.config(
       "node_modules",
       "public",
       "output",
+      "vitallens-vscode/**",
       "nginx-proxy-manager/**",
       "nginx-proxy-manager-2.15.1/**",
     ],

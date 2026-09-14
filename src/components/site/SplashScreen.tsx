@@ -5,51 +5,31 @@ const FADE_DURATION_MS = 350;
 const SPLASH_DONE_KEY = "tk-splash-done";
 
 export function SplashScreen() {
-  const [progress, setProgress] = useState(0);
-  const [fading, setFading] = useState(false);
-  const [removed, setRemoved] = useState(true);
+  const [phase, setPhase] = useState<"hidden" | "visible" | "fading">("hidden");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.sessionStorage.getItem(SPLASH_DONE_KEY)) return;
 
     window.sessionStorage.setItem(SPLASH_DONE_KEY, "1");
-    setRemoved(false);
+    setPhase("visible");
 
-    let rafId = 0;
-    const startTime = performance.now();
-
-    const tick = (now: number) => {
-      const elapsed = now - startTime;
-      const value = Math.min(100, (elapsed / FILL_DURATION_MS) * 100);
-
-      setProgress(value);
-
-      if (value >= 100) {
-        setFading(true);
-        window.setTimeout(() => setRemoved(true), FADE_DURATION_MS);
-        return;
-      }
-
-      rafId = requestAnimationFrame(tick);
-    };
-
-    rafId = requestAnimationFrame(tick);
+    const fillTimer = window.setTimeout(() => setPhase("fading"), FILL_DURATION_MS);
+    const fadeTimer = window.setTimeout(
+      () => setPhase("hidden"),
+      FILL_DURATION_MS + FADE_DURATION_MS,
+    );
 
     return () => {
-      cancelAnimationFrame(rafId);
+      window.clearTimeout(fillTimer);
+      window.clearTimeout(fadeTimer);
     };
   }, []);
 
-  if (removed) return null;
+  if (phase === "hidden") return null;
 
   return (
-    <div
-      aria-hidden="true"
-      className={`pointer-events-none fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#161B16] transition-opacity duration-300 ease-out ${
-        fading ? "opacity-0" : "opacity-100"
-      }`}
-    >
+    <div aria-hidden="true" className={`splash-root ${phase === "fading" ? "splash-fade" : ""}`}>
       <svg
         width="168"
         height="168"
@@ -72,14 +52,8 @@ export function SplashScreen() {
         </text>
       </svg>
 
-      <div className="relative mt-10 h-[3px] w-60 overflow-hidden rounded-full bg-white/10">
-        <div
-          className="splash-fill h-full rounded-full"
-          style={{
-            width: `${progress}%`,
-            boxShadow: "0 0 10px rgba(255,255,255,0.9), 0 0 28px rgba(255,255,255,0.45)",
-          }}
-        />
+      <div className="splash-track">
+        <div className="splash-fill h-full rounded-full" />
       </div>
     </div>
   );

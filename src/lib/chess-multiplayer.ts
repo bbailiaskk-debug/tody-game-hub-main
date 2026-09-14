@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { serverChessAuth } from "./chess-server";
-import type {
-  ChessMatchSnapshot,
-  PlayerInfo,
-  ServerToClientMessage,
-} from "./chess-online-types";
+import type { ChessMatchSnapshot, PlayerInfo, ServerToClientMessage } from "./chess-online-types";
 import type { PieceType, Square } from "./chess-engine";
-import { readPersistedAuthSession, readPersistedUserProfile, storageGet } from "./local-persistence";
+import {
+  readPersistedAuthSession,
+  readPersistedUserProfile,
+  storageGet,
+} from "./local-persistence";
 
 export type ChessOnlinePhase = "idle" | "connecting" | "waiting" | "playing" | "finished" | "error";
 
@@ -150,12 +150,16 @@ export function useChessOnline(): ChessOnlineController {
           break;
         case "move":
           setSnapshot((prev) =>
-            prev ? { ...prev, state: msg.state, lastMove: msg.lastMove, moveCount: msg.moveCount } : prev,
+            prev
+              ? { ...prev, state: msg.state, lastMove: msg.lastMove, moveCount: msg.moveCount }
+              : prev,
           );
           setPhase("playing");
           break;
         case "end":
-          setSnapshot((prev) => (prev ? { ...prev, result: msg.result, status: msg.status, state: msg.state } : prev));
+          setSnapshot((prev) =>
+            prev ? { ...prev, result: msg.result, status: msg.status, state: msg.state } : prev,
+          );
           setPhase("finished");
           break;
         case "playerJoined":
@@ -213,7 +217,8 @@ export function useChessOnline(): ChessOnlineController {
         return;
       }
 
-      const defaultName = authResult.name || session?.name || profile?.name || email.split("@")[0] || "player";
+      const defaultName =
+        authResult.name || session?.name || profile?.name || email.split("@")[0] || "player";
       leftRef.current = false;
       attemptsRef.current = 0;
       connectInfoRef.current = {
@@ -296,9 +301,9 @@ export function useChessOnline(): ChessOnlineController {
 
   const opponentOnline = snapshot
     ? myRole === "white"
-      ? snapshot.players.black?.online ?? false
+      ? (snapshot.players.black?.online ?? false)
       : myRole === "black"
-        ? snapshot.players.white?.online ?? false
+        ? (snapshot.players.white?.online ?? false)
         : false
     : false;
 

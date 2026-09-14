@@ -58,7 +58,49 @@ export const Route = createFileRoute("/ai")({
   head: () => ({
     meta: [
       { title: "TK-Bot — Todor Khristov Gaming" },
-      { name: "description", content: "Изкуственият интелект асистент на Todor Khristov Gaming." },
+      {
+        name: "description",
+        content:
+          "Попитай TK-Bot, изкуственият интелект асистент на Todor Khristov Gaming. Чат за канала, игрите и музиката.",
+      },
+      { property: "og:title", content: "TK-Bot — Todor Khristov Gaming" },
+      {
+        property: "og:description",
+        content: "Попитай TK-Bot, изкуственият интелект асистент на Todor Khristov Gaming.",
+      },
+      { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/ai" },
+      { property: "og:type", content: "website" },
+      {
+        property: "og:image",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
+      },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:type", content: "image/jpeg" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "TK-Bot — Todor Khristov Gaming" },
+      {
+        name: "twitter:description",
+        content: "Попитай TK-Bot, изкуственият интелект асистент на Todor Khristov Gaming.",
+      },
+      {
+        name: "twitter:image",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
+      },
+    ],
+    links: [
+      { rel: "canonical", href: "https://tody-game-hub.bbailiaskk.workers.dev/ai" },
+      { rel: "alternate", hrefLang: "bg", href: "https://tody-game-hub.bbailiaskk.workers.dev/ai" },
+      {
+        rel: "alternate",
+        hrefLang: "en",
+        href: "https://tody-game-hub.bbailiaskk.workers.dev/ai?lang=en",
+      },
+      {
+        rel: "alternate",
+        hrefLang: "zh",
+        href: "https://tody-game-hub.bbailiaskk.workers.dev/ai?lang=zh",
+      },
     ],
   }),
   component: AiPage,
@@ -67,6 +109,7 @@ export const Route = createFileRoute("/ai")({
 type PendingImageItem = {
   kind: "image";
   id: string;
+  name?: string;
   mimeType: string;
   dataUrl: string;
 };
@@ -280,7 +323,7 @@ function fileToChatImage(file: File): Promise<ChatImage> {
       context.drawImage(image, 0, 0, width, height);
 
       const mimeType = keepPng ? "image/png" : "image/jpeg";
-      resolve({ mimeType, dataUrl: canvas.toDataURL(mimeType, 0.82) });
+      resolve({ name: file.name, mimeType, dataUrl: canvas.toDataURL(mimeType, 0.82) });
     };
     image.onerror = () => {
       URL.revokeObjectURL(objectUrl);
@@ -926,7 +969,7 @@ function SidebarContent({
                 className="size-9 shrink-0 rounded-full bg-cover bg-center bg-no-repeat"
               />
             ) : (
-              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--tk-accent)] text-sm font-bold text-white">
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--tk-accent)] text-sm font-bold text-[#0d1117]">
                 {createInitialForName(userName || userEmail)}
               </span>
             )}
@@ -1201,6 +1244,7 @@ function AiPage() {
               converted.push({
                 kind: "image",
                 id: nextItemId(),
+                name: file.name,
                 mimeType: file.type || imageMimeForName(file.name) || "image/png",
                 dataUrl: rawDataUrl,
               });
@@ -1543,7 +1587,7 @@ function AiPage() {
                 }}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/5 text-white">
                   <ImageIcon className="size-4" />
                 </span>
                 {isBg ? "Прикачи изображение" : "Attach image"}
@@ -1557,7 +1601,7 @@ function AiPage() {
                 }}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.8rem] text-[var(--tk-text)] transition-colors hover:bg-[var(--tk-border)]"
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--tk-border)] text-[var(--tk-accent-text)]">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/5 text-white">
                   <FileText className="size-4" />
                 </span>
                 {isBg ? "Прикачи файл" : "Attach file"}
@@ -1620,7 +1664,7 @@ function AiPage() {
         type="submit"
         aria-label={isBg ? "Изпрати" : "Send"}
         disabled={submitDisabled}
-        className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--tk-accent)] text-[#fff] transition-all duration-200 hover:bg-[var(--tk-accent-hover)] hover:shadow-[0_0_16px_var(--tk-accent-50)] disabled:opacity-40 disabled:hover:shadow-none"
+        className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--tk-accent)] text-[#0d1117] transition-all duration-200 hover:bg-[var(--tk-accent-hover)] hover:shadow-[0_0_16px_var(--tk-accent-50)] disabled:opacity-40 disabled:hover:shadow-none"
       >
         {loading ? <Send className="size-4 animate-pulse" /> : <ArrowUp className="size-4.5" />}
       </button>
@@ -1654,7 +1698,11 @@ function AiPage() {
                 >
                   <div className="size-12 overflow-hidden rounded-xl border border-[var(--tk-border)] bg-black/25">
                     {item.kind === "image" ? (
-                      <img src={item.dataUrl} alt="" className="size-full object-cover" />
+                      <img
+                        src={item.dataUrl}
+                        alt={item.name ? `Uploaded image: ${item.name}` : "Uploaded image"}
+                        className="size-full object-cover"
+                      />
                     ) : (
                       <span className="grid size-full place-items-center text-[var(--tk-accent-text)]">
                         {item.kind === "video" ? (
@@ -1668,7 +1716,7 @@ function AiPage() {
                     )}
                   </div>
                   {extension ? (
-                    <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 py-px font-mono text-[0.5rem] font-semibold leading-none text-white">
+                    <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 py-px font-mono text-[0.5rem] font-semibold leading-none text-[#0d1117]">
                       {extension}
                     </span>
                   ) : null}
@@ -1889,7 +1937,7 @@ function AiPage() {
                   <div
                     className={`max-w-[88%] whitespace-pre-wrap break-words rounded-[1.25rem] px-4 py-3 text-[0.92rem] leading-relaxed ${
                       message.role === "user"
-                        ? "rounded-br-md bg-[var(--tk-accent)] text-white"
+                        ? "rounded-br-md bg-[var(--tk-accent)] text-[#0d1117]"
                         : "rounded-bl-md border border-[var(--tk-border)] bg-[var(--tk-panel)] text-[var(--tk-text)]"
                     }`}
                   >
@@ -1909,7 +1957,7 @@ function AiPage() {
                             <img
                               key={`${image.dataUrl.slice(0, 24)}-${imageIndex}`}
                               src={image.dataUrl}
-                              alt=""
+                              alt={image.name ? `Shared image: ${image.name}` : "Shared image"}
                               className={
                                 imageCount >= 2
                                   ? "aspect-square w-full rounded-xl border border-[var(--tk-border)]/40 object-cover"
@@ -1961,17 +2009,17 @@ function AiPage() {
                               key={`${(file.dataUrl || file.name).slice(0, 24)}-${fileIndex}`}
                               href={hasContent ? file.dataUrl : undefined}
                               download={file.name}
-                              className="flex min-w-0 items-center gap-2 rounded-xl border border-[var(--tk-border)] bg-[var(--tk-bg)] p-2.5 text-[var(--tk-text)] transition-colors hover:border-[var(--tk-accent)]/40"
+                              className="flex min-w-0 items-center gap-2 rounded-xl border border-[var(--tk-border)] bg-[var(--tk-bg)] p-2.5 text-white transition-colors hover:border-white/30"
                             >
-                              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--tk-panel)] text-[var(--tk-accent-text)]">
+                              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/5 text-white">
                                 <FileText className="size-4" />
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-[0.75rem] text-[var(--tk-accent-text)]">
+                                <span className="block truncate text-[0.75rem] text-white">
                                   {file.name}
                                 </span>
                                 {file.size ? (
-                                  <span className="block text-[0.65rem] text-[var(--tk-muted)]">
+                                  <span className="block text-[0.65rem] text-white/70">
                                     {formatFileSize(file.size)}
                                   </span>
                                 ) : null}

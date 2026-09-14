@@ -51,9 +51,15 @@ function withHsts(response: Response): Response {
     nextHeaders.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }
 
-  // Keep HTML aligned with the latest hashed asset manifest.
+  // Keep HTML fresh for browsers while letting the Cloudflare edge cache it
+  // briefly (s-maxage) and serve stale copies during revalidation to keep
+  // TTFB/LCP low. max-age=0 keeps the page in lock-step with the latest
+  // hashed asset manifest on every browser visit.
   if (nextHeaders.get("content-type")?.includes("text/html")) {
-    nextHeaders.set("Cache-Control", "no-store, max-age=0");
+    nextHeaders.set(
+      "Cache-Control",
+      "public, max-age=0, must-revalidate, s-maxage=60, stale-while-revalidate=300",
+    );
   }
 
   return new Response(response.body, {

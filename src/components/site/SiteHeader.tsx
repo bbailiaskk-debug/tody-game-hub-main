@@ -125,7 +125,12 @@ export function SiteHeader() {
   useEffect(() => {
     setMounted(true);
 
-    checkUser();
+    const schedule =
+      typeof requestIdleCallback === "function"
+        ? requestIdleCallback
+        : (cb: IdleRequestCallback) =>
+            setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), 0);
+    const idleId = schedule(checkUser);
 
     const handleUserChange = () => {
       checkUser();
@@ -146,6 +151,8 @@ export function SiteHeader() {
     document.addEventListener("mousedown", handlePointerDown);
 
     return () => {
+      if (typeof cancelIdleCallback === "function") cancelIdleCallback(idleId as number);
+      else window.clearTimeout(idleId as number);
       window.removeEventListener("storage", handleUserChange);
 
       window.removeEventListener("userStateChanged", handleUserChange);
@@ -293,226 +300,224 @@ export function SiteHeader() {
               {menuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
             </button>
 
-            <div
-              id="site-main-menu"
-              className={`absolute right-0 top-full z-50 mt-3 w-[calc(100vw-1rem)] max-w-[28rem] max-h-[85vh] overflow-y-auto overflow-x-hidden scrollbar-thin rounded-[2rem] border border-border/80 bg-background shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 sm:w-[28rem] sm:max-h-none sm:overflow-hidden ${
-                menuOpen
-                  ? "translate-y-0 opacity-100"
-                  : "pointer-events-none -translate-y-2 opacity-0"
-              }`}
-            >
-              <div className="border-b border-border/70 px-4 py-4 text-[0.9rem] font-mono tracking-[0.28em] text-muted-foreground uppercase">
-                {lang === "bg" ? "Меню" : "Menu"}
-              </div>
+            {menuOpen ? (
+              <div
+                id="site-main-menu"
+                className="absolute right-0 top-full z-50 mt-3 w-[calc(100vw-1rem)] max-w-[28rem] max-h-[85vh] overflow-y-auto overflow-x-hidden scrollbar-thin rounded-[2rem] border border-border/80 bg-background shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 sm:w-[28rem] sm:max-h-none sm:overflow-hidden"
+              >
+                <div className="border-b border-border/70 px-4 py-4 text-[0.9rem] font-mono tracking-[0.28em] text-muted-foreground uppercase">
+                  {lang === "bg" ? "Меню" : "Menu"}
+                </div>
 
-              <nav className="space-y-1.5 p-3">
-                {menuItems.map((item) =>
-                  item.to === "/games" ? (
-                    <div key={item.to} className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => setGamesMenuOpen((current) => !current)}
-                        aria-expanded={gamesMenuOpen}
-                        aria-controls="games-submenu"
-                        className={`group flex w-full items-center justify-between rounded-[1.2rem] px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] transition-colors ${
-                          gamePathActive
-                            ? "bg-primary text-primary-foreground"
-                            : "text-muted-foreground hover:bg-surface hover:text-foreground"
-                        }`}
+                <nav className="space-y-1.5 p-3">
+                  {menuItems.map((item) =>
+                    item.to === "/games" ? (
+                      <div key={item.to} className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => setGamesMenuOpen((current) => !current)}
+                          aria-expanded={gamesMenuOpen}
+                          aria-controls="games-submenu"
+                          className={`group flex w-full items-center justify-between rounded-[1.2rem] px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] transition-colors ${
+                            gamePathActive
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:bg-surface hover:text-foreground"
+                          }`}
+                        >
+                          <span>{item.label}</span>
+                          <ChevronDown
+                            className={`size-4 transition-transform duration-200 ${
+                              gamesMenuOpen ? "rotate-180" : ""
+                            }`}
+                          />
+                        </button>
+                        {gamesMenuOpen ? (
+                          <div
+                            id="games-submenu"
+                            className="ml-1 space-y-1 border-l border-border/60 pl-3"
+                          >
+                            <Link
+                              to="/games"
+                              onClick={() => setMenuOpen(false)}
+                              className="group flex items-center gap-3 rounded-[1rem] px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.18em] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+                            >
+                              <Gamepad2 className="size-4 text-brand" />
+                              <span>{item.label}</span>
+                              <span className="ml-auto text-current transition-transform group-hover:translate-x-1">
+                                ›
+                              </span>
+                            </Link>
+                            {menuGames.map((game) => {
+                              const Icon = game.icon;
+                              return (
+                                <Link
+                                  key={game.to}
+                                  to={game.to}
+                                  onClick={() => setMenuOpen(false)}
+                                  className="group flex items-center gap-3 rounded-[1rem] px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.18em] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+                                  activeProps={{
+                                    className:
+                                      "group flex items-center gap-3 rounded-[1rem] bg-surface px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.18em] text-foreground",
+                                  }}
+                                >
+                                  <Icon className="size-4 text-brand" />
+                                  <span className="truncate">{game.label}</span>
+                                  <span className="ml-auto text-current transition-transform group-hover:translate-x-1">
+                                    ›
+                                  </span>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => setMenuOpen(false)}
+                        {...(item.to === "/" ? { activeOptions: { exact: true } } : {})}
+                        className="group flex items-center justify-between rounded-[1.2rem] px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+                        activeProps={{
+                          className:
+                            "flex items-center justify-between rounded-[1.2rem] bg-primary px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] text-primary-foreground",
+                        }}
                       >
                         <span>{item.label}</span>
-                        <ChevronDown
-                          className={`size-4 transition-transform duration-200 ${
-                            gamesMenuOpen ? "rotate-180" : ""
-                          }`}
-                        />
-                      </button>
-                      {gamesMenuOpen ? (
-                        <div
-                          id="games-submenu"
-                          className="ml-1 space-y-1 border-l border-border/60 pl-3"
-                        >
-                          <Link
-                            to="/games"
-                            onClick={() => setMenuOpen(false)}
-                            className="group flex items-center gap-3 rounded-[1rem] px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.18em] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
-                          >
-                            <Gamepad2 className="size-4 text-brand" />
-                            <span>{item.label}</span>
-                            <span className="ml-auto text-current transition-transform group-hover:translate-x-1">
-                              ›
-                            </span>
-                          </Link>
-                          {menuGames.map((game) => {
-                            const Icon = game.icon;
-                            return (
-                              <Link
-                                key={game.to}
-                                to={game.to}
-                                onClick={() => setMenuOpen(false)}
-                                className="group flex items-center gap-3 rounded-[1rem] px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.18em] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
-                                activeProps={{
-                                  className:
-                                    "group flex items-center gap-3 rounded-[1rem] bg-surface px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.18em] text-foreground",
-                                }}
-                              >
-                                <Icon className="size-4 text-brand" />
-                                <span className="truncate">{game.label}</span>
-                                <span className="ml-auto text-current transition-transform group-hover:translate-x-1">
-                                  ›
-                                </span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setMenuOpen(false)}
-                      {...(item.to === "/" ? { activeOptions: { exact: true } } : {})}
-                      className="group flex items-center justify-between rounded-[1.2rem] px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
-                      activeProps={{
-                        className:
-                          "flex items-center justify-between rounded-[1.2rem] bg-primary px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] text-primary-foreground",
+                        <span className="text-[1rem] text-current transition-transform group-hover:translate-x-1">
+                          ›
+                        </span>
+                      </Link>
+                    ),
+                  )}
+
+                  <Link
+                    to="/ai"
+                    search={{ chat: "" }}
+                    onClick={() => setMenuOpen(false)}
+                    aria-label="Gemini AI"
+                    className="group flex items-center justify-between gap-3 rounded-full border border-[#4285F4]/20 bg-[#161B26] px-4 py-3.5 transition-all duration-200 hover:border-[#4285F4]/50 hover:bg-[#4285F4]/10 hover:shadow-[0_0_18px_rgba(66,133,244,0.25)]"
+                  >
+                    <span className="flex flex-col">
+                      <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
+                        <span className="text-[#4285F4] transition-colors group-hover:text-[#60A5FA]">
+                          GEMINI
+                        </span>{" "}
+                        <span className="text-[#4285F4] transition-colors group-hover:text-[#60A5FA]">
+                          AI
+                        </span>
+                      </span>
+                      <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
+                        {lang === "bg" ? "изкуствен интелект" : "artificial intelligence"}
+                      </span>
+                    </span>
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B26] text-[#4285F4] transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#60A5FA]">
+                      <Bot className="size-4" />
+                    </span>
+                  </Link>
+                </nav>
+
+                <div className="border-t border-border/70 p-3">
+                  <p className="mb-2 text-[0.9rem] font-mono tracking-[0.2em] text-muted-foreground uppercase">
+                    {lang === "bg" ? "Език" : "Language"}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLang("bg");
+                        setMenuOpen(false);
                       }}
+                      className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${
+                        lang === "bg"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-surface text-muted-foreground hover:text-foreground"
+                      }`}
                     >
-                      <span>{item.label}</span>
-                      <span className="text-[1rem] text-current transition-transform group-hover:translate-x-1">
-                        ›
-                      </span>
-                    </Link>
-                  ),
-                )}
+                      BG
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLang("en");
+                        setMenuOpen(false);
+                      }}
+                      className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${
+                        lang === "en"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-surface text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      EN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLang("zh");
+                        setMenuOpen(false);
+                      }}
+                      className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${
+                        lang === "zh"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-surface text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      中文
+                    </button>
+                  </div>
+                </div>
 
-                <Link
-                  to="/ai"
-                  search={{ chat: "" }}
-                  onClick={() => setMenuOpen(false)}
-                  aria-label="Gemini AI"
-                  className="group flex items-center justify-between gap-3 rounded-full border border-[#4285F4]/20 bg-[#161B26] px-4 py-3.5 transition-all duration-200 hover:border-[#4285F4]/50 hover:bg-[#4285F4]/10 hover:shadow-[0_0_18px_rgba(66,133,244,0.25)]"
-                >
-                  <span className="flex flex-col">
-                    <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
-                      <span className="text-[#4285F4] transition-colors group-hover:text-[#60A5FA]">
-                        GEMINI
-                      </span>{" "}
-                      <span className="text-[#4285F4] transition-colors group-hover:text-[#60A5FA]">
-                        AI
-                      </span>
-                    </span>
-                    <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
-                      {lang === "bg" ? "изкуствен интелект" : "artificial intelligence"}
-                    </span>
-                  </span>
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B26] text-[#4285F4] transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#60A5FA]">
-                    <Bot className="size-4" />
-                  </span>
-                </Link>
-              </nav>
-
-              <div className="border-t border-border/70 p-3">
-                <p className="mb-2 text-[0.9rem] font-mono tracking-[0.2em] text-muted-foreground uppercase">
-                  {lang === "bg" ? "Език" : "Language"}
-                </p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="border-t border-border/70 p-3 space-y-2">
                   <button
                     type="button"
                     onClick={() => {
-                      setLang("bg");
+                      toggleTheme();
                       setMenuOpen(false);
                     }}
-                    className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${
-                      lang === "bg"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-surface text-muted-foreground hover:text-foreground"
-                    }`}
+                    className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.16em] text-foreground transition-colors hover:bg-surface-2"
                   >
-                    BG
+                    {theme === "dark" ? "LIGHT" : "DARK"}
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      setLang("en");
+                      setOpen(true);
                       setMenuOpen(false);
                     }}
-                    className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${
-                      lang === "en"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-surface text-muted-foreground hover:text-foreground"
-                    }`}
+                    className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.16em] text-foreground transition-colors hover:bg-surface-2"
                   >
-                    EN
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLang("zh");
-                      setMenuOpen(false);
-                    }}
-                    className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${
-                      lang === "zh"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-surface text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    中文
+                    {lang === "bg" ? "НАСТРОЙКИ" : "SETTINGS"}
                   </button>
                 </div>
-              </div>
 
-              <div className="border-t border-border/70 p-3 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    toggleTheme();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.16em] text-foreground transition-colors hover:bg-surface-2"
-                >
-                  {theme === "dark" ? "LIGHT" : "DARK"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(true);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 font-mono text-[0.9rem] tracking-[0.16em] text-foreground transition-colors hover:bg-surface-2"
-                >
-                  {lang === "bg" ? "НАСТРОЙКИ" : "SETTINGS"}
-                </button>
-              </div>
-
-              <div className="border-t border-border/70 p-3">
-                <p className="mb-2 text-[0.9rem] font-mono tracking-[0.2em] text-muted-foreground uppercase">
-                  {lang === "bg" ? "Социални мрежи" : "Social Media"}
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {socialLinks.map((social) => (
-                    <a
-                      key={social.label}
-                      href={social.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`${social.label} — ${lang === "bg" ? "отваря се в нов раздел" : "opens in a new tab"}`}
-                      style={{ backgroundColor: social.color, color: social.text }}
-                      className="group inline-flex items-center justify-between rounded-full px-4 py-3 font-mono text-[0.75rem] font-bold tracking-[0.12em] transition-transform duration-200 hover:-translate-y-0.5 hover:brightness-110"
-                    >
-                      <span className="truncate">{social.label}</span>
-                      <span
-                        aria-hidden="true"
-                        className="text-sm leading-none transition-transform group-hover:translate-x-0.5"
+                <div className="border-t border-border/70 p-3">
+                  <p className="mb-2 text-[0.9rem] font-mono tracking-[0.2em] text-muted-foreground uppercase">
+                    {lang === "bg" ? "Социални мрежи" : "Social Media"}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {socialLinks.map((social) => (
+                      <a
+                        key={social.label}
+                        href={social.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`${social.label} — ${lang === "bg" ? "отваря се в нов раздел" : "opens in a new tab"}`}
+                        style={{ backgroundColor: social.color, color: social.text }}
+                        className="group inline-flex items-center justify-between rounded-full px-4 py-3 font-mono text-[0.75rem] font-bold tracking-[0.12em] text-white transition-transform duration-200 hover:-translate-y-0.5 hover:brightness-110"
                       >
-                        ↗
-                      </span>
-                    </a>
-                  ))}
+                        <span className="truncate">{social.label}</span>
+                        <span
+                          aria-hidden="true"
+                          className="text-sm leading-none transition-transform group-hover:translate-x-0.5"
+                        >
+                          ↗
+                        </span>
+                      </a>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : null}
           </div>
         </div>
       </div>

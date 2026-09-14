@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
 
 export type ChatImage = {
+  name?: string;
   mimeType: string;
   dataUrl: string;
 };

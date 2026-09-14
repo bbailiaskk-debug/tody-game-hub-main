@@ -144,8 +144,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const squareHandleTop = `${100 - value}%`;
   const squareIsDragging = useRef(false);
   const hueIsDragging = useRef(false);
+  const squareRect = useRef<DOMRect | null>(null);
+  const hueRect = useRef<DOMRect | null>(null);
   const sliderGradient = `linear-gradient(
-    to top,
+    to bottom,
     #ff0000 0%,
     #ff4500 8%,
     #ff8c00 16%,
@@ -176,8 +178,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     setAccentColor(normalized.toLowerCase());
   };
 
-  const handleSquareSelect = (clientX: number, clientY: number, element: HTMLDivElement) => {
-    const rect = element.getBoundingClientRect();
+  const handleSquareSelect = (clientX: number, clientY: number, rect: DOMRect) => {
     const x = clamp((clientX - rect.left) / rect.width, 0, 1) * 100;
     const y = clamp((clientY - rect.top) / rect.height, 0, 1) * 100;
     const nextSaturation = x;
@@ -187,8 +188,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     setAccentColor(hsvToHex(hue, nextSaturation, nextValue).toLowerCase());
   };
 
-  const handleHueSelect = (clientY: number, element: HTMLDivElement) => {
-    const rect = element.getBoundingClientRect();
+  const handleHueSelect = (clientY: number, rect: DOMRect) => {
     const y = clamp((clientY - rect.top) / rect.height, 0, 1);
     const nextHue = Math.round(y * 360);
     setHue(nextHue);
@@ -198,16 +198,18 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const handleSquarePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     squareIsDragging.current = true;
-    handleSquareSelect(event.clientX, event.clientY, event.currentTarget);
+    squareRect.current = event.currentTarget.getBoundingClientRect();
+    handleSquareSelect(event.clientX, event.clientY, squareRect.current);
   };
 
   const handleSquarePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!squareIsDragging.current) return;
-    handleSquareSelect(event.clientX, event.clientY, event.currentTarget);
+    if (!squareIsDragging.current || !squareRect.current) return;
+    handleSquareSelect(event.clientX, event.clientY, squareRect.current);
   };
 
   const handleSquarePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     squareIsDragging.current = false;
+    squareRect.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -216,16 +218,18 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const handleHuePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     hueIsDragging.current = true;
-    handleHueSelect(event.clientY, event.currentTarget);
+    hueRect.current = event.currentTarget.getBoundingClientRect();
+    handleHueSelect(event.clientY, hueRect.current);
   };
 
   const handleHuePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!hueIsDragging.current) return;
-    handleHueSelect(event.clientY, event.currentTarget);
+    if (!hueIsDragging.current || !hueRect.current) return;
+    handleHueSelect(event.clientY, hueRect.current);
   };
 
   const handleHuePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     hueIsDragging.current = false;
+    hueRect.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -287,7 +291,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
           <div>
             <p className="label-mono mb-3 text-[0.7rem] tracking-[0.22em] text-[#b7c8c1]">
-              АКЦЕНТЕН ЦВЯТ
+              {t.accentColor}
             </p>
 
             <div className="flex items-stretch gap-3">

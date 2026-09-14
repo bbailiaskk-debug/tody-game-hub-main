@@ -39,10 +39,14 @@ export const Route = createFileRoute("/music")({
         content: "Слушай музиката на Todor Khristov Gaming. Оригинални песни и любими парчета.",
       },
       { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/music" },
+      { property: "og:type", content: "website" },
       {
         property: "og:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.png",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
       },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:type", content: "image/jpeg" },
       { name: "twitter:title", content: "Музика — Todor Khristov Gaming" },
       {
         name: "twitter:description",
@@ -51,7 +55,7 @@ export const Route = createFileRoute("/music")({
       { name: "twitter:card", content: "summary_large_image" },
       {
         name: "twitter:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.png",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
       },
     ],
     links: [

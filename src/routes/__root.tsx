@@ -1,26 +1,34 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
-  createRootRouteWithContext,
+  createRootRoute,
   useRouter,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
-import appCss from "../styles.css?url";
+import appCss from "../styles.css?inline";
+import criticalCss from "../critical.css?inline";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SiteHeader } from "../components/site/SiteHeader";
 import { SiteSettingsProvider } from "../components/site/theme";
 import { SplashScreen } from "../components/site/SplashScreen";
 
+const FONT_PRELOADS = [
+  { href: "/fonts/archivoblack-latin.woff2", type: "font/woff2" },
+  { href: "/fonts/manrope-latin.woff2", type: "font/woff2" },
+  { href: "/fonts/manrope-cyrillic.woff2", type: "font/woff2" },
+  { href: "/fonts/jetbrainsmono-latin.woff2", type: "font/woff2" },
+  { href: "/fonts/jetbrainsmono-cyrillic.woff2", type: "font/woff2" },
+];
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <h2 className="text-7xl font-bold text-foreground">404</h2>
+        <h3 className="mt-4 text-xl font-semibold text-foreground">Page not found</h3>
         <p className="mt-2 text-sm text-muted-foreground">
           The page you're looking for doesn't exist or has been moved.
         </p>
@@ -47,22 +55,24 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+        <h2 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
-        </h1>
+        </h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button
-            onClick={() => {
+          <Link
+            to="/"
+            onClick={(event) => {
+              event.preventDefault();
               router.invalidate();
               reset();
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             Try again
-          </button>
+          </Link>
           <Link
             to="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
@@ -75,7 +85,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -84,18 +94,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "google-site-verification",
         content: "FGgEUyiAle8jzX9D-hWVJLXOKgRJ0K5yTiMMmhnQz5o",
       },
+      { property: "og:site_name", content: "Todor Khristov Gaming" },
+      { property: "og:locale", content: "bg_BG" },
+      { name: "theme-color", content: "#1DB954" },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Manrope:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap",
-      },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "icon", href: "/favicon-16x16.png", type: "image/png", sizes: "16x16" },
       { rel: "icon", href: "/favicon-32x32.png", type: "image/png", sizes: "32x32" },
@@ -115,16 +118,51 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="bg" className="dark">
       <head>
+        <title>Todor Khristov Gaming — Яки игри и забавление</title>
+        <meta
+          name="description"
+          content="Игри, моменти и енергия директно от командния център на Todor Khristov Gaming."
+        />
+        <link rel="canonical" href="https://tody-game-hub.bbailiaskk.workers.dev/" />
         <HeadContent />
+        <style dangerouslySetInnerHTML={{ __html: criticalCss }} />
+        <style dangerouslySetInnerHTML={{ __html: appCss }} />
+        {FONT_PRELOADS.map((font) => (
+          <link
+            key={font.href}
+            rel="preload"
+            as="font"
+            href={font.href}
+            type={font.type}
+            crossOrigin="anonymous"
+          />
+        ))}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               "@context": "https://schema.org",
-              "@type": "WebSite",
-              name: "Todor Khristov Gaming",
-              url: "https://tody-game-hub.bbailiaskk.workers.dev/",
-              description: "Яки игри и забавление с Todor Khristov Gaming",
+              "@graph": [
+                {
+                  "@type": "WebSite",
+                  name: "Todor Khristov Gaming",
+                  url: "https://tody-game-hub.bbailiaskk.workers.dev/",
+                  description: "Яки игри и забавление с Todor Khristov Gaming",
+                  inLanguage: "bg",
+                },
+                {
+                  "@type": "Organization",
+                  name: "Todor Khristov Gaming",
+                  url: "https://tody-game-hub.bbailiaskk.workers.dev/",
+                  logo: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
+                  sameAs: [
+                    "https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ",
+                    "https://www.tiktok.com/@todorkhristovgmaing",
+                    "https://open.spotify.com/artist/0qeXEFSge1i8K1lC8np20g",
+                    "https://discord.gg/uRNGhKf7vC",
+                  ],
+                },
+              ],
             }),
           }}
         />
@@ -158,16 +196,12 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <SiteSettingsProvider>
-        <SplashScreen />
-        <SiteHeader />
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-      </SiteSettingsProvider>
-    </QueryClientProvider>
+    <SiteSettingsProvider>
+      <SplashScreen />
+      <SiteHeader />
+      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+      <Outlet />
+    </SiteSettingsProvider>
   );
 }

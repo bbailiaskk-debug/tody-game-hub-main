@@ -31,8 +31,10 @@ function cloneGrid(g: Grid): Grid {
 function getEmptyCells(g: Grid): [number, number][] {
   const cells: [number, number][] = [];
   for (let r = 0; r < SIZE; r++) {
+    const row = g[r];
+    if (!row) continue;
     for (let c = 0; c < SIZE; c++) {
-      if (g[r][c] === 0) cells.push([r, c]);
+      if (row[c] === 0) cells.push([r, c]);
     }
   }
   return cells;
@@ -42,8 +44,13 @@ function addRandomTile(g: Grid): Grid {
   const next = cloneGrid(g);
   const empty = getEmptyCells(next);
   if (empty.length === 0) return next;
-  const [r, c] = empty[Math.floor(Math.random() * empty.length)];
-  next[r][c] = Math.random() < 0.9 ? 2 : 4;
+  const picked = empty[Math.floor(Math.random() * empty.length)];
+  if (!picked) return next;
+  const [r, c] = picked;
+  const targetRow = next[r];
+  if (targetRow) {
+    targetRow[c] = Math.random() < 0.9 ? 2 : 4;
+  }
   return next;
 }
 
@@ -52,12 +59,14 @@ function slideRow(row: number[]): { row: number[]; score: number; moved: boolean
   const result: number[] = [];
   let score = 0;
   for (let i = 0; i < filtered.length; i++) {
-    if (i + 1 < filtered.length && filtered[i] === filtered[i + 1]) {
-      result.push(filtered[i] * 2);
-      score += filtered[i] * 2;
+    const current = filtered[i] ?? 0;
+    const nextVal = filtered[i + 1];
+    if (nextVal !== undefined && current === nextVal) {
+      result.push(current * 2);
+      score += current * 2;
       i++;
     } else {
-      result.push(filtered[i]);
+      result.push(current);
     }
   }
   while (result.length < SIZE) result.push(0);
@@ -66,7 +75,8 @@ function slideRow(row: number[]): { row: number[]; score: number; moved: boolean
 }
 
 function transpose(g: Grid): Grid {
-  return g[0].map((_, c) => g.map((r) => r[c]));
+  const firstRow = g[0] ?? [];
+  return firstRow.map((_, c) => g.map((r) => r[c] ?? 0));
 }
 
 function moveLeft(g: Grid): { grid: Grid; score: number; moved: boolean } {
@@ -101,10 +111,14 @@ function moveDown(g: Grid): { grid: Grid; score: number; moved: boolean } {
 
 function canMove(g: Grid): boolean {
   for (let r = 0; r < SIZE; r++) {
+    const row = g[r];
+    const nextRow = g[r + 1];
+    if (!row) continue;
     for (let c = 0; c < SIZE; c++) {
-      if (g[r][c] === 0) return true;
-      if (c + 1 < SIZE && g[r][c] === g[r][c + 1]) return true;
-      if (r + 1 < SIZE && g[r][c] === g[r + 1][c]) return true;
+      const val = row[c] ?? 0;
+      if (val === 0) return true;
+      if (c + 1 < SIZE && val === (row[c + 1] ?? 0)) return true;
+      if (nextRow && val === (nextRow[c] ?? 0)) return true;
     }
   }
   return false;
@@ -234,6 +248,7 @@ function Game2048Page() {
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0];
+    if (!t) return;
     touchRef.current = { x: t.clientX, y: t.clientY };
   }, []);
 
@@ -241,6 +256,7 @@ function Game2048Page() {
     (e: React.TouchEvent) => {
       if (!touchRef.current) return;
       const t = e.changedTouches[0];
+      if (!t) return;
       const dx = t.clientX - touchRef.current.x;
       const dy = t.clientY - touchRef.current.y;
       touchRef.current = null;
@@ -266,12 +282,10 @@ function Game2048Page() {
 
         <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
           <h1 className="text-brand text-[clamp(2.5rem,7vw,4.5rem)] leading-none">2048</h1>
-          <span className="label-mono text-[0.62rem]">
-            {isBg ? "ПЪЗЗЛ ИГРА" : "PUZZLE GAME"}
-          </span>
+          <span className="label-mono text-[0.62rem]">{isBg ? "ПЪЗЗЛ ИГРА" : "PUZZLE GAME"}</span>
         </div>
 
-        <div className="relative mt-8 overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+        <div className="night-panel relative mt-8 overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
           <div className="flex items-center justify-between px-5 py-3">
             <span className="font-mono text-[0.65rem] tracking-[0.2em] text-brand uppercase">
               {isBg ? "РЕЗУЛТАТ" : "SCORE"} — {score}
@@ -281,11 +295,7 @@ function Game2048Page() {
             </span>
           </div>
 
-          <div
-            className="px-5 pb-5"
-            onTouchStart={onTouchStart}
-            onTouchEnd={onTouchEnd}
-          >
+          <div className="px-5 pb-5" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
             <div className="grid grid-cols-4 gap-2 rounded-2xl bg-[#0d1a17] p-2">
               {grid.map((row, r) =>
                 row.map((val, c) => (
@@ -303,24 +313,24 @@ function Game2048Page() {
           {(gameOver || won) && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#161B16]/85 backdrop-blur-sm">
               <span className="font-mono text-2xl font-bold tracking-[0.2em] text-foreground">
-                {won
-                  ? "2048!"
-                  : isBg
-                    ? "КРАЙ НА ИГРАТА"
-                    : "GAME OVER"}
+                {won ? "2048!" : isBg ? "КРАЙ НА ИГРАТА" : "GAME OVER"}
               </span>
               <span className="font-mono text-xs tracking-[0.2em] text-muted-foreground uppercase">
                 {isBg ? "Твой резултат" : "Your score"} — {score}
               </span>
               <button
                 type="button"
-                onClick={won ? () => { setWon(false); } : resetGame}
-                className="mt-2 inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-brand uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5"
+                onClick={
+                  won
+                    ? () => {
+                        setWon(false);
+                      }
+                    : resetGame
+                }
+                className="mt-2 inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-[var(--brand-bright)] uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5"
               >
                 <RotateCcw className="size-4" />
-                {won
-                  ? isBg ? "ПРОДЪЛЖИ" : "KEEP GOING"
-                  : isBg ? "ОЩЕ ВЕДНЪЖ" : "PLAY AGAIN"}
+                {won ? (isBg ? "ПРОДЪЛЖИ" : "KEEP GOING") : isBg ? "ОЩЕ ВЕДНЪЖ" : "PLAY AGAIN"}
               </button>
             </div>
           )}
@@ -330,7 +340,7 @@ function Game2048Page() {
           <button
             type="button"
             onClick={resetGame}
-            className="inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-brand uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5"
+            className="inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-[var(--brand-bright)] uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5"
           >
             <RotateCcw className="size-4" />
             {isBg ? "НОВА ИГРА" : "NEW GAME"}

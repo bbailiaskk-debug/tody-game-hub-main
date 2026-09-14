@@ -86,8 +86,12 @@ function ChessBoard({
               aria-label={`${FILES[c] ?? ""}${RANKS[r] ?? ""}`}
             >
               {isLast && <span className="absolute inset-0 bg-yellow-400/25" />}
-              {isSel && <span className="absolute inset-0 bg-brand/30 shadow-[inset_0_0_0_2px_var(--brand)]" />}
-              {isCheck && <span className="absolute inset-0 bg-red-500/40 shadow-[inset_0_0_0_2px_#ef4444]" />}
+              {isSel && (
+                <span className="absolute inset-0 bg-brand/30 shadow-[inset_0_0_0_2px_var(--brand)]" />
+              )}
+              {isCheck && (
+                <span className="absolute inset-0 bg-red-500/40 shadow-[inset_0_0_0_2px_#ef4444]" />
+              )}
               {isTarget && !isCapture && (
                 <span className="absolute size-[clamp(0.7rem,3vw,1.1rem)] rounded-full bg-brand/80 shadow-[0_0_10px_rgba(29,185,84,0.6)]" />
               )}
@@ -118,12 +122,22 @@ function ChessBoard({
 }
 
 const BUTTON_CLASS =
-  "inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-brand uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5";
+  "inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-[var(--brand-bright)] uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5";
 
-function PanelHeader({ statusText, statusTone, right }: { statusText: string; statusTone: string; right?: React.ReactNode }) {
+function PanelHeader({
+  statusText,
+  statusTone,
+  right,
+}: {
+  statusText: string;
+  statusTone: string;
+  right?: React.ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between gap-3 px-5 py-3">
-      <span className={`inline-flex items-center gap-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase ${statusTone}`}>
+      <span
+        className={`inline-flex items-center gap-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase ${statusTone}`}
+      >
         {statusText}
       </span>
       {right}
@@ -189,7 +203,9 @@ function LocalChessGame() {
 
   const [state, setState] = useState<GameState>(initialState);
   const [selected, setSelected] = useState<Square | null>(null);
-  const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square } | null>(null);
+  const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square } | null>(
+    null,
+  );
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [moveCount, setMoveCount] = useState(0);
 
@@ -268,7 +284,7 @@ function LocalChessGame() {
 
   return (
     <>
-      <div className="relative mt-8 overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+      <div className="night-panel relative mt-8 overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
         <PanelHeader
           statusText={statusTextFor(isBg, isZh, status, state.turn)}
           statusTone={
@@ -306,17 +322,21 @@ function LocalChessGame() {
               <>
                 <span className="font-mono text-2xl font-bold tracking-[0.2em] text-foreground">
                   {status === "checkmate"
-                    ? isBg ? "ШАХ МАТ" : isZh ? "将死" : "CHECKMATE"
-                    : isBg ? "РАВЕНСТВО" : isZh ? "平局" : "DRAW"}
+                    ? isBg
+                      ? "ШАХ МАТ"
+                      : isZh
+                        ? "将死"
+                        : "CHECKMATE"
+                    : isBg
+                      ? "РАВЕНСТВО"
+                      : isZh
+                        ? "平局"
+                        : "DRAW"}
                 </span>
                 <span className="font-mono text-xs tracking-[0.2em] text-muted-foreground uppercase">
                   {statusTextFor(isBg, isZh, status, state.turn)}
                 </span>
-                <button
-                  type="button"
-                  onClick={resetGame}
-                  className={`${BUTTON_CLASS} mt-2`}
-                >
+                <button type="button" onClick={resetGame} className={`${BUTTON_CLASS} mt-2`}>
                   <RotateCcw className="size-4" />
                   {isBg ? "ИГРАЙ ОТНОВО" : isZh ? "再来一局" : "PLAY AGAIN"}
                 </button>
@@ -341,7 +361,11 @@ function LocalChessGame() {
           <span className="text-[#181d15]">♚</span> — {isBg ? "Черни" : isZh ? "黑棋" : "Black"}
         </span>
         <span>
-          {isBg ? "Рокада, ан пасан и промоция" : isZh ? "王车易位、吃过路兵与升变" : "Castling, en passant, promotion"}
+          {isBg
+            ? "Рокада, ан пасан и промоция"
+            : isZh
+              ? "王车易位、吃过路兵与升变"
+              : "Castling, en passant, promotion"}
         </span>
       </div>
     </>
@@ -358,7 +382,7 @@ function OnlineGameLobby({ online }: { online: ReturnType<typeof useChessOnline>
 
   if (online.phase === "connecting") {
     return (
-      <div className="mt-8 flex min-h-[260px] flex-col items-center justify-center gap-3 rounded-3xl border border-border/60 bg-[#161B16] p-8 text-center">
+      <div className="night-panel mt-8 flex min-h-[260px] flex-col items-center justify-center gap-3 rounded-3xl border border-border/60 bg-[#161B16] p-8 text-center">
         <span className="font-mono text-sm tracking-[0.2em] text-brand uppercase">
           {isBg ? "Свързване…" : isZh ? "连接中…" : "CONNECTING…"}
         </span>
@@ -368,7 +392,7 @@ function OnlineGameLobby({ online }: { online: ReturnType<typeof useChessOnline>
 
   if (!loggedIn) {
     return (
-      <div className="mt-8 flex min-h-[260px] flex-col items-center justify-center gap-4 rounded-3xl border border-border/60 bg-[#161B16] p-8 text-center">
+      <div className="night-panel mt-8 flex min-h-[260px] flex-col items-center justify-center gap-4 rounded-3xl border border-border/60 bg-[#161B16] p-8 text-center">
         <span className="font-mono text-sm tracking-[0.2em] text-muted-foreground uppercase">
           {isBg ? "Изисква се акаунт" : isZh ? "需要账号" : "ACCOUNT REQUIRED"}
         </span>
@@ -384,9 +408,13 @@ function OnlineGameLobby({ online }: { online: ReturnType<typeof useChessOnline>
   }
 
   return (
-    <div className="mt-8 flex flex-col items-center justify-center gap-5 rounded-3xl border border-border/60 bg-[#161B16] p-8">
+    <div className="night-panel mt-8 flex flex-col items-center justify-center gap-5 rounded-3xl border border-border/60 bg-[#161B16] p-8">
       <span className="font-mono text-sm tracking-[0.2em] text-foreground uppercase">
-        {isBg ? "Играй с приятел в реално време" : isZh ? "与朋友实时对战" : "PLAY A FRIEND IN REAL TIME"}
+        {isBg
+          ? "Играй с приятел в реално време"
+          : isZh
+            ? "与朋友实时对战"
+            : "PLAY A FRIEND IN REAL TIME"}
       </span>
 
       <div className="flex w-full max-w-md flex-col gap-3">
@@ -407,7 +435,7 @@ function OnlineGameLobby({ online }: { online: ReturnType<typeof useChessOnline>
           onClick={() => {
             if (codeInput.trim().length > 0) void online.joinGame(codeInput);
           }}
-          className="inline-flex items-center justify-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-brand uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5"
+          className="inline-flex items-center justify-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-[var(--brand-bright)] uppercase transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5"
           disabled={codeInput.trim().length === 0}
         >
           <UserPlus className="size-4" />
@@ -433,7 +461,9 @@ function OnlineGameLobby({ online }: { online: ReturnType<typeof useChessOnline>
       </button>
 
       {online.error && online.error !== "login-required" && (
-        <span className="font-mono text-xs tracking-[0.15em] text-red-400 uppercase">{online.error}</span>
+        <span className="font-mono text-xs tracking-[0.15em] text-red-400 uppercase">
+          {online.error}
+        </span>
       )}
     </div>
   );
@@ -447,7 +477,9 @@ function OnlineChessGame() {
   const navigate = useNavigate();
 
   const [selected, setSelected] = useState<Square | null>(null);
-  const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square } | null>(null);
+  const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square } | null>(
+    null,
+  );
 
   const snapshot = online.snapshot;
   const state = snapshot?.state ?? null;
@@ -469,10 +501,7 @@ function OnlineChessGame() {
   const myColor: Color | null = myRole === "white" ? "w" : myRole === "black" ? "b" : null;
   const isMyTurn = myColor !== null && state?.turn === myColor;
   const canMove =
-    online.phase === "playing" &&
-    isMyTurn &&
-    !snapshot?.result &&
-    myRole !== "spectator";
+    online.phase === "playing" && isMyTurn && !snapshot?.result && myRole !== "spectator";
   const gameOver = online.phase === "finished";
 
   const handleSquareClick = useCallback(
@@ -531,15 +560,31 @@ function OnlineChessGame() {
   if (online.phase === "error" && online.error) {
     headerText =
       online.error === "disconnected"
-        ? isBg ? "СВЪРЗВАНЕТО ПРЕКЪСНАТО" : isZh ? "连接已断开" : "DISCONNECTED"
+        ? isBg
+          ? "СВЪРЗВАНЕТО ПРЕКЪСНАТО"
+          : isZh
+            ? "连接已断开"
+            : "DISCONNECTED"
         : online.error;
   } else if (gameOver && snapshot.result) {
     headerText =
       snapshot.result === "draw"
-        ? isBg ? "РАВЕНСТВО — ПАТ" : isZh ? "平局 — 逼和" : "DRAW — STALEMATE"
+        ? isBg
+          ? "РАВЕНСТВО — ПАТ"
+          : isZh
+            ? "平局 — 逼和"
+            : "DRAW — STALEMATE"
         : snapshot.result === "white-wins"
-          ? isBg ? "ШАХ МАТ — Белите печелят" : isZh ? "将死 — 白棋获胜" : "CHECKMATE — White wins"
-          : isBg ? "ШАХ МАТ — Черните печелят" : isZh ? "将死 — 黑棋获胜" : "CHECKMATE — Black wins";
+          ? isBg
+            ? "ШАХ МАТ — Белите печелят"
+            : isZh
+              ? "将死 — 白棋获胜"
+              : "CHECKMATE — White wins"
+          : isBg
+            ? "ШАХ МАТ — Черните печелят"
+            : isZh
+              ? "将死 — 黑棋获胜"
+              : "CHECKMATE — Black wins";
   } else if (joinedCount < 2) {
     headerText = isZh ? "等待对手…" : isBg ? "Чакаме противник…" : "WAITING FOR OPPONENT…";
   } else if (canMove) {
@@ -562,7 +607,7 @@ function OnlineChessGame() {
 
   return (
     <>
-      <div className="relative mt-8 overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+      <div className="night-panel relative mt-8 overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
         <PanelHeader
           statusText={headerText}
           statusTone={headerTone}
@@ -576,7 +621,9 @@ function OnlineChessGame() {
         <div className="flex flex-col items-center justify-center gap-4 px-5 pb-5">
           <div className="flex w-full max-w-[560px] items-center justify-between gap-2 rounded-xl border border-border/40 bg-surface/40 px-4 py-2 font-mono text-[0.62rem] tracking-[0.15em] uppercase">
             <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-              <span className={`size-2 shrink-0 rounded-full ${snapshot.players.white?.online ? "bg-[#4ADE80]" : "bg-muted-foreground/40"}`} />
+              <span
+                className={`size-2 shrink-0 rounded-full ${snapshot.players.white?.online ? "bg-[#4ADE80]" : "bg-muted-foreground/40"}`}
+              />
               <span className={`truncate ${myRole === "white" ? "text-foreground" : ""}`}>
                 {snapshot.players.white?.name || (isBg ? "Бели" : isZh ? "白棋" : "White")}
               </span>
@@ -586,7 +633,9 @@ function OnlineChessGame() {
               <span className={`truncate ${myRole === "black" ? "text-foreground" : ""}`}>
                 {snapshot.players.black?.name || (isBg ? "Черни" : isZh ? "黑棋" : "Black")}
               </span>
-              <span className={`size-2 shrink-0 rounded-full ${snapshot.players.black?.online ? "bg-[#4ADE80]" : "bg-muted-foreground/40"}`} />
+              <span
+                className={`size-2 shrink-0 rounded-full ${snapshot.players.black?.online ? "bg-[#4ADE80]" : "bg-muted-foreground/40"}`}
+              />
             </span>
           </div>
 
@@ -623,8 +672,16 @@ function OnlineChessGame() {
                   >
                     <RotateCcw className="size-4" />
                     {online.rematch[myRole === "white" ? "white" : "black"]
-                      ? isBg ? "Чакаме противника…" : isZh ? "等待对手…" : "WAITING…"
-                      : isBg ? "РЕВАНШ" : isZh ? "再来一局" : "REMATCH"}
+                      ? isBg
+                        ? "Чакаме противника…"
+                        : isZh
+                          ? "等待对手…"
+                          : "WAITING…"
+                      : isBg
+                        ? "РЕВАНШ"
+                        : isZh
+                          ? "再来一局"
+                          : "REMATCH"}
                   </button>
                 </div>
                 <span className="font-mono text-[0.6rem] tracking-[0.15em] text-muted-foreground uppercase">
@@ -696,7 +753,9 @@ function ChessPage() {
               type="button"
               onClick={() => setMode("local")}
               className={`rounded-full px-5 py-2 font-mono text-[0.65rem] font-bold tracking-[0.18em] uppercase transition-colors ${
-                mode === "local" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                mode === "local"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {isBg ? "ЛОКАЛНО" : isZh ? "本地" : "LOCAL"}
@@ -705,7 +764,9 @@ function ChessPage() {
               type="button"
               onClick={() => setMode("online")}
               className={`rounded-full px-5 py-2 font-mono text-[0.65rem] font-bold tracking-[0.18em] uppercase transition-colors ${
-                mode === "online" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                mode === "online"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {isBg ? "ОНЛАЙН" : isZh ? "在线" : "ONLINE"}
@@ -714,7 +775,11 @@ function ChessPage() {
         </div>
 
         <span className="label-mono mt-2 block text-[0.62rem]">
-          {isBg ? "НАСТОЛНА КЛАСИКА / МУЛТИПЛЕЙЪР" : isZh ? "棋盘经典 / 多人对战" : "BOARD CLASSIC / MULTIPLAYER"}
+          {isBg
+            ? "НАСТОЛНА КЛАСИКА / МУЛТИПЛЕЙЪР"
+            : isZh
+              ? "棋盘经典 / 多人对战"
+              : "BOARD CLASSIC / MULTIPLAYER"}
         </span>
 
         {mode === "local" ? <LocalChessGame /> : <OnlineChessGame />}

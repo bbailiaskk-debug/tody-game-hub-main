@@ -9,7 +9,6 @@ import {
   writeRegisteredUsers,
   storageGet,
 } from "../../lib/local-persistence";
-import { serverSyncUserProfile } from "../../lib/auth-functions";
 
 type Theme = "dark" | "light";
 type Lang = "bg" | "en" | "zh";
@@ -47,6 +46,54 @@ const normalizeAccentColor = (value: string) => {
 
   return withHash.toLowerCase();
 };
+
+const ACCENT_TARGET_CONTRAST = 4.5;
+
+function channelsOf(hex: string): [number, number, number] {
+  const value = parseInt(hex.slice(1), 16);
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+function luminanceOf(rgb: [number, number, number]): number {
+  const toLinear = (channel: number) => {
+    const s = channel / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * toLinear(rgb[0]) + 0.7152 * toLinear(rgb[1]) + 0.0722 * toLinear(rgb[2]);
+}
+
+function contrastWithWhite(rgb: [number, number, number]): number {
+  const l = luminanceOf(rgb);
+  return 1.05 / (l + 0.05);
+}
+
+function toHex(rgb: [number, number, number]): string {
+  return `#${rgb
+    .map((c) =>
+      Math.max(0, Math.min(255, Math.round(c)))
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
+
+function darkenAccentForLight(hex: string): string {
+  const base = channelsOf(hex);
+  if (contrastWithWhite(base) >= ACCENT_TARGET_CONTRAST) return hex;
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 24; i++) {
+    const t = (lo + hi) / 2;
+    const mixed: [number, number, number] = [
+      base[0] * (1 - t),
+      base[1] * (1 - t),
+      base[2] * (1 - t),
+    ];
+    if (contrastWithWhite(mixed) >= ACCENT_TARGET_CONTRAST) hi = t;
+    else lo = t;
+  }
+  return toHex([base[0] * (1 - hi), base[1] * (1 - hi), base[2] * (1 - hi)]);
+}
 
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
@@ -94,37 +141,28 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
+
     root.classList.toggle("light", theme === "light");
     root.classList.toggle("dark", theme === "dark");
-  }, [theme]);
 
-  useEffect(() => {
-    document.documentElement.lang = lang === "zh" ? "zh-CN" : lang === "bg" ? "bg" : "en";
-  }, [lang]);
+    root.lang = lang === "zh" ? "zh-CN" : lang === "bg" ? "bg" : "en";
 
-  useEffect(() => {
-    const root = document.documentElement;
-    const color = accentColor || "#40cc3c";
-    root.style.setProperty("--brand", color);
-    root.style.setProperty("--primary", color);
-    root.style.setProperty("--ring", color);
-    root.style.setProperty("--brand-dim", color);
-    root.style.setProperty("--primary-foreground", "#0d1a17");
-  }, [accentColor]);
+    const accent = accentColor || "#40cc3c";
+    const brand = theme === "light" ? darkenAccentForLight(accent) : accent;
+    root.style.setProperty("--brand", brand);
+    root.style.setProperty("--primary", brand);
+    root.style.setProperty("--ring", brand);
+    root.style.setProperty("--brand-dim", brand);
+    root.style.setProperty("--brand-bright", accent);
+    root.style.setProperty("--primary-foreground", theme === "light" ? "#ffffff" : "#0d1a17");
 
-  useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--graphics-scale",
-      graphicsSize === "large" ? "1.08" : "1",
-    );
-  }, [graphicsSize]);
+    root.style.setProperty("--graphics-scale", graphicsSize === "large" ? "1.08" : "1");
 
-  useEffect(() => {
-    document.documentElement.style.setProperty(
+    root.style.setProperty(
       "--site-background-image",
       backgroundImage ? `url("${backgroundImage}")` : "none",
     );
-  }, [backgroundImage]);
+  }, [theme, lang, accentColor, graphicsSize, backgroundImage]);
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
@@ -155,10 +193,12 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
 
     writePersistedUserAccentColor(currentEmail, nextColor);
 
-    void serverSyncUserProfile({
-      data: { email: currentEmail, accentColor: nextColor },
-    }).catch((error) => {
-      console.warn("Failed to sync accent color to server.", error);
+    import("../../lib/auth-functions").then(({ serverSyncUserProfile }) => {
+      serverSyncUserProfile({
+        data: { email: currentEmail, accentColor: nextColor },
+      }).catch((error) => {
+        console.warn("Failed to sync accent color to server.", error);
+      });
     });
 
     const users = readRegisteredUsers();
@@ -211,12 +251,19 @@ export function useSiteSettings() {
 
 export const copy = {
   bg: {
-    nav: { home: "НАЧАЛО", games: "ИГРИ", music: "МУЗИКА", ai: "ИЗК. ИНТЕЛЕКТ", info: "ИНФОРМАЦИЯ" },
+    nav: {
+      home: "НАЧАЛО",
+      games: "ИГРИ",
+      music: "МУЗИКА",
+      ai: "ИЗК. ИНТЕЛЕКТ",
+      info: "ИНФОРМАЦИЯ",
+    },
     online: "ОНЛАЙН",
     settings: "Настройки",
     settingsLabel: "КОНТРОЛЕН ПАНЕЛ",
     language: "ЕЗИК",
     theme: "ТЕМА",
+    accentColor: "АКЦЕНТЕН ЦВЯТ",
     dark: "Тъмна",
     light: "Светла",
     tagline: "ГЕЙМИНГ / СЪЗДАТЕЛ",
@@ -228,6 +275,7 @@ export const copy = {
     settingsLabel: "CONTROL PANEL",
     language: "LANGUAGE",
     theme: "THEME",
+    accentColor: "ACCENT COLOR",
     dark: "Dark",
     light: "Light",
     tagline: "GAMING / CREATOR",
@@ -239,6 +287,7 @@ export const copy = {
     settingsLabel: "控制面板",
     language: "语言",
     theme: "主题",
+    accentColor: "强调色",
     dark: "深色",
     light: "浅色",
     tagline: "游戏 / 创作者",

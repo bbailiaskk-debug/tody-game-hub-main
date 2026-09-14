@@ -1,0 +1,109 @@
+{
+  "name": "vitallens",
+  "displayName": "VitalLens — SEO & Performance Analyzer",
+  "description": "Real-time SEO & Core Web Vitals linter for HTML, CSS, JS/TS, and React projects. Inline bundle size CodeLens, image warnings and redirect-loop detection — like Lighthouse inside VS Code.",
+  "version": "1.0.0",
+  "publisher": "tody",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vitallens.refresh",
+        "title": "VitalLens: Rescan Project"
+      },
+      {
+        "command": "vitallens.showPanel",
+        "title": "VitalLens: Show Score Panel",
+        "icon": "$(graph-line)"
+      },
+      {
+        "command": "vitallens.openIssue",
+        "title": "VitalLens: Open Issue",
+        "icon": "$(go-to-file)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "vitallens.refresh",
+          "when": "view == vitallens.view",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "VitalLens",
+      "properties": {
+        "vitallens.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable or disable all VitalLens SEO & performance audits."
+        },
+        "vitallens.imageSizeWarningKB": {
+          "type": "number",
+          "default": 200,
+          "minimum": 0,
+          "description": "Size threshold in KB to trigger LCP warnings on images."
+        },
+        "vitallens.showCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline bundle-size and TTI CodeLens above dependencies."
+        },
+        "vitallens.analyzeOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Re-run SEO analysis immediately on file save."
+        },
+        "vitallens.rankTarget": {
+          "type": "string",
+          "enum": [
+            "top3",
+            "top10",
+            "top100"
+          ],
+          "default": "top10",
+          "description": "Target rank used for the predicted Lighthouse score calibration."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vitallens",
+          "title": "VitalLens",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "vitallens": [
+        {
+          "id": "vitallens.view",
+          "name": "VitalLens",
+          "contextualTitle": "VitalLens — SEO & Performance"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --no-dependencies",
+    "lint": "tsc -p ./ --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.4"
+  }
+}

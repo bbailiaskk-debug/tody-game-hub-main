@@ -43,14 +43,18 @@ export const Route = createFileRoute("/info")({
         content: "Профил на създателя, канали за следване и график на новите видеа.",
       },
       { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/info" },
+      { property: "og:type", content: "website" },
       {
         property: "og:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/profile-photo.jpg",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
       },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:type", content: "image/jpeg" },
       { name: "twitter:card", content: "summary_large_image" },
       {
         name: "twitter:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/profile-photo.jpg",
+        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
       },
     ],
     links: [
@@ -84,7 +88,7 @@ const socials = [
   {
     name: "YouTube",
     href: "https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ",
-    className: "bg-youtube text-primary-foreground",
+    className: "bg-youtube text-[#ffffff]",
   },
   {
     name: "TikTok",
@@ -94,12 +98,12 @@ const socials = [
   {
     name: "Spotify",
     href: "https://open.spotify.com/artist/0qeXEFSge1i8K1lC8np20g",
-    className: "bg-spotify text-primary-foreground",
+    className: "bg-spotify text-[#0d1a17]",
   },
   {
     name: "Discord",
     href: "https://discord.gg/uRNGhKf7vC",
-    className: "bg-discord text-primary-foreground",
+    className: "bg-discord text-[#0d1a17]",
   },
 ];
 
@@ -261,8 +265,8 @@ function InfoPage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-[#1DB954]/20 bg-[#161B16] p-5">
-              <h2 className="label-mono text-brand text-[0.7rem]">
+            <div className="night-panel rounded-3xl border border-[#1DB954]/20 bg-[#161B16] p-5">
+              <h2 className="label-mono text-[var(--brand-bright)] text-[0.7rem]">
                 {isBg ? "СЪДЪРЖАНИЕ" : isZh ? "内容" : "CONTENT"}
               </h2>
               <ul className="mt-4 space-y-1">
