@@ -33,6 +33,7 @@ function DinoGamePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastRef = useRef<number | null>(null);
+  const displayedScoreRef = useRef(0);
   const keysRef = useRef<Set<string>>(new Set());
 
   const [score, setScore] = useState(0);
@@ -131,6 +132,7 @@ function DinoGamePage() {
     }
     setIsRunning(true);
     lastRef.current = null;
+    displayedScoreRef.current = 0;
     setScore(0);
   }, [isGameOver]);
 
@@ -175,7 +177,11 @@ function DinoGamePage() {
       g.speed = Math.min(320 + g.score * 0.6, 720);
       g.frames += 1;
       g.score += dt * g.speed * 0.02;
-      setScore(Math.floor(g.score));
+      const nextScore = Math.floor(g.score);
+      if (nextScore !== displayedScoreRef.current) {
+        displayedScoreRef.current = nextScore;
+        setScore(nextScore);
+      }
 
       g.spawnTimer -= dt;
       if (g.spawnTimer <= 0) {
