@@ -382,7 +382,7 @@ function InfoPage() {
 
         <div
           id="youtube-videos"
-          className="mt-14 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
+          className="lazy-section mt-14 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
         >
           <div className="flex items-center gap-3">
             <Play className="size-4 text-brand" />
@@ -432,7 +432,7 @@ function InfoPage() {
 
         <div
           id="highlights"
-          className="mt-8 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
+          className="lazy-section mt-8 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
         >
           <div className="flex items-center gap-3">
             <Flame className="size-4 text-brand" />
@@ -482,7 +482,7 @@ function InfoPage() {
 
         <div
           id="community-news"
-          className="mt-8 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
+          className="lazy-section mt-8 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
         >
           <div className="flex items-center gap-3">
             <Users className="size-4 text-brand" />
@@ -532,7 +532,7 @@ function InfoPage() {
 
         <div
           id="music-playlists"
-          className="mt-8 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
+          className="lazy-section mt-8 scroll-mt-28 rounded-3xl border border-border bg-card p-6 md:p-8"
         >
           <div className="flex items-center gap-3">
             <Music className="size-4 text-brand" />

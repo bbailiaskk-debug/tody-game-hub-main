@@ -99,8 +99,8 @@ function Index() {
 
   return (
     <main className="grid-bg min-h-screen">
-      <section className="mx-auto grid max-w-[1400px] items-center gap-14 px-6 pb-24 pt-20 lg:grid-cols-[1.1fr_0.9fr] lg:pt-28">
-        <div>
+      <section className="hero-banner mx-auto grid max-w-7xl items-center gap-10 px-6 pb-24 pt-20 sm:gap-14 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16 lg:pt-28">
+        <div className="min-w-0">
           <div className="flex items-center gap-4">
             <span className="h-px w-10 bg-brand" />
             <span className="label-mono">
@@ -108,7 +108,7 @@ function Index() {
             </span>
           </div>
 
-          <h1 className="mt-8 text-brand text-[clamp(2.8rem,8vw,6.5rem)] leading-[0.92]">
+          <h1 className="hero-title mt-8 text-brand text-[clamp(2.8rem,8vw,6.5rem)] leading-[0.92]">
             {isBg ? (
               <>
                 ЯКИ ИГРИ
@@ -197,11 +197,11 @@ function Index() {
           </div>
         </div>
 
-        <div className="rounded-4xl border border-border bg-card/70 p-5">
+        <div className="w-full max-w-sm rounded-4xl border border-border bg-card/70 p-5 lg:justify-self-center">
           <p className="label-mono text-[0.62rem] text-brand-dim">
             TK / {isBg ? "НА ЖИВО" : isZh ? "直播" : "LIVE"}
           </p>
-          <div className="mt-4 flex aspect-square flex-col items-center justify-center rounded-3xl bg-surface/60">
+          <div className="mt-4 flex flex-col items-center justify-center rounded-3xl bg-surface/60 px-6 py-10">
             <Gamepad2 className="size-7 text-brand" />
             <span className="mt-4 font-display text-5xl text-brand">TK</span>
             <span className="label-mono mt-3 text-[0.6rem]">{t.online}</span>
@@ -218,7 +218,7 @@ function Index() {
         </div>
       </section>
 
-      <section id="games" className="mx-auto max-w-[1400px] px-6 pb-28">
+      <section id="games" className="lazy-section mx-auto max-w-7xl px-6 pb-28">
         <div className="flex items-center gap-4">
           <span className="label-mono text-brand">02 /</span>
           <span className="label-mono">

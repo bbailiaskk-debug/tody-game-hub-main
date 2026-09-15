@@ -307,10 +307,13 @@ function Login() {
         },
       });
       googleButtonRef.current.replaceChildren();
+      const googleWidth = Math.round(
+        Math.max(240, Math.min(360, googleButtonRef.current.clientWidth || 360)),
+      );
       window.google.accounts.id.renderButton(googleButtonRef.current, {
         theme: "outline",
         size: "large",
-        width: "360",
+        width: String(googleWidth),
         text: "signin_with",
       });
     };

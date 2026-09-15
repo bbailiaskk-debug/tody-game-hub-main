@@ -196,19 +196,19 @@ export function SiteHeader() {
     "rounded-full px-6 py-2.5 font-mono text-xs tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-[68px] max-w-[1600px] items-center justify-between gap-4 px-5">
-        <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-          <span className="relative grid size-12 place-items-center rounded-full bg-surface-2 font-display text-base font-bold">
+    <header className="site-header sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl max-sm:bg-background max-sm:backdrop-blur-none">
+      <div className="mx-auto flex h-[68px] max-w-[1600px] items-center justify-between gap-3 px-4 sm:gap-4 sm:px-5">
+        <Link to="/" className="site-header-brand flex items-center gap-2 flex-shrink-0">
+          <span className="site-header-logo relative grid size-12 place-items-center rounded-full bg-surface-2 font-display text-base font-bold">
             TK
             <span className="absolute right-0 top-0 size-2 rounded-full bg-brand" />
           </span>
 
-          <div className="flex flex-col gap-0.5">
+          <div className="site-header-copy flex min-w-0 flex-col gap-0.5">
             <span className="block font-display text-sm font-bold tracking-tight leading-tight">
               TODOR <span className="text-brand">KHRISTOV</span>
             </span>
-            <span className="text-[0.55rem] font-mono tracking-[0.15em] text-muted-foreground">
+            <span className="hidden text-[0.55rem] font-mono tracking-[0.15em] text-muted-foreground min-[440px]:block">
               {t.tagline}
             </span>
           </div>
@@ -238,7 +238,9 @@ export function SiteHeader() {
                     {(userName || userEmail).charAt(0).toUpperCase()}
                   </span>
                 )}
-                <span className="max-w-[80px] truncate">{userName || userEmail}</span>
+                <span className="hidden max-w-[80px] truncate sm:inline">
+                  {userName || userEmail}
+                </span>
               </button>
 
               <div

@@ -157,18 +157,21 @@ function Game2048Page() {
   const { lang } = useSiteSettings();
   const isBg = lang === "bg";
 
-  const [grid, setGrid] = useState<Grid>(() => {
-    let g = emptyGrid();
-    g = addRandomTile(g);
-    g = addRandomTile(g);
-    return g;
-  });
+  const [grid, setGrid] = useState<Grid>(emptyGrid);
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [won, setWon] = useState(false);
   const gridRef = useRef(grid);
   gridRef.current = grid;
+
+  useEffect(() => {
+    setGrid((g) => {
+      let ng = addRandomTile(g);
+      ng = addRandomTile(ng);
+      return ng;
+    });
+  }, []);
 
   useEffect(() => {
     setBest(Number(localStorage.getItem("2048-best") || "0"));
@@ -295,7 +298,12 @@ function Game2048Page() {
             </span>
           </div>
 
-          <div className="px-5 pb-5" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+          <div
+            className="px-5 pb-5"
+            style={{ touchAction: "none" }}
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+          >
             <div className="grid grid-cols-4 gap-2 rounded-2xl bg-[#0d1a17] p-2">
               {grid.map((row, r) =>
                 row.map((val, c) => (

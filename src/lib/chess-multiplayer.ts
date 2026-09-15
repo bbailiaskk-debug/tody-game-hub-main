@@ -180,6 +180,7 @@ export function useChessOnline(): ChessOnlineController {
     };
 
     ws.onclose = () => {
+      if (wsRef.current !== ws) return;
       stopPing();
       if (!leftRef.current && attemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
         attemptsRef.current += 1;

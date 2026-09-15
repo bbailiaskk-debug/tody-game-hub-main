@@ -275,6 +275,19 @@ function DinoGamePage() {
     };
   }, [isRunning, isGameOver, startGame]);
 
+  const handlePanelPointerDown = () => {
+    if (isGameOver) {
+      startGame();
+      return;
+    }
+    if (!isRunning) {
+      startGame();
+      return;
+    }
+    keysRef.current.add(" ");
+    window.setTimeout(() => keysRef.current.delete(" "), 120);
+  };
+
   return (
     <main className="grid-bg min-h-screen">
       <section className="mx-auto max-w-[1000px] px-6 pb-28 pt-20">
@@ -292,7 +305,10 @@ function DinoGamePage() {
           </span>
         </div>
 
-        <div className="night-panel relative mt-8 overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+        <div
+          onPointerDown={handlePanelPointerDown}
+          className="night-panel relative mt-8 touch-manipulation select-none overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]"
+        >
           <div className="flex items-center justify-between px-5 py-3">
             <span className="font-mono text-[0.65rem] tracking-[0.2em] text-muted-foreground uppercase">
               {isBg ? "НАЙ-ДОБЪР РЕЗУЛТАТ" : "HIGH SCORE"} — {best}
@@ -346,9 +362,9 @@ function DinoGamePage() {
 
         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-mono text-[0.62rem] tracking-[0.15em] text-muted-foreground uppercase">
           <span>
-            <span className="text-brand">SPACE</span> — {isBg ? "скок" : "jump"}
+            <span className="text-brand">SPACE / TAP</span> — {isBg ? "скок" : "jump"}
           </span>
-          <span>
+          <span className="max-sm:hidden">
             <span className="text-brand">↓</span> — {isBg ? "приклекни" : "duck"}
           </span>
         </div>

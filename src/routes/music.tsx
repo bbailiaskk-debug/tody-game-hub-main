@@ -304,14 +304,18 @@ function MusicPage() {
             <button
               type="button"
               aria-label={isBg ? "Търсене" : "Search"}
-              className="grid size-11 place-items-center rounded-md text-brand"
+              aria-disabled="true"
+              tabIndex={-1}
+              className="grid size-11 place-items-center rounded-md text-muted-foreground opacity-50"
             >
               <Search className="size-5" />
             </button>
             <button
               type="button"
               aria-label={isBg ? "Библиотека" : "Library"}
-              className="grid size-11 place-items-center rounded-md bg-brand text-primary-foreground"
+              aria-disabled="true"
+              tabIndex={-1}
+              className="grid size-11 place-items-center rounded-md text-muted-foreground opacity-50"
             >
               <Library className="size-5" />
             </button>
@@ -320,15 +324,15 @@ function MusicPage() {
 
         <section className="min-w-0 overflow-hidden bg-background/35 px-5 py-7 sm:px-8 lg:px-12">
           <div className="mx-auto max-w-5xl">
-            <div className="flex items-end justify-between gap-5">
-              <div>
+            <div className="flex flex-wrap items-end justify-between gap-x-5 gap-y-4">
+              <div className="min-w-0">
                 <span className="label-mono text-brand">TK / MUSIC LIBRARY</span>
                 <h1 className="mt-3 font-display text-[clamp(2rem,5vw,4.4rem)] leading-none">
                   {isBg ? "Tодор Христов" : isZh ? "Todor Khristov" : "Todor Khristov"}
                 </h1>
               </div>
-              <Disc3 className="mb-1 hidden size-10 text-brand sm:block" />
-              <div className="flex items-center gap-2">
+              <Disc3 className="mb-1 hidden size-10 shrink-0 text-brand sm:block" />
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   ref={backgroundInputRef}
                   type="file"
@@ -476,7 +480,7 @@ function MusicPage() {
         </aside>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-surface px-4 py-3 shadow-2xl sm:px-6">
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-surface px-4 pt-3 shadow-2xl pb-safe sm:px-6">
         <div className="mx-auto flex max-w-[1600px] items-center gap-4">
           <div className="hidden min-w-0 w-56 sm:block">
             <p className="truncate text-sm font-bold">{selectedTrack?.name}</p>

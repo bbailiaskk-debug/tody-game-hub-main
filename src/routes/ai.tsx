@@ -1784,6 +1784,7 @@ function AiPage() {
               onPaste={handlePaste}
               rows={1}
               placeholder={textareaPlaceholder}
+              aria-label={textareaPlaceholder}
               className="max-h-[160px] min-h-[24px] w-full resize-none bg-transparent px-1 py-2 text-[0.95rem] text-[var(--tk-text)] outline-none placeholder:text-[var(--tk-muted)]"
             />
             {microphoneControl}
@@ -1803,6 +1804,7 @@ function AiPage() {
               onPaste={handlePaste}
               rows={1}
               placeholder={textareaPlaceholder}
+              aria-label={textareaPlaceholder}
               className="max-h-[160px] w-full resize-none bg-transparent px-1 py-1 text-[0.95rem] text-[var(--tk-text)] outline-none placeholder:text-[var(--tk-muted)]"
             />
             <div className="mt-2 flex items-center justify-between">

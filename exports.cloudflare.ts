@@ -230,7 +230,7 @@ export class ChessMatchDO extends DurableObject<ChessEnv> {
     const pair = new WebSocketPair();
     const serverWs = pair[0];
     this.wsToConnId.set(serverWs, connId);
-    this.ctx.acceptWebSocket(serverWs);
+    this.ctx.acceptWebSocket(serverWs, [connId]);
     this.send(serverWs, { type: "state", snapshot });
 
     return new Response(null, { status: 101, webSocket: pair[1] } as ResponseInit);
@@ -243,7 +243,11 @@ export class ChessMatchDO extends DurableObject<ChessEnv> {
     try {
       const parsed = this.parseMessage(message);
       if (!parsed) return;
-      if (typeof parsed.connId !== "string" || !parsed.connId) return;
+      const connectionId = this.getConnectionId(ws);
+      if (!connectionId || parsed.connId !== connectionId) {
+        this.send(ws, { type: "error", message: "unknown-connection" });
+        return;
+      }
       await this.ctx.blockConcurrencyWhile(async () => {
         await this.handleClientMessage(ws, parsed);
       });
@@ -440,7 +444,7 @@ export class ChessMatchDO extends DurableObject<ChessEnv> {
   }
 
   private async handleConnectionClosed(ws: WebSocket): Promise<void> {
-    const connId = this.wsToConnId.get(ws);
+    const connId = this.getConnectionId(ws);
     this.wsToConnId.delete(ws);
     if (!connId) return;
 
@@ -568,6 +572,15 @@ export class ChessMatchDO extends DurableObject<ChessEnv> {
     }
   }
 
+  private getConnectionId(ws: WebSocket): string | null {
+    const mapped = this.wsToConnId.get(ws);
+    if (mapped) return mapped;
+    const tagged = this.ctx.getWebSocketTags(ws)[0];
+    if (!tagged) return null;
+    this.wsToConnId.set(ws, tagged);
+    return tagged;
+  }
+
   private parseMessage(
     message: string | ArrayBuffer | ArrayBufferView,
   ): ClientToServerMessage | null {
@@ -647,7 +660,7 @@ export class TicTacToeMatchDO extends DurableObject<TttEnv> {
     const pair = new WebSocketPair();
     const serverWs = pair[0];
     this.wsToConnId.set(serverWs, connId);
-    this.ctx.acceptWebSocket(serverWs);
+    this.ctx.acceptWebSocket(serverWs, [connId]);
     this.send(serverWs, { type: "state", snapshot });
 
     return new Response(null, { status: 101, webSocket: pair[1] } as ResponseInit);
@@ -660,7 +673,11 @@ export class TicTacToeMatchDO extends DurableObject<TttEnv> {
     try {
       const parsed = this.parseMessage(message);
       if (!parsed) return;
-      if (typeof parsed.connId !== "string" || !parsed.connId) return;
+      const connectionId = this.getConnectionId(ws);
+      if (!connectionId || parsed.connId !== connectionId) {
+        this.send(ws, { type: "error", message: "unknown-connection" });
+        return;
+      }
       await this.ctx.blockConcurrencyWhile(async () => {
         await this.handleClientMessage(ws, parsed);
       });
@@ -852,7 +869,7 @@ export class TicTacToeMatchDO extends DurableObject<TttEnv> {
   }
 
   private async handleConnectionClosed(ws: WebSocket): Promise<void> {
-    const connId = this.wsToConnId.get(ws);
+    const connId = this.getConnectionId(ws);
     this.wsToConnId.delete(ws);
     if (!connId) return;
 
@@ -976,6 +993,15 @@ export class TicTacToeMatchDO extends DurableObject<TttEnv> {
     } catch (error) {
       console.warn("Failed to send a tictactoe websocket message.", error);
     }
+  }
+
+  private getConnectionId(ws: WebSocket): string | null {
+    const mapped = this.wsToConnId.get(ws);
+    if (mapped) return mapped;
+    const tagged = this.ctx.getWebSocketTags(ws)[0];
+    if (!tagged) return null;
+    this.wsToConnId.set(ws, tagged);
+    return tagged;
   }
 
   private parseMessage(
