@@ -1,5 +1,5 @@
 models:
-  - name: Gemini
+  - name: Gemini Reasoning
     provider: gemini
-    model: gemini-2.5-flash
+    model: gemini-2.5-pro
     apiKey: $GEMINI_API_KEY
