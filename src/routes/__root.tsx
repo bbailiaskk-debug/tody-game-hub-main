@@ -196,7 +196,7 @@ function RootShell({ children }: { children: ReactNode }) {
             __html: `if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
     navigator.serviceWorker
-      .register("/pwabuilder-sw.js")
+      .register("/sw.js")
       .then(function (registration) {
         console.log("ServiceWorker registered:", registration.scope);
       })

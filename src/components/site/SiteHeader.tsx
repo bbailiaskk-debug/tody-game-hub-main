@@ -22,6 +22,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 
 import { createPortal } from "react-dom";
 
+import { InstallPWAButton } from "./InstallPWAButton";
+
 import {
   clearPersistedUserProfile,
   readPersistedAuthSession,
@@ -215,6 +217,7 @@ export function SiteHeader() {
         </Link>
 
         <div className="site-header-actions ml-auto flex items-center gap-2">
+          {mounted && <InstallPWAButton />}
           {mounted && userEmail ? (
             // User is logged in - show profile menu
             <div ref={profileMenuRef} className="relative">
