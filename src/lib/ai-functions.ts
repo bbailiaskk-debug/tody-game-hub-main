@@ -24,9 +24,22 @@ type AiChatInput = {
   messages: AiChatMessage[];
 };
 
+type GeminiKvNamespace = {
+  get: (key: string) => Promise<string | null>;
+  put: (key: string, value: string) => Promise<void>;
+};
+
+type GeminiCachedResponse = {
+  success: boolean;
+  error?: string;
+  data?: { text: string; image?: AiChatImage };
+};
+
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta";
 
 const MAX_ATTACHMENTS = 10;
+
+const GEMINI_TIMEOUT_MS = 25_000;
 
 const MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024;
 
@@ -130,6 +143,75 @@ function getImageGenerationModel(): string {
   return readSecret("GEMINI_IMAGE_GEN_MODEL") || IMAGE_GEN_MODEL_DEFAULT;
 }
 
+function getGeminiCacheKv(): GeminiKvNamespace | null {
+  const workerEnv = env as unknown as { GEMINI_CACHE_KV?: GeminiKvNamespace; AUTH_USERS_KV?: GeminiKvNamespace };
+  if (workerEnv.GEMINI_CACHE_KV) return workerEnv.GEMINI_CACHE_KV;
+  if (workerEnv.AUTH_USERS_KV) return workerEnv.AUTH_USERS_KV;
+
+  const globalEnv = (globalThis as typeof globalThis & {
+    CF_ENV?: { GEMINI_CACHE_KV?: GeminiKvNamespace; AUTH_USERS_KV?: GeminiKvNamespace };
+  }).CF_ENV;
+  if (globalEnv?.GEMINI_CACHE_KV) return globalEnv.GEMINI_CACHE_KV;
+  if (globalEnv?.AUTH_USERS_KV) return globalEnv.AUTH_USERS_KV;
+
+  return null;
+}
+
+export function buildGeminiCacheKey(model: string, prompt: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < prompt.length; index += 1) {
+    hash ^= prompt.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  const key = (hash >>> 0).toString(16).padStart(8, "0");
+  return `gemini:${model}:${key}`;
+}
+
+export async function readGeminiCachedResponse<T>(
+  kv: GeminiKvNamespace | null,
+  key: string,
+): Promise<T | null> {
+  if (!kv) return null;
+
+  try {
+    const raw = await kv.get(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeGeminiCachedResponse<T>(
+  kv: GeminiKvNamespace | null,
+  key: string,
+  value: T,
+): Promise<void> {
+  if (!kv) return;
+
+  try {
+    await kv.put(key, JSON.stringify(value));
+  } catch {
+    // Ignore cache write failures; the API request still succeeds.
+  }
+}
+
+async function fetchWithGeminiTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = GEMINI_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function isImageRequest(text: string): boolean {
   const value = typeof text === "string" ? text.trim() : "";
   if (!value) return false;
@@ -159,13 +241,30 @@ async function requestImageGeneration(
     },
   });
 
+  const cacheKv = getGeminiCacheKv();
+  const cacheKey = buildGeminiCacheKey(model, requestBody);
+  const cached = await readGeminiCachedResponse<GeminiCachedResponse>(cacheKv, cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   let response!: Response;
   for (let attempt = 1; attempt <= MAX_GEMINI_RETRIES; attempt += 1) {
-    response = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: requestBody,
-    });
+    try {
+      response = await fetchWithGeminiTimeout(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: requestBody,
+      });
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.name === "AbortError";
+      return {
+        success: false,
+        error: isTimeout
+          ? "Gemini API не отговори в рамките на 25 секунди (Timeout). Моля, опитай отново."
+          : "Неуспешна заявка към Gemini API.",
+      };
+    }
 
     if ((response.status === 429 || response.status === 503) && attempt < MAX_GEMINI_RETRIES) {
       await waitForGeminiRetry(response, attempt);
@@ -222,13 +321,17 @@ async function requestImageGeneration(
 
   const mimeType = imagePart.inlineData.mimeType || "image/png";
   const textPart = parts.find((part) => part?.text)?.text?.trim() ?? "";
-  return {
+  const payload = {
     success: true,
     data: {
       text: textPart ? `Ето твоята снимка. ${textPart}` : "Ето твоята снимка.",
       image: { mimeType, dataUrl: `data:${mimeType};base64,${imagePart.inlineData.data}` },
     },
-  };
+  } satisfies GeminiCachedResponse;
+
+  await writeGeminiCachedResponse(cacheKv, cacheKey, payload);
+
+  return payload;
 }
 
 const MAX_GEMINI_RETRIES = 3;
@@ -392,13 +495,30 @@ export const serverAiChat = createServerFn({ method: "POST" })
         },
       });
 
+      const cacheKv = getGeminiCacheKv();
+      const cacheKey = buildGeminiCacheKey(model, requestBody);
+      const cached = await readGeminiCachedResponse<GeminiCachedResponse>(cacheKv, cacheKey);
+      if (cached) {
+        return cached;
+      }
+
       let response!: Response;
       for (let attempt = 1; attempt <= MAX_GEMINI_RETRIES; attempt += 1) {
-        response = await fetch(url, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: requestBody,
-        });
+        try {
+          response = await fetchWithGeminiTimeout(url, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: requestBody,
+          });
+        } catch (error) {
+          const isTimeout = error instanceof Error && error.name === "AbortError";
+          return {
+            success: false,
+            error: isTimeout
+              ? "Gemini API не отговори в рамките на 25 секунди (Timeout). Моля, опитай отново."
+              : "Неуспешна заявка към Gemini API.",
+          };
+        }
 
         if ((response.status === 429 || response.status === 503) && attempt < MAX_GEMINI_RETRIES) {
           await waitForGeminiRetry(response, attempt);
@@ -445,7 +565,10 @@ export const serverAiChat = createServerFn({ method: "POST" })
         return { success: false, error: "Gemini не върна текст. Моля, опитай пак." };
       }
 
-      return { success: true, data: { text } };
+      const payload = { success: true, data: { text } } satisfies GeminiCachedResponse;
+      await writeGeminiCachedResponse(cacheKv, cacheKey, payload);
+
+      return payload;
     } catch (error) {
       console.warn("Gemini request failed.", error);
       return { success: false, error: "Неуспешна заявка към Gemini API." };
