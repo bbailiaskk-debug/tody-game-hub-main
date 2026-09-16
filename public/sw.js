@@ -5,9 +5,16 @@
    cache-first for static assets.
    =========================================================== */
 
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 const CACHE_NAME = `tkg-pwabuilder-${VERSION}`;
-const PRECACHE_URLS = ["/", "/site.webmanifest", "/android-chrome-192x192.png", "/android-chrome-512x512.png", "/favicon-32x32.png"];
+const PRECACHE_URLS = [
+  "/",
+  "/site.webmanifest",
+  "/android-chrome-192x192.png",
+  "/android-chrome-512x512.png",
+  "/favicon-32x32.png",
+  "/favicon.ico",
+];
 
 const ASSET_EXTENSIONS = /\.(?:js|css|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|webmanifest|json)$/;
 
@@ -31,6 +38,15 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+async function cacheResponse(request, response) {
+  if (!response || response.type !== "basic" || response.status !== 200) {
+    return;
+  }
+
+  const cache = await caches.open(CACHE_NAME);
+  await cache.put(request, response.clone());
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
@@ -42,14 +58,13 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         try {
-          const response = await fetch(request);
-          if (response && response.ok) {
-            const cache = await caches.open(CACHE_NAME);
-            cache.put(request, response.clone());
+          const networkResponse = await fetch(request);
+          if (networkResponse && networkResponse.ok) {
+            await cacheResponse(request, networkResponse);
           }
-          return response;
+          return networkResponse;
         } catch (error) {
-          const cached = await caches.match("/");
+          const cached = await caches.match(request) || (await caches.match("/"));
           if (cached) return cached;
           return new Response("Offline", {
             status: 503,
@@ -62,21 +77,20 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (ASSET_EXTENSIONS.test(url.pathname)) {
+  if (ASSET_EXTENSIONS.test(url.pathname) || url.pathname.startsWith("/assets/")) {
     event.respondWith(
       (async () => {
         const cached = await caches.match(request);
         if (cached) return cached;
+
         try {
-          const response = await fetch(request);
-          if (response && response.ok) {
-            const cache = await caches.open(CACHE_NAME);
-            cache.put(request, response.clone());
+          const networkResponse = await fetch(request);
+          if (networkResponse && networkResponse.ok) {
+            await cacheResponse(request, networkResponse);
           }
-          return response;
+          return networkResponse;
         } catch (error) {
-          if (cached) return cached;
-          return new Response("", { status: 504, statusText: "Network Error" });
+          return cached || new Response("", { status: 504, statusText: "Network Error" });
         }
       })(),
     );
