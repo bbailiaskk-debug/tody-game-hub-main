@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.todorkhristov.gaming",
+    "sha256_cert_fingerprints": ["ED:39:E3:62:DA:4A:7C:D9:D0:15:7F:4D:F0:19:2F:4B:99:4E:1F:8D:70:0D:DF:A3:2A:59:62:F6:C5:C8:0B:48"]
+  }
+}]

@@ -2,7 +2,6 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import {
   Disc3,
   Home,
-  ImagePlus,
   Library,
   ListMusic,
   Pause,
@@ -17,7 +16,6 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSiteSettings } from "../components/site/theme";
-import { createCompressedImageDataUrl } from "../lib/image-utils";
 import { readPersistedAuthSession } from "../lib/local-persistence";
 
 export const Route = createFileRoute("/music")({
@@ -104,7 +102,7 @@ const libraryTracks: Track[] = [
 }));
 
 function MusicPage() {
-  const { lang, backgroundImage, setBackgroundImage } = useSiteSettings();
+  const { lang } = useSiteSettings();
   const isBg = lang === "bg";
   const isZh = lang === "zh";
   const [tracks] = useState<Track[]>(libraryTracks);
@@ -116,9 +114,7 @@ function MusicPage() {
   const [volume, setVolume] = useState(0.75);
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
-  const [backgroundError, setBackgroundError] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const backgroundInputRef = useRef<HTMLInputElement>(null);
   const mediaActionsRef = useRef({
     play: () => {},
     pause: () => {},
@@ -332,54 +328,6 @@ function MusicPage() {
                 </h1>
               </div>
               <Disc3 className="mb-1 hidden size-10 shrink-0 text-brand sm:block" />
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  ref={backgroundInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  className="sr-only"
-                  onChange={async (event) => {
-                    const file = event.target.files?.[0];
-                    setBackgroundError(false);
-                    const maxFileSize = 17.1 * 1024 * 1024;
-                    if (!file || file.size > maxFileSize) {
-                      setBackgroundError(true);
-                      return;
-                    }
-
-                    try {
-                      const compressedImage = await createCompressedImageDataUrl(file, {
-                        maxWidth: 1920,
-                        maxHeight: 1080,
-                        maxBytes: 450_000,
-                        quality: 0.68,
-                      });
-                      setBackgroundImage(compressedImage);
-                    } catch {
-                      setBackgroundError(true);
-                    } finally {
-                      event.target.value = "";
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => backgroundInputRef.current?.click()}
-                  className="flex items-center gap-2 border border-brand px-3 py-2 font-mono text-[0.6rem] text-brand transition-colors hover:bg-accent/40 focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                >
-                  <ImagePlus className="size-4" />
-                  {isBg ? "КАЧИ СНИМКА" : isZh ? "上传图片" : "UPLOAD IMAGE"}
-                </button>
-                {backgroundImage && (
-                  <button
-                    type="button"
-                    onClick={() => setBackgroundImage(null)}
-                    className="border border-border px-3 py-2 font-mono text-[0.6rem] text-muted-foreground hover:text-foreground"
-                  >
-                    {isBg ? "ПРЕМАХНИ" : isZh ? "移除" : "REMOVE"}
-                  </button>
-                )}
-              </div>
             </div>
             <div className="mt-8 flex h-12 max-w-2xl items-center border border-border bg-surface px-4">
               <Search className="size-4 text-muted-foreground" />

@@ -123,30 +123,21 @@ function RootShell({ children }: { children: ReactNode }) {
         <style dangerouslySetInnerHTML={{ __html: criticalCss }} />
         <link rel="preload" href={appCssUrl} as="style" fetchPriority="high" />
         <link rel="stylesheet" href={appCssUrl} media="all" id="app-css" suppressHydrationWarning />
+        <noscript>
+          <link rel="stylesheet" href={appCssUrl} media="all" />
+        </noscript>
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){
   var l=document.getElementById("app-css");if(!l)return;
-  function isOn(){
-    try{for(var i=0;i<document.styleSheets.length;i++){if(document.styleSheets[i].href===l.href)return true;}}
-    catch(e){return !!l.sheet;}
-    return false;
-  }
-  function apply(){if(l.media!=="all"){l.media="all";}document.documentElement.setAttribute("data-css-on","");}
-  function tick(){if(isOn()){apply();}setTimeout(function(){if(isOn())apply();},0);}
-  l.onload=function(){apply();};
-  l.onerror=function(){};
-  var guard=setInterval(function(){tick();},250);
-  var stop=function(){clearInterval(guard);tick();};
-  if(document.readyState==="complete"){stop();}
-  else{window.addEventListener("load",stop);document.addEventListener("DOMContentLoaded",function(){setTimeout(tick,0);setTimeout(tick,120);});}
-  tick();setTimeout(tick,60);setTimeout(tick,250);setTimeout(tick,800);setTimeout(tick,2000);
+  function apply(){document.documentElement.setAttribute("data-css-on","");}
+  try{if(l.sheet)apply();}catch(e){}
+  l.onload=apply;
+  var guard=setInterval(function(){try{if(l.sheet)apply();}catch(e){apply();}},200);
+  window.addEventListener("load",function(){clearInterval(guard);apply();},{once:true});
 })();`,
           }}
         />
-        <noscript>
-          <link rel="stylesheet" href={appCssUrl} media="all" />
-        </noscript>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -200,6 +191,22 @@ function RootShell({ children }: { children: ReactNode }) {
           </div>
         </footer>
         <Scripts />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker
+      .register("/pwabuilder-sw.js")
+      .then(function (registration) {
+        console.log("ServiceWorker registered:", registration.scope);
+      })
+      .catch(function (error) {
+        console.warn("ServiceWorker registration failed:", error);
+      });
+  });
+}`,
+          }}
+        />
       </body>
     </html>
   );

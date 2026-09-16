@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { shouldRenderSplash } from "./SplashScreen";
 import { normalizeLang } from "./theme";
 
 describe("site language normalization", () => {
@@ -13,5 +14,11 @@ describe("site language normalization", () => {
     expect(normalizeLang("INVALID")).toBe("bg");
     expect(normalizeLang("")).toBe("bg");
     expect(normalizeLang(undefined)).toBe("bg");
+  });
+});
+
+describe("splash screen behavior", () => {
+  it("stays enabled by default so the splash experience is preserved", () => {
+    expect(shouldRenderSplash()).toBe(true);
   });
 });

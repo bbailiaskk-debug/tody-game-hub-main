@@ -1,0 +1,44 @@
+{
+  "packageId": "com.todorkhristov.gaming",
+  "host": "tody-game-hub.bbailiaskk.workers.dev",
+  "name": "Todor Khristov Gaming",
+  "launcherName": "TK Gaming",
+  "display": "standalone",
+  "themeColor": "#1DB954",
+  "themeColorDark": "#0d120d",
+  "navigationColor": "#0d120d",
+  "navigationColorDark": "#0d120d",
+  "navigationDividerColor": "#0d120d",
+  "navigationDividerColorDark": "#0d120d",
+  "backgroundColor": "#0d120d",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://tody-game-hub.bbailiaskk.workers.dev/android-chrome-512x512.png",
+  "maskableIconUrl": "https://tody-game-hub.bbailiaskk.workers.dev/android-chrome-512x512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  },
+  "appVersionCode": 1,
+  "appVersion": "1.0.0",
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://tody-game-hub.bbailiaskk.workers.dev/site.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": [
+    {
+      "name": "upload-key-sha256",
+      "value": "ED:39:E3:62:DA:4A:7C:D9:D0:15:7F:4D:F0:19:2F:4B:99:4E:1F:8D:70:0D:DF:A3:2A:59:62:F6:C5:C8:0B:48"
+    }
+  ]
+}

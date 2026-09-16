@@ -1,10 +1,20 @@
 import { useEffect, useState } from "react";
 
-const MIN_VISIBLE_MS = 1500;
-const MAX_VISIBLE_MS = 1650;
-const FADE_DURATION_MS = 350;
-const CHECK_INTERVAL_MS = 150;
+const MIN_VISIBLE_MS = 300;
+const MAX_VISIBLE_MS = 550;
+const FADE_DURATION_MS = 220;
+const CHECK_INTERVAL_MS = 120;
 const SPLASH_DONE_KEY = "tk-splash-done";
+
+export function shouldRenderSplash(): boolean {
+  if (typeof window === "undefined") return true;
+
+  const forced = new URLSearchParams(window.location.search).get("splash");
+  if (forced === "0" || forced === "false") return false;
+  if (forced === "1" || forced === "true") return true;
+
+  return true;
+}
 
 function isPageFullyLoaded(): boolean {
   if (typeof document === "undefined") return true;
@@ -20,9 +30,16 @@ export function SplashScreen() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.sessionStorage.getItem(SPLASH_DONE_KEY)) return;
-
-    window.sessionStorage.setItem(SPLASH_DONE_KEY, "1");
+    if (!shouldRenderSplash()) {
+      setPhase("hidden");
+      return;
+    }
+    try {
+      if (window.sessionStorage.getItem(SPLASH_DONE_KEY)) return;
+      window.sessionStorage.setItem(SPLASH_DONE_KEY, "1");
+    } catch {
+      // The splash must never prevent the app from starting when storage is blocked.
+    }
     setPhase("visible");
 
     const startedAt = Date.now();
@@ -79,7 +96,6 @@ export function SplashScreen() {
             </feMerge>
           </filter>
         </defs>
-        {/* Outer ambient glow ring */}
         <circle
           cx="84"
           cy="84"
@@ -90,7 +106,6 @@ export function SplashScreen() {
           strokeWidth="8"
           filter="url(#splash-glow)"
         />
-        {/* Animated progress ring */}
         <circle
           className="splash-ring"
           cx="84"
@@ -103,9 +118,7 @@ export function SplashScreen() {
           strokeDasharray="452.39"
           strokeDashoffset="452.39"
         />
-        {/* Inner dark circle */}
         <circle cx="84" cy="84" r="58" fill="#0d120d" />
-        {/* TK text */}
         <text
           x="84"
           y="106"
@@ -122,6 +135,10 @@ export function SplashScreen() {
 
       <div className="splash-track">
         <div className="splash-fill" />
+      </div>
+      <div className="splash-status">
+        <span className="splash-status-dot" />
+        INITIALIZING SIGNAL
       </div>
     </div>
   );

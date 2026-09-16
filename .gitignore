@@ -38,3 +38,21 @@ nginx-proxy-manager-2.15.1/
 
 # Stray duplicate of public/мойта музика
 мойта музика/
+
+# Android (TWA) build artifacts
+android/android.keystore
+android/keystore-password.txt
+android/app/
+android/build/
+android/.gradle/
+android/gradle.properties
+android/settings.gradle
+android/build.gradle
+android/gradlew
+android/gradlew.bat
+android/gradle/
+android/store_icon.png
+android/*.apk
+android/*.aab
+android/manifest-checksum.txt
+android/.idea/

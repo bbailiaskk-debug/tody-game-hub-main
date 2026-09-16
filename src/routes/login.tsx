@@ -306,10 +306,10 @@ function Login() {
           signIn(profile);
         },
       });
-      googleButtonRef.current.replaceChildren();
       const googleWidth = Math.round(
         Math.max(240, Math.min(360, googleButtonRef.current.clientWidth || 360)),
       );
+      googleButtonRef.current.replaceChildren();
       window.google.accounts.id.renderButton(googleButtonRef.current, {
         theme: "outline",
         size: "large",

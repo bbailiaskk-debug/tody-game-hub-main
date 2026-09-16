@@ -1,5 +1,6 @@
-import { X } from "lucide-react";
+import { ImagePlus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { createCompressedImageDataUrl } from "../../lib/image-utils";
 import { copy, useSiteSettings } from "./theme";
 
 function OptionButton({
@@ -124,8 +125,19 @@ function hexToHsv(hex: string) {
 }
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const { theme, lang, accentColor, setTheme, setLang, setAccentColor } = useSiteSettings();
+  const {
+    theme,
+    lang,
+    accentColor,
+    backgroundImage,
+    setTheme,
+    setLang,
+    setAccentColor,
+    setBackgroundImage,
+  } = useSiteSettings();
   const t = copy[lang];
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
+  const backgroundInputRef = useRef<HTMLInputElement>(null);
   const [hue, setHue] = useState(() => hexToHsv(accentColor).h);
   const [saturation, setSaturation] = useState(() => hexToHsv(accentColor).s);
   const [value, setValue] = useState(() => hexToHsv(accentColor).v);
@@ -365,6 +377,72 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   />
                 ))}
               </div>
+            </div>
+          </div>
+
+          <div>
+            <p className="label-mono mb-3 text-[0.7rem] tracking-[0.22em] text-[#b7c8c1]">
+              {t.bgImage}
+            </p>
+            <div className="overflow-hidden rounded-[18px] border border-[#2d3d36] bg-[#0f1715]">
+              {backgroundImage ? (
+                <div
+                  className="h-32 bg-cover bg-center"
+                  style={{ backgroundImage: `url("${backgroundImage}")` }}
+                  aria-hidden="true"
+                />
+              ) : null}
+              <div className="flex flex-wrap items-center gap-3 p-3">
+                <input
+                  ref={backgroundInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="sr-only"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    setBackgroundError(null);
+                    const maxFileSize = 17.1 * 1024 * 1024;
+                    if (!file || file.size > maxFileSize) {
+                      setBackgroundError(t.bgErrorTooLarge);
+                      return;
+                    }
+
+                    try {
+                      const compressedImage = await createCompressedImageDataUrl(file, {
+                        maxWidth: 4096,
+                        maxHeight: 4096,
+                        maxBytes: 1_500_000,
+                        quality: 0.72,
+                      });
+                      setBackgroundImage(compressedImage);
+                    } catch {
+                      setBackgroundError(t.bgErrorGeneral);
+                    } finally {
+                      event.target.value = "";
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => backgroundInputRef.current?.click()}
+                  className="flex items-center gap-2 rounded-lg border border-[#2d3d36] bg-[#121c1a] px-4 py-2.5 font-mono text-[0.65rem] tracking-[0.18em] text-[#dfe9e5] transition-colors hover:border-[#1ce38b] hover:text-[#7ef7bb]"
+                >
+                  <ImagePlus className="size-4" />
+                  {t.bgUpload}
+                </button>
+                {backgroundImage ? (
+                  <button
+                    type="button"
+                    onClick={() => setBackgroundImage(null)}
+                    className="rounded-lg border border-[#2d3d36] bg-transparent px-4 py-2.5 font-mono text-[0.65rem] tracking-[0.18em] text-[#b7c8c1] transition-colors hover:border-red-400/50 hover:text-red-400"
+                  >
+                    {t.bgRemove}
+                  </button>
+                ) : null}
+              </div>
+              {backgroundError ? (
+                <p className="px-3 pb-3 text-[0.7rem] text-red-400">{backgroundError}</p>
+              ) : null}
             </div>
           </div>
         </div>

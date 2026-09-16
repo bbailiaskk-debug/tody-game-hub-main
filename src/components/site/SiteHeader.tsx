@@ -214,7 +214,7 @@ export function SiteHeader() {
           </div>
         </Link>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="site-header-actions ml-auto flex items-center gap-2">
           {mounted && userEmail ? (
             // User is logged in - show profile menu
             <div ref={profileMenuRef} className="relative">

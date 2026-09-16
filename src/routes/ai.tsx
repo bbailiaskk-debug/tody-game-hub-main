@@ -15,6 +15,7 @@ import {
   Music,
   Palette,
   Plus,
+  Search,
   Send,
   Settings,
   Sparkles,
@@ -779,9 +780,14 @@ function SidebarContent({
   showCloseButton = false,
 }: SidebarContentProps) {
   const scopeEmail = (userEmail ?? "").trim().toLowerCase();
-  const visibleChats = chats
+  const [historySearch, setHistorySearch] = useState("");
+  const normalizedSearch = historySearch.trim().toLowerCase();
+  const sortedChats = chats
     .filter((chat) => chat.userEmail === scopeEmail)
     .sort((a, b) => b.updatedAt - a.updatedAt);
+  const visibleChats = normalizedSearch
+    ? sortedChats.filter((chat) => chat.title.toLowerCase().includes(normalizedSearch))
+    : sortedChats;
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
 
   return (
@@ -914,6 +920,30 @@ function SidebarContent({
         </button>
       </div>
 
+      <div className="border-b border-[var(--tk-border)] px-3 pb-2 pt-1">
+        <label className="flex items-center gap-2 rounded-full border border-[var(--tk-border)] bg-[var(--tk-panel)] px-3 py-2 transition-colors focus-within:border-[var(--tk-accent)]/50">
+          <Search className="size-3.5 shrink-0 text-[var(--tk-muted)]" />
+          <input
+            type="search"
+            value={historySearch}
+            onChange={(event) => setHistorySearch(event.target.value)}
+            placeholder={isBg ? "Търси в историята…" : "Search history…"}
+            aria-label={isBg ? "Търси в историята" : "Search history"}
+            className="w-full min-w-0 bg-transparent text-[0.8rem] text-[var(--tk-text)] outline-none placeholder:text-[var(--tk-muted)]"
+          />
+          {historySearch ? (
+            <button
+              type="button"
+              onClick={() => setHistorySearch("")}
+              aria-label={isBg ? "Изчисти търсенето" : "Clear search"}
+              className="grid size-5 shrink-0 place-items-center rounded-full text-[var(--tk-muted)] transition-colors hover:text-[var(--tk-text)]"
+            >
+              <X className="size-3" />
+            </button>
+          ) : null}
+        </label>
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2 scrollbar-thin">
         <p className="flex items-center gap-2 px-2 py-2 font-mono text-[0.62rem] uppercase tracking-[0.18em] text-[var(--tk-muted)]">
           <History className="size-3.5" />
@@ -922,7 +952,13 @@ function SidebarContent({
 
         {visibleChats.length === 0 ? (
           <p className="px-2 py-2 text-[0.75rem] leading-relaxed text-[var(--tk-muted)]">
-            {isBg ? "Няма запазени чатове." : "No saved chats yet."}
+            {normalizedSearch
+              ? isBg
+                ? "Няма чатове, отговарящи на търсенето."
+                : "No chats match your search."
+              : isBg
+                ? "Няма запазени чатове."
+                : "No saved chats yet."}
           </p>
         ) : (
           <ul className="space-y-1">
@@ -1050,10 +1086,27 @@ function AiPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileFileInputRef = useRef<HTMLInputElement>(null);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
+  const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollMessagesToBottom = () => {
+    const el = messagesScrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  };
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    scrollMessagesToBottom();
   }, [messages, loading]);
+
+  useEffect(() => {
+    const el = chatTextareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    el.scrollTop = el.scrollHeight;
+  }, [prompt]);
 
   useEffect(() => {
     setMounted(true);
@@ -1782,10 +1835,11 @@ function AiPage() {
                 }
               }}
               onPaste={handlePaste}
+              ref={chatTextareaRef}
               rows={1}
               placeholder={textareaPlaceholder}
               aria-label={textareaPlaceholder}
-              className="max-h-[160px] min-h-[24px] w-full resize-none bg-transparent px-1 py-2 text-[0.95rem] text-[var(--tk-text)] outline-none placeholder:text-[var(--tk-muted)]"
+              className="max-h-[160px] w-full resize-none overflow-y-auto scrollbar-thin bg-transparent px-1 py-2 leading-relaxed text-[0.95rem] text-[var(--tk-text)] outline-none placeholder:text-[var(--tk-muted)]"
             />
             {microphoneControl}
             {sendControl}
@@ -1802,10 +1856,11 @@ function AiPage() {
                 }
               }}
               onPaste={handlePaste}
+              ref={chatTextareaRef}
               rows={1}
               placeholder={textareaPlaceholder}
               aria-label={textareaPlaceholder}
-              className="max-h-[160px] w-full resize-none bg-transparent px-1 py-1 text-[0.95rem] text-[var(--tk-text)] outline-none placeholder:text-[var(--tk-muted)]"
+              className="max-h-[160px] w-full resize-none overflow-y-auto scrollbar-thin bg-transparent px-1 py-1 leading-relaxed text-[0.95rem] text-[var(--tk-text)] outline-none placeholder:text-[var(--tk-muted)]"
             />
             <div className="mt-2 flex items-center justify-between">
               <div className="flex items-center gap-1">
@@ -1921,7 +1976,8 @@ function AiPage() {
           ) : null}
 
           <div
-            className={`${hasMessages ? "mt-8 min-h-0 flex-1" : ""} space-y-4 overflow-y-auto overflow-x-hidden scrollbar-thin`}
+            ref={messagesScrollRef}
+            className={`${hasMessages ? "mt-8 min-h-0 max-h-full flex-1" : ""} space-y-4 overflow-y-auto overflow-x-hidden overscroll-y-contain scrollbar-thin`}
           >
             {messages.map((message) => {
               const imageCount = message.images?.length ?? 0;
@@ -1959,6 +2015,7 @@ function AiPage() {
                             <img
                               key={`${image.dataUrl.slice(0, 24)}-${imageIndex}`}
                               src={image.dataUrl}
+                              onLoad={scrollMessagesToBottom}
                               alt={image.name ? `Shared image: ${image.name}` : "Shared image"}
                               className={
                                 imageCount >= 2
@@ -1987,6 +2044,7 @@ function AiPage() {
                               <video
                                 key={`${(file.dataUrl || file.name).slice(0, 24)}-${fileIndex}`}
                                 src={file.dataUrl}
+                                onLoadedMetadata={scrollMessagesToBottom}
                                 controls
                                 className={
                                   fileCount >= 2
