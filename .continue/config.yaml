@@ -1,0 +1,5 @@
+models:
+  - name: Gemini
+    provider: gemini
+    model: gemini-2.5-flash
+    apiKey: $GEMINI_API_KEY
