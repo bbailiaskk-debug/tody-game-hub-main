@@ -1,6 +1,7 @@
+import { useEffect, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowUpRight, Gamepad2, Info } from "lucide-react";
-import { copy, useSiteSettings } from "../components/site/theme";
+import { useSiteSettings } from "../components/site/theme";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -59,8 +60,6 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const bars = [3, 6, 4, 9, 5, 12, 7, 16, 10, 22, 14, 26, 18, 12, 8, 14, 6, 10, 20, 13, 7, 4];
-
 const games = {
   bg: [
     { title: "Minecraft", tag: "СЪРВАЙВЪЛ", note: "Серии и проекти на живо" },
@@ -93,9 +92,45 @@ const games = {
 
 function Index() {
   const { lang } = useSiteSettings();
-  const t = copy[lang];
   const isBg = lang === "bg";
   const isZh = lang === "zh";
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.muted = true;
+
+    const start = () => {
+      if (video.paused) {
+        video.play().catch(() => {});
+      }
+    };
+
+    video.addEventListener("loadeddata", start);
+    video.addEventListener("canplay", start);
+
+    const onGesture = () => {
+      start();
+      window.removeEventListener("pointerdown", onGesture);
+      window.removeEventListener("keydown", onGesture);
+      window.removeEventListener("touchstart", onGesture);
+    };
+    window.addEventListener("pointerdown", onGesture);
+    window.addEventListener("keydown", onGesture);
+    window.addEventListener("touchstart", onGesture);
+
+    start();
+
+    return () => {
+      video.removeEventListener("loadeddata", start);
+      video.removeEventListener("canplay", start);
+      window.removeEventListener("pointerdown", onGesture);
+      window.removeEventListener("keydown", onGesture);
+      window.removeEventListener("touchstart", onGesture);
+    };
+  }, []);
 
   return (
     <main className="grid-bg min-h-screen">
@@ -197,24 +232,20 @@ function Index() {
           </div>
         </div>
 
-        <div className="w-full max-w-sm rounded-4xl border border-border bg-card/70 p-5 lg:justify-self-center">
-          <p className="label-mono text-[0.62rem] text-brand-dim">
-            TK / {isBg ? "НА ЖИВО" : isZh ? "直播" : "LIVE"}
-          </p>
-          <div className="mt-4 flex flex-col items-center justify-center rounded-3xl bg-surface/60 px-6 py-10">
-            <Gamepad2 className="size-7 text-brand" />
-            <span className="mt-4 font-display text-5xl text-brand">TK</span>
-            <span className="label-mono mt-3 text-[0.6rem]">{t.online}</span>
-            <div className="mt-10 flex h-16 items-end gap-1.5">
-              {bars.map((h, i) => (
-                <span
-                  key={i}
-                  className="w-1.5 rounded-full bg-brand"
-                  style={{ height: `${h * 2.4}px`, opacity: 0.5 + (h / 26) * 0.5 }}
-                />
-              ))}
-            </div>
-          </div>
+        <div className="relative aspect-square w-full max-w-md overflow-hidden rounded-4xl border border-border lg:justify-self-center">
+          <video
+            ref={videoRef}
+            className="absolute inset-0 size-full object-cover"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            aria-hidden="true"
+          >
+            <source src="/animo-focus-shift.webm" type="video/webm" />
+            <source src="/animo-focus-shift.mp4" type="video/mp4" />
+          </video>
         </div>
       </section>
 
