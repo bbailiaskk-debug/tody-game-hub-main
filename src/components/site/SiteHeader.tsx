@@ -523,7 +523,9 @@ export function SiteHeader() {
                   <div className="mt-3 hidden flex-col items-center gap-2 md:flex">
                     <img
                       src="/Untitled-9.png"
-                      alt={lang === "bg" ? "QR код със социалните мрежи" : "QR code to social media"}
+                      alt={
+                        lang === "bg" ? "QR код със социалните мрежи" : "QR code to social media"
+                      }
                       width={140}
                       height={140}
                       loading="lazy"

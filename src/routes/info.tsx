@@ -194,12 +194,11 @@ function InfoPage() {
         {
           email: contactEmail.trim(),
           name: contactName.trim(),
-          to_email: contactEmail.trim(),
-          to_name: contactName.trim(),
           message: contactMessage.trim(),
           title: "Contact Us",
         },
         EMAILJS_CONTACT_PUBLIC_KEY,
+        { keepTemplateRecipient: true },
       );
 
       setContactName("");

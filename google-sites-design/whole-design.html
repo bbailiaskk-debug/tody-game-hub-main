@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  ЦЕЛИЯТ ДИЗАЙН НА САЙТА — ЗА GOOGLE SITES (една страница)
+  ============================================================
+  Как да редактираш: отвори файла с Word / Notepad / VS Code.
+  Променяй само текстовете (картинките/емоджитата и бутоните),
+  всяка секция е отделена със заглавие. Запази файла после.
+
+  Как да сложиш в Google Sites:
+  1) Отвори сайта си в редактора: https://sites.google.com/new
+  2) Вмъкване (Insert) > Вграждане (Embed) > Чрез кода (Embed code)
+  3) Постави ЦЕЛИЯ код (от <!DOCTYPE html> до </html>) и натисни Вмъкни.
+
+  Секции: 1. Лента  |  2. Начало  |  3. Игри в ротация
+           4. Играй сега  |  5. Музика  |  6. Зад канала
+           7. Социални  |  8. График  |  9. Контакт
+  Google Analytics (G-C35YFLR7D7) е включен в <head>.
+  ============================================================
+-->
+<html lang="bg">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Todor Khristov Gaming — Яки игри и забавление</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-C35YFLR7D7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-C35YFLR7D7');
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0b; color: #e5e5e7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.6; }
+
+  /* ---- Навигация ---- */
+  nav { position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 16px 26px; background: rgba(10,10,11,.92); border-bottom: 1px solid #27272a; }
+  .logo { color: #1DB954; font-weight: 900; letter-spacing: .08em; font-size: 14px; text-decoration: none; }
+  nav a { color: #e5e5e7; text-decoration: none; font-size: 13px; }
+  nav a:hover { color: #1DB954; }
+  nav .spacer { flex: 1; }
+
+  main { max-width: 1080px; margin: 0 auto; padding: 40px 22px 70px; }
+  footer { border-top: 1px solid #27272a; padding: 26px 22px; text-align: center; color: #a1a1aa; font-size: 13px; }
+  footer a { color: #e5e5e7; text-decoration: none; margin: 0 10px; }
+
+  /* ---- Общи елементи ---- */
+  .kicker { display: flex; align-items: center; gap: 14px; color: #1DB954; text-transform: uppercase; letter-spacing: .2em; font-size: 12px; }
+  .kicker::before { content: ""; width: 40px; height: 1px; background: #1DB954; }
+  .sec-head { display: flex; align-items: center; gap: 14px; margin-top: 72px; }
+  .sec-head .num { color: #1DB954; font-size: 11px; letter-spacing: .15em; }
+  .sec-head .lbl { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; }
+  h1 { color: #1DB954; font-size: clamp(44px, 8vw, 92px); line-height: .92; font-weight: 900; margin: 26px 0 28px; }
+  h2 { color: #1DB954; font-size: clamp(30px, 5vw, 54px); line-height: 1; margin: 18px 0 30px; }
+  .sub { color: #a1a1aa; max-width: 600px; margin-bottom: 16px; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 15px 26px; border-radius: 999px; text-decoration: none; font-size: 11px; letter-spacing: .14em; font-weight: 800; }
+  .btn-green { background: #1DB954; color: #06210f; }
+  .btn-red { background: #ff0000; color: #fff; }
+  .btn-ghost { color: #e5e5e7; border: 1px solid #27272a; }
+  .media { display: flex; align-items: center; gap: 10px; margin-top: 46px; }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; background: #27272a; color: #1DB954; display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+  .media p { font-size: 11px; letter-spacing: .1em; }
+
+  /* ---- Карти-игри ---- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+  .card { background: #141417; border: 1px solid #27272a; border-radius: 22px; padding: 22px; transition: border-color .2s, box-shadow .2s; }
+  .card:hover { border-color: #1DB95466; box-shadow: 0 0 24px rgba(29,185,84,.15); }
+  .card .tag { color: #1DB954; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+  .card h3 { font-size: 26px; margin: 34px 0 8px; }
+  .card p { color: #a1a1aa; font-size: 14px; }
+  .card a.play { display: inline-flex; align-items: center; gap: 10px; margin-top: 20px; padding: 11px 20px; border-radius: 999px; border: 1px solid rgba(29,185,84,.3); color: #1DB954; text-decoration: none; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+
+  /* ---- Музика ---- */
+  .search { display: flex; align-items: center; gap: 10px; border: 1px solid #27272a; background: #101013; padding: 12px 16px; max-width: 560px; margin: 16px 0 26px; }
+  .search input { flex: 1; background: transparent; border: none; outline: none; color: #e5e5e7; font-size: 14px; }
+  .list-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #27272a; padding-bottom: 12px; margin-bottom: 8px; }
+  .list-head h4 { font-size: 20px; }
+  .list-head span { font-size: 10px; letter-spacing: .15em; color: #a1a1aa; }
+  .track { display: flex; align-items: center; gap: 14px; padding: 13px 12px; border-radius: 10px; }
+  .track .num { width: 28px; color: #a1a1aa; font-family: monospace; font-size: 12px; }
+  .track .disc { color: #1DB954; }
+  .track h5 { font-size: 15px; font-weight: 500; }
+  .track:hover { background: #141417; }
+
+  /* ---- Инфо секции ---- */
+  .about h3 { font-size: clamp(26px, 4vw, 40px); font-weight: 900; line-height: 1.15; margin-bottom: 16px; }
+  .about h3 span { color: #1DB954; }
+  .about p { color: #a1a1aa; font-size: 15px; margin-bottom: 14px; }
+  .block { border: 1px solid #27272a; background: #141417; border-radius: 24px; padding: 22px; margin-bottom: 18px; }
+  .block .bh { color: #1DB954; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 16px; }
+  .links { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .links a { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #101013; border: 1px solid #27272a; border-radius: 16px; padding: 16px 18px; text-decoration: none; }
+  .links a:hover { background: #1a1a1e; }
+  .links a span { color: #e5e5e7; font-size: 13px; }
+  .links a small { display: block; color: #a1a1aa; margin-top: 3px; }
+  .links a b { color: #1DB954; }
+
+  /* ---- Социални / график / контакт ---- */
+  .cap { display: flex; align-items: center; gap: 10px; margin-top: 48px; }
+  .cap .bolt { color: #1DB954; }
+  .cap .lbl { color: #e5e5e7; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+  .socials { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-top: 18px; }
+  .socials a { display: flex; justify-content: space-between; align-items: center; border-radius: 999px; padding: 18px 24px; text-decoration: none; font-weight: 800; font-size: 16px; transition: transform .2s; }
+  .socials a:hover { transform: translateY(-2px); }
+  .s-yt { background: #ff0000; color: #fff; }
+  .s-tt { background: #1f1f23; color: #fff; }
+  .s-sp { background: #1DB954; color: #06210f; }
+  .s-dc { background: #5865F2; color: #fff; }
+  .schedule { display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); gap: 12px; margin-top: 18px; }
+  .day { background: #141417; border: 1px solid #27272a; border-radius: 16px; padding: 20px 4px; text-align: center; }
+  .day.on { background: #0f1f14; border-color: #1DB95466; }
+  .day > span { display: block; font-size: 12px; color: #a1a1aa; }
+  .day .mark { font-size: 16px; margin-top: 8px; }
+  .day.on .mark { color: #1DB954; }
+  .day .st { font-size: 10px; margin-top: 6px; }
+  .day.on .st { color: #1DB954; }
+  form { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  form input, form textarea { width: 100%; background: #101013; border: 1px solid #27272a; border-radius: 12px; color: #e5e5e7; padding: 14px 16px; font-size: 14px; font-family: inherit; }
+  form textarea { grid-column: 1 / -1; min-height: 130px; resize: vertical; }
+  form button { grid-column: 1 / -1; justify-self: start; background: #1DB954; color: #06210f; border: none; border-radius: 999px; padding: 15px 28px; font-size: 12px; font-weight: 800; letter-spacing: .14em; cursor: pointer; }
+  .hint { margin-top: 10px; font-size: 12px; color: #a1a1aa; }
+</style>
+</head>
+<body>
+
+<!-- ============ 1. ЛЕНТА ЗА НАВИГАЦИЯ — редактирай тук ============ -->
+<nav>
+  <a class="logo" href="#">TODOR KHRISTOV GAMING</a>
+  <a href="#nachalo">Начало</a>
+  <a href="#igri">Игри</a>
+  <a href="#muzika">Музика</a>
+  <a href="#kanala">Информация</a>
+  <span class="spacer"></span>
+  <a class="btn btn-green" href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ" target="_blank">АБОНИРАЙ СЕ</a>
+</nav>
+
+<main>
+
+  <!-- ============ 2. НАЧАЛО (HERO) — редактирай тук ============ -->
+  <section id="nachalo">
+    <p class="kicker">ДОБРЕ ДОШЪЛ В СИГНАЛА</p>
+    <h1>ЯКИ ИГРИ<br />И<br />ЗАБАВЛЕНИЕ</h1>
+    <p class="sub">
+      Игри, моменти и енергия директно от командния център на Todor Khristov.
+      Тук се събират епични мисии, живи сесии, забавни заглавия и атмосфера,
+      която държи общността в движение.
+    </p>
+    <p class="sub">
+      От гейминг сесиите и челленджите до музиката и атмосферата около канала,
+      всичко е подготвено да влезе в ежедневието ви като усещане за свобода,
+      лудост и стабилна емоция.
+    </p>
+
+    <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:26px;">
+      <a class="btn btn-green" href="#kanala">ПРОФИЛ НА СЪЗДАТЕЛЯ ›</a>
+      <a class="btn btn-red" href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ" target="_blank">YOUTUBE КАНАЛ ›</a>
+      <a class="btn btn-ghost" href="#igri">КЪМ ИГРИТЕ ›</a>
+    </div>
+
+    <div class="media">
+      <span class="avatar">TK</span>
+      <span class="avatar">TK</span>
+      <span class="avatar">+</span>
+      <p>2 847 В ОБЩНОСТТА</p>
+    </div>
+  </section>
+
+  <!-- ============ 3. ИГРИ В РОТАЦИЯ — редактирай тук ============ -->
+  <section id="igri">
+    <div class="sec-head">
+      <span class="num">02 /</span>
+      <span class="lbl">Какво играя</span>
+    </div>
+    <h2>ИГРИ В РОТАЦИЯ</h2>
+    <div class="cards">
+      <div class="card"><div class="tag">СЪРВАЙВЪЛ</div><h3>Minecraft</h3><p>Серии и проекти на живо</p></div>
+      <div class="card"><div class="tag">ОТВОРЕН СВЯТ</div><h3>GTA V</h3><p>Мисии и лудории</p></div>
+      <div class="card"><div class="tag">ШУТЪР</div><h3>Counter-Strike 2</h3><p>Класирани мачове</p></div>
+      <div class="card"><div class="tag">БАТЪЛ РОЯЛ</div><h3>Fortnite</h3><p>Игра с общността</p></div>
+      <div class="card"><div class="tag">МОБА</div><h3>Mobile Legends</h3><p>Ранкед битки 5v5</p></div>
+      <div class="card"><div class="tag">СТРАТЕГИЯ</div><h3>Bloons TD 6</h3><p>Тауър дифенс рундове</p></div>
+      <div class="card"><div class="tag">ПАРТИ</div><h3>Among Us</h3><p>Импостър или креумейт — кой лъже?</p></div>
+    </div>
+  </section>
+
+  <!-- ============ 4. ИГРАЙ СЕГА — редактирай тук ============ -->
+  <section>
+    <div class="sec-head">
+      <span class="num">02 /</span>
+      <span class="lbl">Игри</span>
+    </div>
+    <h2>ИГРАЙ СЕГА</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="tag">НАСТОЛНА</div>
+        <h3>ШАХ</h3>
+        <p>Класически шах срещу приятел — рокада, ан пасан и промоция.</p>
+        <a class="play" href="https://tody-game-hub.bbailiaskk.workers.dev/chess" target="_blank">ИГРАЙ ›</a>
+      </div>
+      <div class="card">
+        <div class="tag">ПЪЗЗЛ</div>
+        <h3>2048</h3>
+        <p>Плъзгай и съединявай плочките, за да стигнеш до 2048.</p>
+        <a class="play" href="https://tody-game-hub.bbailiaskk.workers.dev/game2048" target="_blank">ИГРАЙ ›</a>
+      </div>
+      <div class="card">
+        <div class="tag">КЛАСИКА</div>
+        <h3>TIC TAC TOE</h3>
+        <p>Морски шах срещу компютъра или приятел.</p>
+        <a class="play" href="https://tody-game-hub.bbailiaskk.workers.dev/tictactoe" target="_blank">ИГРАЙ ›</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 5. МУЗИКА — редактирай тук ============ -->
+  <section id="muzika">
+    <div class="sec-head">
+      <span class="num">TK /</span>
+      <span class="lbl">Music library</span>
+    </div>
+    <h2>Тодор Христов</h2>
+    <p class="sub">
+      Този плейлист събира музиката на Todor Khristov Gaming на едно място.
+      Избери песен и използвай търсенето по-долу.
+    </p>
+
+    <div class="search">
+      <span>🔍</span>
+      <input id="search" type="text" placeholder="Да намерим нещо за вашия плейлист" />
+    </div>
+
+    <div class="list-head">
+      <h4>Песни</h4>
+      <span id="count">11 TRACKS</span>
+    </div>
+    <div id="list">
+      <div class="track"><span class="num">01</span><span class="disc">●</span><h5>Аз обичам живота Mix</h5></div>
+      <div class="track"><span class="num">02</span><span class="disc">●</span><h5>В природата MIX</h5></div>
+      <div class="track"><span class="num">03</span><span class="disc">●</span><h5>Всеки ден качвам Mix</h5></div>
+      <div class="track"><span class="num">04</span><span class="disc">●</span><h5>Всеки ден с приятелка mix</h5></div>
+      <div class="track"><span class="num">05</span><span class="disc">●</span><h5>Вторник и петък натискай play сега! MIX</h5></div>
+      <div class="track"><span class="num">06</span><span class="disc">●</span><h5>Джойстикът ми знае Mix</h5></div>
+      <div class="track"><span class="num">07</span><span class="disc">●</span><h5>Кола и пиксели (Nightcore Mix)</h5></div>
+      <div class="track"><span class="num">08</span><span class="disc">●</span><h5>Копая към края MIX</h5></div>
+      <div class="track"><span class="num">09</span><span class="disc">●</span><h5>саламът бяга Mix</h5></div>
+      <div class="track"><span class="num">10</span><span class="disc">●</span><h5>Световно на победата Mix</h5></div>
+      <div class="track"><span class="num">11</span><span class="disc">●</span><h5>Тодор е тук</h5></div>
+    </div>
+    <div style="margin-top:22px;">
+      <a class="btn btn-green" href="https://tody-game-hub.bbailiaskk.workers.dev/music" target="_blank">ОТВОРИ ПЛЕЪРА ›</a>
+    </div>
+  </section>
+
+  <!-- ============ 6. ЗАД КАНАЛА — редактирай тук ============ -->
+  <section id="kanala">
+    <div class="sec-head">
+      <span class="num">03 /</span>
+      <span class="lbl">Профил на създателя</span>
+    </div>
+    <h2>ЗАД КАНАЛА</h2>
+
+    <div class="about">
+      <h3>Добре дошли в официалния свят на <span>Todor Khristov Gaming!</span></h3>
+      <p>
+        Тук забавлението е на първо място. Влизам в най-различни виртуални светове,
+        за да споделя с вас незабравими гейминг емоции, епични моменти и много смях.
+        Зад всеки кадър стои старателна обработка, виртуална стая и софтуер като
+        NVIDIA Broadcast, за да ви осигуря най-доброто и качествено изживяване.
+      </p>
+      <p>
+        Направете си абонамент, станете част от нашата страхотна общност и не
+        пропускайте новите епизоди, които излизат всеки вторник и петък.
+        Пригответе се за яко гейминг преживяване!
+      </p>
+      <p>
+        Каналът е създаден да събира игри, музика, атмосфера и личен стил в едно
+        пространство, като изграждам чувство за общност, в което всеки зрител може
+        да се почувства част от историята и да е част от следващото приключение.
+      </p>
+      <p>
+        От експерименти в игри с различни жанрове до музикални моменти и визуално
+        оформени кадри, целта е да се създаде усещане за енергия, създаване и
+        безкрайна забавна рутина. Всяка публикация поддържа атмосферата жива,
+        интерактивна и винаги готова за нови игри.
+      </p>
+    </div>
+
+    <div class="block">
+      <div class="bh">СЪДЪРЖАНИЕ</div>
+      <div class="links">
+        <a href="#vet"><span>ПОСЛЕДНИ ЮТУБ ВИДЕА<small>Виж последните клипове</small></span><b>›</b></a>
+        <a href="#acl"><span>ГЕЙМИНГ АКЦЕНТИ<small>Виж гейминг клипове</small></span><b>›</b></a>
+        <a href="#obs"><span>ОБЩНОСТНИ НОВИНИ<small>Виж последните новини</small></span><b>›</b></a>
+        <a href="#mus"><span>МУЗИКАЛНИ ПЛЕЙЛИСТИ<small>Виж музиката</small></span><b>›</b></a>
+      </div>
+    </div>
+
+    <div class="block" id="vet">
+      <div class="bh">ПОСЛЕДНИ ЮТУБ ВИДЕА</div>
+      <div class="links">
+        <a href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ" target="_blank"><span>НАЙ-НОВИТЕ КЛИПОВЕ<small>Свежи видеа всяка седмица</small></span><b>↗</b></a>
+        <a href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ/live" target="_blank"><span>СТРИЙМОВЕ<small>Гледай на живо</small></span><b>↗</b></a>
+      </div>
+    </div>
+
+    <div class="block" id="acl">
+      <div class="bh">ГЕЙМИНГ АКЦЕНТИ</div>
+      <div class="links">
+        <a href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ" target="_blank"><span>ЕПИЧНИ МОМЕНТИ<small>Най-запомнящите се кадри</small></span><b>↗</b></a>
+        <a href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ/shorts" target="_blank"><span>ШОРТИ<small>Кратки гейминг кадри</small></span><b>↗</b></a>
+      </div>
+    </div>
+
+    <div class="block" id="obs">
+      <div class="bh">ОБЩНОСТНИ НОВИНИ</div>
+      <div class="links">
+        <a href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ/community" target="_blank"><span>ОБЯВИ В ОБЩНОСТТА<small>Следвай директно от канала</small></span><b>↗</b></a>
+        <a href="https://discord.com/invite/uRNGhKf7vC" target="_blank"><span>DISCORD СЪРВЪР<small>Присъедини се към общността</small></span><b>↗</b></a>
+      </div>
+    </div>
+
+    <div class="block" id="mus">
+      <div class="bh">МУЗИКАЛНИ ПЛЕЙЛИСТИ</div>
+      <div class="links">
+        <a href="https://open.spotify.com/artist/0qeXEFSge1i8K1lC8np20g" target="_blank"><span>SPOTIFY<small>Слушай оригиналните парчета</small></span><b>↗</b></a>
+        <a href="#muzika"><span>МУЗИКАЛЕН ПЛЕЪР<small>Отвори секцията с музика</small></span><b>↗</b></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 7. СОЦИАЛНИ МРЕЖИ — редактирай тук ============ -->
+  <section>
+    <div class="cap"><span class="bolt">◈</span><span class="lbl">Абонирайте се и ме последвайте</span></div>
+    <div class="socials">
+      <a class="s-yt" href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ" target="_blank">YouTube ↗</a>
+      <a class="s-tt" href="https://www.tiktok.com/@todorkhristovgmaing" target="_blank">TikTok ↗</a>
+      <a class="s-sp" href="https://open.spotify.com/artist/0qeXEFSge1i8K1lC8np20g" target="_blank">Spotify ↗</a>
+      <a class="s-dc" href="https://discord.gg/uRNGhKf7vC" target="_blank">Discord ↗</a>
+    </div>
+  </section>
+
+  <!-- ============ 8. ГРАФИК НА КАЧВАНЕ — редактирай тук ============ -->
+  <section>
+    <div class="cap"><span class="bolt">◗</span><span class="lbl">График на качване</span></div>
+    <div class="schedule">
+      <div class="day"><span>ПН</span><span class="mark">✕</span><span class="st">ПОЧИВКА</span></div>
+      <div class="day on"><span>ВТ</span><span class="mark">✔</span><span class="st">НОВО ВИДЕО</span></div>
+      <div class="day"><span>СР</span><span class="mark">✕</span><span class="st">ПОЧИВКА</span></div>
+      <div class="day"><span>ЧТ</span><span class="mark">✕</span><span class="st">ПОЧИВКА</span></div>
+      <div class="day on"><span>ПТ</span><span class="mark">✔</span><span class="st">НОВО ВИДЕО</span></div>
+      <div class="day"><span>СБ</span><span class="mark">✕</span><span class="st">ПОЧИВКА</span></div>
+      <div class="day"><span>НД</span><span class="mark">✕</span><span class="st">ПОЧИВКА</span></div>
+    </div>
+  </section>
+
+  <!-- ============ 9. КОНТАКТ — редактирай тук ============ -->
+  <section>
+    <div class="cap"><span class="bolt">✉</span><span class="lbl">Пишете ми</span></div>
+    <form>
+      <input type="text" placeholder="Име" />
+      <input type="email" placeholder="Имейл" />
+      <textarea placeholder="Вашето съобщение"></textarea>
+      <button type="button">ИЗПРАТИ</button>
+    </form>
+    <p class="hint">
+      Забележка: формулярът е визуален. За да получаваш съобщения, свържи го с
+      услуга като EmailJS или Google Таблица.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <a href="#">Начало</a>
+  <a href="#igri">Игри</a>
+  <a href="#muzika">Музика</a>
+  <a href="#kanala">Информация</a>
+  <span>© 2026 Todor Khristov Gaming</span>
+</footer>
+
+<script>
+  var input = document.getElementById("search");
+  if (input) {
+    var tracks = Array.prototype.slice.call(document.querySelectorAll(".track"));
+    var count = document.getElementById("count");
+    input.addEventListener("input", function () {
+      var q = input.value.toLowerCase();
+      var shown = 0;
+      tracks.forEach(function (row) {
+        var match = row.textContent.toLowerCase().indexOf(q) !== -1;
+        row.style.display = match ? "" : "none";
+        if (match) shown++;
+      });
+      if (count) count.textContent = shown + " TRACKS";
+    });
+  }
+</script>
+
+</body>
+</html>

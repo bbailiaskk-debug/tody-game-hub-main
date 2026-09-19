@@ -1,0 +1,74 @@
+{
+  "listeners": {
+    "*:80": {
+      "pass": "routes/main"
+    },
+    "*:443": {
+      "pass": "routes/main",
+      "tls": {
+        "certificate": "tody-game-hub"
+      }
+    }
+  },
+  "routes": {
+    "main": [
+      {
+        "match": {
+          "scheme": "http"
+        },
+        "action": {
+          "return": 301,
+          "location": "https://$host$request_uri"
+        }
+      },
+      {
+        "match": {
+          "uri": [
+            "/assets/*",
+            "/_static/*",
+            "/favicon.ico",
+            "/robots.txt",
+            "/sitemap.xml",
+            "/manifest.json",
+            "/offline.html",
+            "/animo-focus-shift.mp4",
+            "/animo-focus-shift.webm",
+            "/animo-focus-shift-poster.jpg",
+            "/Untitled-9.png",
+            "/images/*",
+            "/music/*",
+            "/videos/*",
+            "*.png",
+            "*.jpg",
+            "*.jpeg",
+            "*.gif",
+            "*.webp",
+            "*.svg",
+            "*.ico",
+            "*.woff2",
+            "*.woff",
+            "*.ttf",
+            "*.mp3",
+            "*.ogg",
+            "*.mp4",
+            "*.webm",
+            "*.mjs",
+            "*.css",
+            "*.js"
+          ]
+        },
+        "action": {
+          "share": "/srv/tody-game-hub/.output/public/",
+          "fallback": {
+            "proxy": "http://127.0.0.1:3000"
+          }
+        }
+      },
+      {
+        "action": {
+          "proxy": "http://127.0.0.1:3000"
+        }
+      }
+    ]
+  }
+}

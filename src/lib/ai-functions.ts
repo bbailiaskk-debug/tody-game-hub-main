@@ -144,13 +144,18 @@ function getImageGenerationModel(): string {
 }
 
 function getGeminiCacheKv(): GeminiKvNamespace | null {
-  const workerEnv = env as unknown as { GEMINI_CACHE_KV?: GeminiKvNamespace; AUTH_USERS_KV?: GeminiKvNamespace };
+  const workerEnv = env as unknown as {
+    GEMINI_CACHE_KV?: GeminiKvNamespace;
+    AUTH_USERS_KV?: GeminiKvNamespace;
+  };
   if (workerEnv.GEMINI_CACHE_KV) return workerEnv.GEMINI_CACHE_KV;
   if (workerEnv.AUTH_USERS_KV) return workerEnv.AUTH_USERS_KV;
 
-  const globalEnv = (globalThis as typeof globalThis & {
-    CF_ENV?: { GEMINI_CACHE_KV?: GeminiKvNamespace; AUTH_USERS_KV?: GeminiKvNamespace };
-  }).CF_ENV;
+  const globalEnv = (
+    globalThis as typeof globalThis & {
+      CF_ENV?: { GEMINI_CACHE_KV?: GeminiKvNamespace; AUTH_USERS_KV?: GeminiKvNamespace };
+    }
+  ).CF_ENV;
   if (globalEnv?.GEMINI_CACHE_KV) return globalEnv.GEMINI_CACHE_KV;
   if (globalEnv?.AUTH_USERS_KV) return globalEnv.AUTH_USERS_KV;
 
@@ -230,7 +235,7 @@ function extractImagePrompt(text: string): string {
 async function requestImageGeneration(
   apiKey: string,
   prompt: string,
-): Promise<{ success: boolean; error?: string; data?: { text: string; image: AiChatImage } }> {
+): Promise<{ success: boolean; error?: string; data?: { text: string; image?: AiChatImage } }> {
   const model = getImageGenerationModel();
   const url = `${GEMINI_ENDPOINT}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const requestBody = JSON.stringify({

@@ -10,6 +10,7 @@ import {
   serverSyncUserProfile,
   serverUserExists,
 } from "../lib/auth-functions";
+import { cachedRead, fnv1a, invalidateCachePrefix } from "../lib/remote-cache";
 import {
   readRegisteredUsers,
   readPersistedAuthSession,
@@ -263,7 +264,9 @@ function Login() {
         ...(safeToken ? { token: safeToken } : {}),
       });
 
-      const avatarPromise = serverGetUserProfile({ data: { email: user.email } })
+      const avatarPromise = cachedRead(`profile:${user.email.toLowerCase()}`, () =>
+        serverGetUserProfile({ data: { email: user.email } }),
+      )
         .then((result) => {
           if (result.success && result.data && result.data.avatar) {
             writePersistedUserProfile({ avatar: result.data.avatar });
@@ -477,6 +480,7 @@ function Login() {
             ? { accentColor: result.data.accentColor }
             : {}),
         };
+        invalidateCachePrefix(`user-exists:${normalizedEmail}`);
         signIn(authenticatedUser, result.data.token);
       } catch (caughtError) {
         console.warn("Registration failed.", caughtError);
@@ -493,9 +497,11 @@ function Login() {
     }
 
     try {
-      const existsResult = await serverUserExists({
-        data: { email: normalizedEmail },
-      });
+      const existsResult = await cachedRead(
+        `user-exists:${normalizedEmail}`,
+        () => serverUserExists({ data: { email: normalizedEmail } }),
+        { ttlMs: 60_000 },
+      );
 
       if (!existsResult.success || !existsResult.data || !existsResult.data.exists) {
         setError(
@@ -508,12 +514,23 @@ function Login() {
         return;
       }
 
-      const result = await serverLogin({
-        data: {
-          email: normalizedEmail,
-          password,
+      const result = await cachedRead(
+        `auth-login:${normalizedEmail}:${fnv1a(normalizedEmail + ":" + password)}`,
+        () =>
+          serverLogin({
+            data: {
+              email: normalizedEmail,
+              password,
+            },
+          }),
+        {
+          ttlMs: 30_000,
+          cacheIf: (value) =>
+            typeof value === "object" &&
+            value !== null &&
+            (value as { success?: boolean }).success === true,
         },
-      });
+      );
       if (!result.success || !result.data) {
         setError(isBg ? "Невалиден имейл или парола." : "Invalid email or password.");
         setNotice("");

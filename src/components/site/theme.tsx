@@ -9,6 +9,15 @@ import {
   writeRegisteredUsers,
   storageGet,
 } from "../../lib/local-persistence";
+import { createDebouncedWriter } from "../../lib/remote-cache";
+
+const debouncedSyncAccent = createDebouncedWriter(
+  (email: string, accentColor: string) =>
+    import("../../lib/auth-functions").then(({ serverSyncUserProfile }) =>
+      serverSyncUserProfile({ data: { email, accentColor } }),
+    ),
+  800,
+);
 
 type Theme = "dark" | "light";
 type Lang = "bg" | "en" | "zh";
@@ -193,13 +202,7 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
 
     writePersistedUserAccentColor(currentEmail, nextColor);
 
-    import("../../lib/auth-functions").then(({ serverSyncUserProfile }) => {
-      serverSyncUserProfile({
-        data: { email: currentEmail, accentColor: nextColor },
-      }).catch((error) => {
-        console.warn("Failed to sync accent color to server.", error);
-      });
-    });
+    debouncedSyncAccent(currentEmail, nextColor);
 
     const users = readRegisteredUsers();
     const nextUsers = users.map((user) =>

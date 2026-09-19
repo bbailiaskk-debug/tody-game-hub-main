@@ -35,6 +35,7 @@ import {
 } from "react";
 
 import { serverAiChat, type AiChatMessage } from "../lib/ai-functions";
+import { cachedRead, createDebouncedWriter } from "../lib/remote-cache";
 import {
   serverGetAiChats,
   serverSaveAiChats,
@@ -131,6 +132,11 @@ function nextItemId(): string {
   itemSequence += 1;
   return `p${itemSequence}`;
 }
+
+const debouncedSaveAiChats = createDebouncedWriter(
+  (email: string, chats: StoredChat[]) => serverSaveAiChats({ data: { email, chats } }),
+  1000,
+);
 
 const CHATS_STORAGE_KEY = "tody_ai_chats_v1";
 const CHATS_DB_NAME = "tody_ai_chats";
@@ -1158,7 +1164,11 @@ function AiPage() {
 
       if (scope) {
         try {
-          const remote = await serverGetAiChats({ data: { email: scope } });
+          const remote = await cachedRead(
+            `ai-chats:${scope.toLowerCase()}`,
+            () => serverGetAiChats({ data: { email: scope } }),
+            { ttlMs: 30_000 },
+          );
           if (remote?.success) {
             stored = sanitizeStoredChats(remote.chats);
             void writeStoredChats(stored);
@@ -1234,7 +1244,11 @@ function AiPage() {
     let cancelled = false;
     void (async () => {
       try {
-        const remote = await serverGetAiChats({ data: { email: scope } });
+        const remote = await cachedRead(
+          `ai-chats:${scope.toLowerCase()}`,
+          () => serverGetAiChats({ data: { email: scope } }),
+          { ttlMs: 30_000 },
+        );
         if (cancelled || !remote?.success) return;
         const next = sanitizeStoredChats(remote.chats);
         if (cancelled) return;
@@ -1262,9 +1276,7 @@ function AiPage() {
     void writeStoredChats(chats);
     const scope = (userEmail ?? "").trim().toLowerCase();
     if (!scope || !remoteSyncRef.current) return;
-    void serverSaveAiChats({ data: { email: scope, chats } }).catch((error) => {
-      console.warn("Failed to save AI chats to server.", error);
-    });
+    debouncedSaveAiChats(scope, chats);
   }, [chats, historyLoaded, userEmail]);
 
   const scopeEmail = (userEmail ?? "").trim().toLowerCase();

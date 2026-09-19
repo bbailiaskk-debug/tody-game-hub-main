@@ -1,0 +1,408 @@
+import { RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSiteSettings } from "../site/theme";
+
+const GAME_W = 900;
+const GAME_H = 300;
+const GROUND_Y = 252;
+
+type Obstacle = {
+  x: number;
+  width: number;
+  height: number;
+};
+
+type Variant = "default" | "chrome";
+
+const VARIANTS: Record<
+  Variant,
+  {
+    panel: string;
+    muted: string;
+    accent: string;
+    startOverlay: string;
+    overOverlay: string;
+    button: string;
+    bg: string;
+    ground: string;
+    dino: string;
+    dark: string;
+    eye: string;
+    pupil: string;
+    cactusLight: string;
+    cactusDark: string;
+  }
+> = {
+  default: {
+    panel:
+      "night-panel relative touch-manipulation select-none overflow-hidden rounded-3xl border border-border/60 bg-[#161B16] shadow-[0_18px_45px_rgba(0,0,0,0.35)]",
+    muted: "text-muted-foreground",
+    accent: "text-brand",
+    startOverlay: "bg-[#161B16]/70 backdrop-blur-sm",
+    overOverlay: "bg-[#161B16]/80 backdrop-blur-sm",
+    button:
+      "inline-flex items-center gap-2 rounded-full border border-[#1DB954]/50 bg-[#161B16] px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.2em] text-[var(--brand-bright)] transition-all duration-200 hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)] active:translate-y-0.5",
+    bg: "#161B16",
+    ground: "#1DB954",
+    dino: "#1DB954",
+    dark: "#147d3a",
+    eye: "#ffffff",
+    pupil: "#0d1a17",
+    cactusLight: "#d6e69c",
+    cactusDark: "#1DB954",
+  },
+  chrome: {
+    panel:
+      "relative touch-manipulation select-none overflow-hidden rounded-3xl border border-black/10 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)]",
+    muted: "text-[#5f6368]",
+    accent: "text-[#202124]",
+    startOverlay: "bg-white/70 backdrop-blur-sm",
+    overOverlay: "bg-white/80 backdrop-blur-sm",
+    button:
+      "inline-flex items-center gap-2 rounded-full border border-[#dadce0] bg-white px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.2em] text-[#1a73e8] transition-all duration-200 hover:bg-[#1a73e8]/5 active:translate-y-0.5",
+    bg: "#ffffff",
+    ground: "#c6c6c6",
+    dino: "#535353",
+    dark: "#262626",
+    eye: "#ffffff",
+    pupil: "#202124",
+    cactusLight: "#3c4043",
+    cactusDark: "#535353",
+  },
+};
+
+export function DinoGame({ variant = "default" }: { variant?: Variant } = {}) {
+  const { lang } = useSiteSettings();
+  const isBg = lang === "bg";
+  const isZh = lang === "zh";
+  const P = VARIANTS[variant];
+
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastRef = useRef<number | null>(null);
+  const displayedScoreRef = useRef(0);
+  const keysRef = useRef<Set<string>>(new Set());
+
+  const [score, setScore] = useState(0);
+  const [best, setBest] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
+  const [isGameOver, setIsGameOver] = useState(false);
+
+  const gameRef = useRef({
+    dinoY: GROUND_Y,
+    vy: 0,
+    ducking: false,
+    obstacles: [] as Obstacle[],
+    spawnTimer: 0,
+    speed: 320,
+    frames: 0,
+    score: 0,
+  });
+
+  useEffect(() => {
+    setBest(Number(window.localStorage.getItem("dino-high-score") || "0"));
+  }, []);
+
+  const drawDino = (ctx: CanvasRenderingContext2D, ducking: boolean) => {
+    const x = 60;
+    const y = gameRef.current.dinoY;
+
+    if (ducking) {
+      ctx.fillStyle = P.dino;
+      ctx.fillRect(x, y + 8, 48, 18);
+      ctx.fillRect(x + 34, y + 2, 24, 18);
+      ctx.fillRect(x + 50, y + 14, 14, 12);
+      ctx.fillStyle = P.dark;
+      ctx.fillRect(x + 42, y + 8, 5, 8);
+    } else {
+      ctx.fillStyle = P.dino;
+      ctx.fillRect(x, y, 26, 22);
+      ctx.fillRect(x + 16, y - 20, 24, 24);
+      ctx.fillRect(x - 6, y + 12, 12, 14);
+
+      ctx.fillStyle = P.eye;
+      ctx.fillRect(x + 30, y - 14, 8, 8);
+      ctx.fillStyle = P.pupil;
+      ctx.fillRect(x + 34, y - 12, 4, 4);
+
+      ctx.fillStyle = P.dino;
+      const legY = gameRef.current.frames % 10 < 5 ? y + 22 : y + 18;
+      ctx.fillRect(x + 4, legY, 6, 16);
+      ctx.fillRect(x + 14, y + 20, 6, 18);
+    }
+  };
+
+  const drawObstacle = (ctx: CanvasRenderingContext2D, o: Obstacle) => {
+    ctx.fillStyle = P.cactusLight;
+    for (let i = 0; i < Math.ceil(o.height / 14); i++) {
+      ctx.fillRect(o.x + 4, GROUND_Y - (i + 1) * 14, o.width - 8, 14);
+    }
+    ctx.fillStyle = P.cactusDark;
+    ctx.fillRect(o.x, GROUND_Y - o.height, 4, o.height);
+    ctx.fillRect(o.x + o.width - 4, GROUND_Y - o.height, 4, o.height);
+  };
+
+  const resetGame = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, GAME_W, GAME_H);
+    ctx.fillStyle = P.bg;
+    ctx.fillRect(0, 0, GAME_W, GAME_H);
+    ctx.strokeStyle = P.ground;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    ctx.lineTo(GAME_W, GROUND_Y);
+    ctx.stroke();
+    drawDino(ctx, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [P.bg, P.ground]);
+
+  const startGame = useCallback(() => {
+    if (isGameOver) {
+      gameRef.current = {
+        dinoY: GROUND_Y,
+        vy: 0,
+        ducking: false,
+        obstacles: [],
+        spawnTimer: 0,
+        speed: 320,
+        frames: 0,
+        score: 0,
+      };
+      setIsGameOver(false);
+    }
+    setIsRunning(true);
+    lastRef.current = null;
+    displayedScoreRef.current = 0;
+    setScore(0);
+  }, [isGameOver]);
+
+  useEffect(() => {
+    resetGame();
+  }, [resetGame]);
+
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const step = (now: number) => {
+      const g = gameRef.current;
+      rafRef.current = requestAnimationFrame(step);
+
+      if (lastRef.current === null) {
+        lastRef.current = now;
+        return;
+      }
+      const dt = Math.min((now - lastRef.current) / 1000, 0.05);
+      lastRef.current = now;
+
+      const space = keysRef.current.has(" ") || keysRef.current.has("ArrowUp");
+      const down = keysRef.current.has("ArrowDown");
+      const onGround = g.dinoY >= GROUND_Y;
+
+      if (space && onGround) {
+        g.vy = -760;
+        g.dinoY = GROUND_Y - 2;
+      }
+
+      if (g.dinoY < GROUND_Y) {
+        g.vy += 2200 * dt;
+        g.dinoY += g.vy * dt;
+        if (g.dinoY > GROUND_Y) {
+          g.dinoY = GROUND_Y;
+          g.vy = 0;
+        }
+      }
+
+      g.ducking = onGround && down;
+
+      g.speed = Math.min(320 + g.score * 0.6, 720);
+      g.frames += 1;
+      g.score += dt * g.speed * 0.02;
+      const nextScore = Math.floor(g.score);
+      if (nextScore !== displayedScoreRef.current) {
+        displayedScoreRef.current = nextScore;
+        setScore(nextScore);
+      }
+
+      g.spawnTimer -= dt;
+      if (g.spawnTimer <= 0) {
+        const height = Math.random() < 0.5 ? 36 : 52;
+        g.obstacles.push({
+          x: GAME_W + 20,
+          width: 22,
+          height,
+        });
+        g.spawnTimer = 0.9 + Math.random() * 1.4;
+      }
+
+      g.obstacles = g.obstacles.filter((o) => o.x + o.width > -20);
+      for (const o of g.obstacles) {
+        o.x -= g.speed * dt;
+      }
+
+      const w = g.ducking ? 58 : 40;
+      const h = g.ducking ? 26 : 42;
+      const dinoHit = {
+        x: 60,
+        y: g.ducking ? g.dinoY + 8 : g.dinoY - 20,
+        width: w,
+        height: h,
+      };
+
+      for (const o of g.obstacles) {
+        const oHit = { x: o.x + 2, y: GROUND_Y - o.height, width: o.width - 4, height: o.height };
+        if (
+          dinoHit.x < oHit.x + oHit.width &&
+          dinoHit.x + dinoHit.width > oHit.x &&
+          dinoHit.y < oHit.y + oHit.height &&
+          dinoHit.y + dinoHit.height > oHit.y
+        ) {
+          setIsRunning(false);
+          setIsGameOver(true);
+          const highScore = Number(window.localStorage.getItem("dino-high-score") || "0");
+          const newBest = Math.max(highScore, Math.floor(g.score));
+          window.localStorage.setItem("dino-high-score", String(newBest));
+          setBest(newBest);
+          return;
+        }
+      }
+
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (!canvas || !ctx) return;
+      ctx.fillStyle = P.bg;
+      ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+      ctx.strokeStyle = P.ground;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, GROUND_Y);
+      ctx.lineTo(GAME_W, GROUND_Y);
+      ctx.stroke();
+
+      ctx.fillStyle = P.ground;
+      for (let i = 0; i < 9; i++) {
+        const x = (((i * 100 - g.score * 2) % (GAME_W + 100)) + GAME_W) % (GAME_W + 100);
+        ctx.fillRect(x, GROUND_Y + 8, 26, 3);
+      }
+
+      g.obstacles.forEach((o) => drawObstacle(ctx, o));
+      drawDino(ctx, g.ducking);
+    };
+
+    rafRef.current = requestAnimationFrame(step);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRunning]);
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if ([" ", "ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
+      keysRef.current.add(e.key);
+      if (e.key === " " || e.key === "ArrowUp") {
+        if (!isRunning && !isGameOver) startGame();
+        else if (isGameOver) startGame();
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      keysRef.current.delete(e.key);
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, [isRunning, isGameOver, startGame]);
+
+  const handlePanelPointerDown = () => {
+    if (isGameOver) {
+      startGame();
+      return;
+    }
+    if (!isRunning) {
+      startGame();
+      return;
+    }
+    keysRef.current.add(" ");
+    window.setTimeout(() => keysRef.current.delete(" "), 120);
+  };
+
+  const startHint =
+    variant === "chrome"
+      ? isBg
+        ? "Натиснете интервал, за да играете"
+        : isZh
+          ? "按空格键开始游戏"
+          : "Press space to play"
+      : isBg
+        ? "Натисни SPACE или докосни, за да започнеш"
+        : isZh
+          ? "按空格键或点击开始"
+          : "Press SPACE or tap to start";
+
+  return (
+    <div onPointerDown={handlePanelPointerDown} className={P.panel}>
+      <div className="flex items-center justify-between px-5 py-3">
+        <span className={`font-mono text-[0.65rem] tracking-[0.2em] uppercase ${P.muted}`}>
+          {isBg ? "НАЙ-ДОБЪР РЕЗУЛТАТ" : isZh ? "最高分" : "HIGH SCORE"} — {best}
+        </span>
+        <span className={`font-mono text-[0.65rem] tracking-[0.2em] uppercase ${P.accent}`}>
+          {isBg ? "РЕЗУЛТАТ" : isZh ? "分数" : "SCORE"} — {score}
+        </span>
+      </div>
+
+      <canvas
+        ref={canvasRef}
+        width={GAME_W}
+        height={GAME_H}
+        className="block h-auto w-full select-none"
+      />
+
+      {!isRunning && !isGameOver && (
+        <div
+          className={`absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 ${P.startOverlay}`}
+        >
+          <span
+            className={`max-w-[85%] text-center font-mono text-sm uppercase tracking-[0.3em] ${P.muted}`}
+          >
+            {startHint}
+          </span>
+          <button type="button" onClick={startGame} className={P.button}>
+            {isBg ? "СТАРТ" : isZh ? "开始" : "START"}
+          </button>
+        </div>
+      )}
+
+      {isGameOver && (
+        <div
+          className={`absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 ${P.overOverlay}`}
+        >
+          <span className="font-mono text-2xl font-bold tracking-[0.2em] text-foreground">
+            {isBg ? "ИГРАТА СВЪРШИ" : isZh ? "游戏结束" : "GAME OVER"}
+          </span>
+          <span className={`font-mono text-xs uppercase tracking-[0.2em] ${P.muted}`}>
+            {isBg ? "Твой резултат" : isZh ? "你的分数" : "Your score"} — {score}
+          </span>
+          <button
+            type="button"
+            onClick={startGame}
+            className={`mt-2 inline-flex items-center gap-2 rounded-full px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.2em] transition-all duration-200 active:translate-y-0.5 ${
+              variant === "chrome"
+                ? "border border-[#dadce0] bg-white text-[#1a73e8] hover:bg-[#1a73e8]/5"
+                : "border border-[#1DB954]/50 bg-[#161B16] text-[var(--brand-bright)] hover:bg-[#1DB954]/10 hover:shadow-[0_0_18px_rgba(29,185,84,0.25)]"
+            }`}
+          >
+            <RotateCcw className="size-4" />
+            {isBg ? "ОЩЕ ВЕДНЪЖ" : isZh ? "再玩一次" : "PLAY AGAIN"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

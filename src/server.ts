@@ -76,8 +76,24 @@ function redirectToHttps(request: Request): Response | null {
     return null;
   }
 
+  // NGINX Unit deployment: Unit terminates TLS and redirects :80 -> :443 itself
+  // (Unit does NOT inject x-forwarded-proto when proxying to this app, so the
+  // internal URL here is always plain http — trusting it would redirect every
+  // request and loop). The systemd unit sets HTTPS_REDIRECT=off in that case.
+  if (typeof process !== "undefined" && process.env?.["HTTPS_REDIRECT"] === "off") {
+    return null;
+  }
+
   const forwardedProto = request.headers.get("x-forwarded-proto");
-  const isHttpRequest = forwardedProto === "http" || url.protocol === "http:";
+
+  let isHttpRequest: boolean;
+  if (forwardedProto) {
+    // Trust the edge/proxy (NGINX Unit, Cloudflare) for protocol detection:
+    // behind a TLS terminator the internal URL is plain http even on https requests.
+    isHttpRequest = forwardedProto === "http";
+  } else {
+    isHttpRequest = url.protocol === "http:";
+  }
 
   if (!isHttpRequest || url.hostname === "localhost" || url.hostname.endsWith("localhost")) {
     return null;

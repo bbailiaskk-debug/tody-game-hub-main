@@ -10,6 +10,7 @@ import {
   serverRequestAccountDeletionCode,
   serverSyncUserProfile,
 } from "../lib/auth-functions";
+import { cachedRead, invalidateCachePrefix } from "../lib/remote-cache";
 import {
   clearPersistedUserProfile,
   readPersistedUserAccentColor,
@@ -85,7 +86,11 @@ function Profile() {
 
       if (profileEmail) {
         try {
-          const result = await serverGetUserProfile({ data: { email: profileEmail } });
+          const result = await cachedRead(
+            `profile:${profileEmail.toLowerCase()}`,
+            () => serverGetUserProfile({ data: { email: profileEmail } }),
+            { ttlMs: 60_000 },
+          );
           if (result.success && result.data) {
             nextName = result.data.name || nextName;
             nextBirthday = result.data.birthday || nextBirthday;
@@ -140,6 +145,7 @@ function Profile() {
           (syncError) => console.warn("Avatar sync failed.", syncError),
         );
       }
+      invalidateCachePrefix(`profile:${activeEmail.toLowerCase()}`);
       window.dispatchEvent(new Event("userStateChanged"));
     } catch {
       setError(isBg ? "Неуспешно качване на снимка." : "Image upload failed.");
@@ -158,6 +164,7 @@ function Profile() {
         console.warn("Avatar sync failed.", syncError),
       );
     }
+    invalidateCachePrefix(`profile:${activeEmail.toLowerCase()}`);
     window.dispatchEvent(new Event("userStateChanged"));
   };
 
@@ -191,6 +198,7 @@ function Profile() {
       console.warn("Server profile sync failed.", error);
     });
 
+    invalidateCachePrefix(`profile:${(currentEmail ?? nextEmail).toLowerCase()}`);
     writeRegisteredUsers(updatedUsers);
     writePersistedUserProfile({
       name: nextName,
@@ -309,6 +317,8 @@ function Profile() {
         );
         return;
       }
+      invalidateCachePrefix(`user-exists:${currentEmail}`);
+      invalidateCachePrefix(`auth-login:${currentEmail}`);
       clearDeletedAccount(currentEmail);
     } catch (error) {
       console.warn("Account deletion failed on server.", error);
@@ -359,6 +369,7 @@ function Profile() {
         return;
       }
 
+      invalidateCachePrefix(`auth-login:${currentEmail}`);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmNewPassword("");

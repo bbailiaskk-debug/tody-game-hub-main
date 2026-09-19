@@ -10,8 +10,12 @@ const RECIPIENT_NAME_KEYS = ["name", "recipient_name", "recipientName", "to_name
 
 export function ensureRecipientFields(
   templateParams: Record<string, string>,
+  options?: { keepTemplateRecipient?: boolean },
 ): Record<string, string> {
   const params = { ...templateParams };
+  if (options?.keepTemplateRecipient) {
+    return params;
+  }
   if (!params["to_email"]) {
     const recipientKey = RECIPIENT_KEYS.find(
       (key) => typeof params[key] === "string" && params[key]!.includes("@"),
@@ -44,8 +48,9 @@ export async function sendEmailJsWithFallback(
   templateId: string,
   templateParams: Record<string, string>,
   preferredPublicKey?: string,
+  options?: { keepTemplateRecipient?: boolean },
 ) {
-  const recipientSafeParams = ensureRecipientFields(templateParams);
+  const recipientSafeParams = ensureRecipientFields(templateParams, options);
 
   if (shouldMockEmailFor(recipientSafeParams)) {
     recordMockEmail({ at: Date.now(), serviceId, templateId, templateParams: recipientSafeParams });

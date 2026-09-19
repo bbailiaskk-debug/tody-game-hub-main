@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  ФАЙЛ ЗА GOOGLE SITES / РЕДАКТИРАНЕ
+  ============================================================
+  КАК РЕДАКТИРАШ:
+  1) Отвори този файл с:
+     - Notepad (Windows) или
+     - Word (Файл → Отвори → избери HTML) — или
+     - VS Code.
+  2) Променяй само текста между заглавията на секциите
+     (например <h1>ЯКИ ИГРИ И ЗАБАВЛЕНИЕ</h1>).
+  3) Запази файла.
+  4) Качи го в Google Sites:
+     - В редактора на Google Sites: Вмъкване → Вграждане → Чрез кода
+       → постави целия код на страницата (Insert → Embed → Embed code)
+       ИЛИ
+     - качи файла в Google Drive и го отвори, за да го гледаш.
+
+  Google Analytics скриптът (G-C35YFLR7D7) е долу в <head>.
+  ============================================================
+-->
+<html lang="bg">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Todor Khristov Gaming — Яки игри и забавление</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-C35YFLR7D7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-C35YFLR7D7');
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0b;
+    color: #e5e5e7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 56px 24px; }
+
+  /* ---------- НАЧАЛНА СЕКЦИЯ ---------- */
+  .kicker { color: #1DB954; text-transform: uppercase; letter-spacing: .2em; font-size: 12px; }
+  h1 {
+    color: #1DB954;
+    font-size: clamp(44px, 8vw, 84px);
+    line-height: .95;
+    font-weight: 900;
+    margin: 20px 0;
+  }
+  .sub { color: #a1a1aa; max-width: 560px; margin-bottom: 18px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 28px; }
+  .btn {
+    display: inline-block;
+    padding: 14px 24px;
+    border-radius: 999px;
+    text-decoration: none;
+    font-size: 12px;
+    letter-spacing: .12em;
+    font-weight: 700;
+  }
+  .btn-green { background: #1DB954; color: #06210f; }
+  .btn-red { background: #ff0000; color: #ffffff; }
+  .btn-ghost { color: #e5e5e7; border: 1px solid #27272a; }
+
+  /* ---------- СЕКЦИЯ ИГРИ ---------- */
+  .sec-title { margin-top: 70px; display: flex; align-items: center; gap: 12px; }
+  .sec-title .num { color: #1DB954; font-size: 12px; letter-spacing: .15em; }
+  .sec-title .lbl { font-size: 12px; letter-spacing: .15em; text-transform: uppercase; color: #e5e5e7; }
+  h2 { color: #1DB954; font-size: clamp(30px, 5vw, 48px); line-height: 1; margin: 16px 0 30px; }
+  .games { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+  .game {
+    background: #141417;
+    border: 1px solid #27272a;
+    border-radius: 20px;
+    padding: 22px;
+  }
+  .game .tag { color: #1DB954; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+  .game h3 { font-size: 24px; margin: 26px 0 6px; }
+  .game p { color: #a1a1aa; font-size: 14px; }
+
+  footer { border-top: 1px solid #27272a; padding: 26px 24px; text-align: center; color: #a1a1aa; font-size: 13px; }
+  footer a { color: #e5e5e7; text-decoration: none; margin: 0 10px; }
+</style>
+</head>
+<body>
+
+<main>
+  <!-- ==================== НАЧАЛНА СЕКЦИЯ (редактирай тук) ==================== -->
+  <p class="kicker">ДОБРЕ ДОШЪЛ В СИГНАЛА</p>
+  <h1>ЯКИ ИГРИ<br />И<br />ЗАБАВЛЕНИЕ</h1>
+  <p class="sub">
+    Игри, моменти и енергия директно от командния център на Todor Khristov.
+    Тук се събират епични мисии, живи сесии, забавни заглавия и атмосфера,
+    която държи общността в движение.
+  </p>
+  <p class="sub">
+    От гейминг сесиите и челленджите до музиката и атмосферата около канала,
+    всичко е подготвено да влезе в ежедневието ви като усещане за свобода,
+    лудост и стабилна емоция.
+  </p>
+
+  <div class="buttons">
+    <a class="btn btn-green" href="/info">ПРОФИЛ НА СЪЗДАТЕЛЯ</a>
+    <a class="btn btn-red" href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ" target="_blank">YOUTUBE КАНАЛ</a>
+    <a class="btn btn-ghost" href="#games">КЪМ ИГРИТЕ</a>
+  </div>
+
+  <!-- ==================== СЕКЦИЯ ИГРИ (редактирай тук) ==================== -->
+  <div class="sec-title">
+    <span class="num">02 /</span>
+    <span class="lbl">Какво играя</span>
+  </div>
+  <h2>ИГРИ В РОТАЦИЯ</h2>
+
+  <div class="games">
+    <div class="game">
+      <div class="tag">СЪРВАЙВЪЛ</div>
+      <h3>Minecraft</h3>
+      <p>Серии и проекти на живо</p>
+    </div>
+    <div class="game">
+      <div class="tag">ОТВОРЕН СВЯТ</div>
+      <h3>GTA V</h3>
+      <p>Мисии и лудории</p>
+    </div>
+    <div class="game">
+      <div class="tag">ШУТЪР</div>
+      <h3>Counter-Strike 2</h3>
+      <p>Класирани мачове</p>
+    </div>
+    <div class="game">
+      <div class="tag">БАТЪЛ РОЯЛ</div>
+      <h3>Fortnite</h3>
+      <p>Игра с общността</p>
+    </div>
+    <div class="game">
+      <div class="tag">МОБА</div>
+      <h3>Mobile Legends</h3>
+      <p>Ранкед битки 5v5</p>
+    </div>
+    <div class="game">
+      <div class="tag">СТРАТЕГИЯ</div>
+      <h3>Bloons TD 6</h3>
+      <p>Тауър дифенс рундове</p>
+    </div>
+    <div class="game">
+      <div class="tag">ПАРТИ</div>
+      <h3>Among Us</h3>
+      <p>Импостър или креумейт – кой лъже?</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <a href="/">Начало</a>
+  <a href="/games">Игри</a>
+  <a href="/music">Музика</a>
+  <a href="/info">Информация</a>
+  <span>© 2026 Todor Khristov Gaming</span>
+</footer>
+
+</body>
+</html>

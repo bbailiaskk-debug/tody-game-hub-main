@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { serverResetPassword } from "../lib/auth-functions";
 import { useSiteSettings } from "../components/site/theme";
+import { invalidateCachePrefix } from "../lib/remote-cache";
 
 export const Route = createFileRoute("/reset-password")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -76,6 +77,8 @@ function ResetPasswordRoute() {
         setError(result.error ?? "The reset link could not be used.");
         return;
       }
+
+      invalidateCachePrefix(`auth-login:${email.toLowerCase()}`);
 
       setNotice(
         isBg
