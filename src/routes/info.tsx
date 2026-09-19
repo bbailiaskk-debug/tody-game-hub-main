@@ -607,6 +607,20 @@ function InfoPage() {
           ))}
         </div>
 
+        <div className="mt-6 hidden flex-col items-center gap-3 lg:flex">
+          <span className="label-mono text-[0.6rem]">
+            {isBg ? "СКАНИРАЙ QR КОДА" : isZh ? "扫描二维码" : "SCAN THE QR CODE"}
+          </span>
+          <img
+            src="/Untitled-9.png"
+            alt={isBg ? "QR код със социалните мрежи" : "QR code to social media"}
+            width={160}
+            height={160}
+            loading="lazy"
+            className="size-40 rounded-2xl border border-border bg-surface p-2"
+          />
+        </div>
+
         <div className="mt-14 flex items-center gap-3">
           <Calendar className="size-4 text-brand" />
           <span className="label-mono">

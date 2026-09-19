@@ -520,6 +520,19 @@ export function SiteHeader() {
                       </a>
                     ))}
                   </div>
+                  <div className="mt-3 hidden flex-col items-center gap-2 md:flex">
+                    <img
+                      src="/Untitled-9.png"
+                      alt={lang === "bg" ? "QR код със социалните мрежи" : "QR code to social media"}
+                      width={140}
+                      height={140}
+                      loading="lazy"
+                      className="size-[8.75rem] rounded-xl border border-border bg-surface p-2"
+                    />
+                    <span className="font-mono text-[0.6rem] tracking-[0.18em] text-muted-foreground uppercase">
+                      {lang === "bg" ? "Сканирай с телефона" : "Scan with your phone"}
+                    </span>
+                  </div>
                 </div>
               </div>
             ) : null}

@@ -240,7 +240,8 @@ function Index() {
             loop
             muted
             playsInline
-            preload="auto"
+            preload="none"
+            poster="/animo-focus-shift-poster.jpg"
             aria-hidden="true"
           >
             <source src="/animo-focus-shift.webm" type="video/webm" />

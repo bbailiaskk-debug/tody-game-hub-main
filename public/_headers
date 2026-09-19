@@ -19,6 +19,18 @@
   Cache-Control: public, max-age=2592000, immutable
   CDN-Cache-Control: max-age=2592000
 
+/animo-focus-shift.mp4
+  Cache-Control: public, max-age=2592000, immutable
+  CDN-Cache-Control: max-age=2592000
+
+/animo-focus-shift.webm
+  Cache-Control: public, max-age=2592000, immutable
+  CDN-Cache-Control: max-age=2592000
+
+/animo-focus-shift-poster.jpg
+  Cache-Control: public, max-age=2592000, immutable
+  CDN-Cache-Control: max-age=2592000
+
 /favicon.ico
   Cache-Control: public, max-age=86400
   CDN-Cache-Control: max-age=86400
