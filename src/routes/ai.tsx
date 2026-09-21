@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  startTransition,
   useEffect,
   useRef,
   useState,
@@ -36,6 +37,7 @@ import {
 
 import { serverAiChat, type AiChatMessage } from "../lib/ai-functions";
 import { cachedRead, createDebouncedWriter } from "../lib/remote-cache";
+import { seoHead } from "../lib/seo";
 import {
   serverGetAiChats,
   serverSaveAiChats,
@@ -57,54 +59,15 @@ export const Route = createFileRoute("/ai")({
   validateSearch: (search: Record<string, unknown>) => ({
     chat: typeof search["chat"] === "string" ? search["chat"] : "",
   }),
-  head: () => ({
-    meta: [
-      { title: "TK-Bot — Todor Khristov Gaming" },
-      {
-        name: "description",
-        content:
-          "Попитай TK-Bot, изкуственият интелект асистент на Todor Khristov Gaming. Чат за канала, игрите и музиката.",
-      },
-      { property: "og:title", content: "TK-Bot — Todor Khristov Gaming" },
-      {
-        property: "og:description",
-        content: "Попитай TK-Bot, изкуственият интелект асистент на Todor Khristov Gaming.",
-      },
-      { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/ai" },
-      { property: "og:type", content: "website" },
-      {
-        property: "og:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
-      },
-      { property: "og:image:width", content: "1200" },
-      { property: "og:image:height", content: "630" },
-      { property: "og:image:type", content: "image/jpeg" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "TK-Bot — Todor Khristov Gaming" },
-      {
-        name: "twitter:description",
-        content: "Попитай TK-Bot, изкуственият интелект асистент на Todor Khristov Gaming.",
-      },
-      {
-        name: "twitter:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
-      },
-    ],
-    links: [
-      { rel: "canonical", href: "https://tody-game-hub.bbailiaskk.workers.dev/ai" },
-      { rel: "alternate", hrefLang: "bg", href: "https://tody-game-hub.bbailiaskk.workers.dev/ai" },
-      {
-        rel: "alternate",
-        hrefLang: "en",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/ai?lang=en",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "zh",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/ai?lang=zh",
-      },
-    ],
-  }),
+  head: () => {
+    const seo = seoHead({
+      path: "/ai",
+      title: "TK-Bot AI",
+      description:
+        "Попитай TK-Bot, изкуственият интелект асистент на Todor Khristov Gaming. Чат за канала, игрите и музиката.",
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   component: AiPage,
 });
 
@@ -1538,38 +1501,44 @@ function AiPage() {
   };
 
   const startNewChat = () => {
-    setActiveChatId(null);
-    setMessages([]);
-    setError(null);
-    setPrompt("");
-    setPendingItems([]);
-    setAttachMenuOpen(false);
-    setSidebarOpen(false);
-    navigate({ to: "/ai", search: { chat: "" }, replace: true });
-  };
-
-  const openChat = (chat: StoredChat) => {
-    setActiveChatId(chat.id);
-    setMessages(chat.messages);
-    setError(null);
-    setPrompt("");
-    setPendingItems([]);
-    setAttachMenuOpen(false);
-    setSidebarOpen(false);
-    navigate({ to: "/ai", search: { chat: chat.id }, replace: true });
-  };
-
-  const deleteChat = (chatId: string) => {
-    setChats((current) => current.filter((chat) => chat.id !== chatId));
-    if (activeChatId === chatId) {
+    startTransition(() => {
       setActiveChatId(null);
       setMessages([]);
       setError(null);
       setPrompt("");
       setPendingItems([]);
       setAttachMenuOpen(false);
+      setSidebarOpen(false);
       navigate({ to: "/ai", search: { chat: "" }, replace: true });
-    }
+    });
+  };
+
+  const openChat = (chat: StoredChat) => {
+    startTransition(() => {
+      setActiveChatId(chat.id);
+      setMessages(chat.messages);
+      setError(null);
+      setPrompt("");
+      setPendingItems([]);
+      setAttachMenuOpen(false);
+      setSidebarOpen(false);
+      navigate({ to: "/ai", search: { chat: chat.id }, replace: true });
+    });
+  };
+
+  const deleteChat = (chatId: string) => {
+    startTransition(() => {
+      setChats((current) => current.filter((chat) => chat.id !== chatId));
+      if (activeChatId === chatId) {
+        setActiveChatId(null);
+        setMessages([]);
+        setError(null);
+        setPrompt("");
+        setPendingItems([]);
+        setAttachMenuOpen(false);
+        navigate({ to: "/ai", search: { chat: "" }, replace: true });
+      }
+    });
   };
 
   const hasMessages = messages.length > 0;

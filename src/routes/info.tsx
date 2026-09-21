@@ -22,65 +22,18 @@ import {
   EMAILJS_CONTACT_TEMPLATE_ID,
 } from "../lib/emailjs-config";
 import { sendEmailJsWithFallback } from "../lib/emailjs-send";
+import { seoHead } from "../lib/seo";
 
 export const Route = createFileRoute("/info")({
-  head: () => ({
-    meta: [
-      { title: "Зад канала — Todor Khristov Gaming" },
-      {
-        name: "description",
-        content:
-          "Кой е Todor Khristov Gaming: игри за забавление, обработени видеа, график на качване и всички канали за следване.",
-      },
-      { property: "og:title", content: "Зад канала — Todor Khristov Gaming" },
-      {
-        property: "og:description",
-        content: "Профил на създателя, канали за следване и график на новите видеа.",
-      },
-      { name: "twitter:title", content: "Зад канала — Todor Khristov Gaming" },
-      {
-        name: "twitter:description",
-        content: "Профил на създателя, канали за следване и график на новите видеа.",
-      },
-      { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/info" },
-      { property: "og:type", content: "website" },
-      {
-        property: "og:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
-      },
-      { property: "og:image:width", content: "1200" },
-      { property: "og:image:height", content: "630" },
-      { property: "og:image:type", content: "image/jpeg" },
-      { name: "twitter:card", content: "summary_large_image" },
-      {
-        name: "twitter:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
-      },
-    ],
-    links: [
-      { rel: "canonical", href: "https://tody-game-hub.bbailiaskk.workers.dev/info" },
-      {
-        rel: "alternate",
-        hrefLang: "bg",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/info",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "en",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/info?lang=en",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "zh",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/info?lang=zh",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "x-default",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/info",
-      },
-    ],
-  }),
+  head: () => {
+    const seo = seoHead({
+      path: "/info",
+      title: "Зад канала",
+      description:
+        "Кой е Todor Khristov Gaming: игри за забавление, обработени видеа, график на качване и всички канали за следване.",
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   component: InfoPage,
 });
 

@@ -11,16 +11,26 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AiRouteImport } from './routes/ai'
+import { Route as AirhockeyRouteImport } from './routes/airhockey'
+import { Route as BeatbattleRouteImport } from './routes/beatbattle'
+import { Route as CandycrushRouteImport } from './routes/candycrush'
 import { Route as ChessRouteImport } from './routes/chess'
+import { Route as CrystalrealmRouteImport } from './routes/crystalrealm'
+import { Route as DdlcRouteImport } from './routes/ddlc'
 import { Route as DinoRouteImport } from './routes/dino'
 import { Route as Game2048RouteImport } from './routes/game2048'
 import { Route as GamesRouteImport } from './routes/games'
 import { Route as InfoRouteImport } from './routes/info'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MusicRouteImport } from './routes/music'
+import { Route as PrismheartRouteImport } from './routes/prismheart'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as StreamerRouteImport } from './routes/streamer'
+import { Route as SudokuRouteImport } from './routes/sudoku'
+import { Route as TetrisRouteImport } from './routes/tetris'
 import { Route as TictactoeRouteImport } from './routes/tictactoe'
+import { Route as WordleRouteImport } from './routes/wordle'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -32,9 +42,34 @@ const AiRoute = AiRouteImport.update({
   path: '/ai',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AirhockeyRoute = AirhockeyRouteImport.update({
+  id: '/airhockey',
+  path: '/airhockey',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BeatbattleRoute = BeatbattleRouteImport.update({
+  id: '/beatbattle',
+  path: '/beatbattle',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CandycrushRoute = CandycrushRouteImport.update({
+  id: '/candycrush',
+  path: '/candycrush',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChessRoute = ChessRouteImport.update({
   id: '/chess',
   path: '/chess',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CrystalrealmRoute = CrystalrealmRouteImport.update({
+  id: '/crystalrealm',
+  path: '/crystalrealm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DdlcRoute = DdlcRouteImport.update({
+  id: '/ddlc',
+  path: '/ddlc',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DinoRoute = DinoRouteImport.update({
@@ -67,6 +102,11 @@ const MusicRoute = MusicRouteImport.update({
   path: '/music',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrismheartRoute = PrismheartRouteImport.update({
+  id: '/prismheart',
+  path: '/prismheart',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -77,113 +117,203 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StreamerRoute = StreamerRouteImport.update({
+  id: '/streamer',
+  path: '/streamer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SudokuRoute = SudokuRouteImport.update({
+  id: '/sudoku',
+  path: '/sudoku',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TetrisRoute = TetrisRouteImport.update({
+  id: '/tetris',
+  path: '/tetris',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TictactoeRoute = TictactoeRouteImport.update({
   id: '/tictactoe',
   path: '/tictactoe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WordleRoute = WordleRouteImport.update({
+  id: '/wordle',
+  path: '/wordle',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai': typeof AiRoute
+  '/airhockey': typeof AirhockeyRoute
+  '/beatbattle': typeof BeatbattleRoute
+  '/candycrush': typeof CandycrushRoute
   '/chess': typeof ChessRoute
+  '/crystalrealm': typeof CrystalrealmRoute
+  '/ddlc': typeof DdlcRoute
   '/dino': typeof DinoRoute
   '/game2048': typeof Game2048Route
   '/games': typeof GamesRoute
   '/info': typeof InfoRoute
   '/login': typeof LoginRoute
   '/music': typeof MusicRoute
+  '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/streamer': typeof StreamerRoute
+  '/sudoku': typeof SudokuRoute
+  '/tetris': typeof TetrisRoute
   '/tictactoe': typeof TictactoeRoute
+  '/wordle': typeof WordleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai': typeof AiRoute
+  '/airhockey': typeof AirhockeyRoute
+  '/beatbattle': typeof BeatbattleRoute
+  '/candycrush': typeof CandycrushRoute
   '/chess': typeof ChessRoute
+  '/crystalrealm': typeof CrystalrealmRoute
+  '/ddlc': typeof DdlcRoute
   '/dino': typeof DinoRoute
   '/game2048': typeof Game2048Route
   '/games': typeof GamesRoute
   '/info': typeof InfoRoute
   '/login': typeof LoginRoute
   '/music': typeof MusicRoute
+  '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/streamer': typeof StreamerRoute
+  '/sudoku': typeof SudokuRoute
+  '/tetris': typeof TetrisRoute
   '/tictactoe': typeof TictactoeRoute
+  '/wordle': typeof WordleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/ai': typeof AiRoute
+  '/airhockey': typeof AirhockeyRoute
+  '/beatbattle': typeof BeatbattleRoute
+  '/candycrush': typeof CandycrushRoute
   '/chess': typeof ChessRoute
+  '/crystalrealm': typeof CrystalrealmRoute
+  '/ddlc': typeof DdlcRoute
   '/dino': typeof DinoRoute
   '/game2048': typeof Game2048Route
   '/games': typeof GamesRoute
   '/info': typeof InfoRoute
   '/login': typeof LoginRoute
   '/music': typeof MusicRoute
+  '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/streamer': typeof StreamerRoute
+  '/sudoku': typeof SudokuRoute
+  '/tetris': typeof TetrisRoute
   '/tictactoe': typeof TictactoeRoute
+  '/wordle': typeof WordleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/ai'
+    | '/airhockey'
+    | '/beatbattle'
+    | '/candycrush'
     | '/chess'
+    | '/crystalrealm'
+    | '/ddlc'
     | '/dino'
     | '/game2048'
     | '/games'
     | '/info'
     | '/login'
     | '/music'
+    | '/prismheart'
     | '/profile'
     | '/reset-password'
+    | '/streamer'
+    | '/sudoku'
+    | '/tetris'
     | '/tictactoe'
+    | '/wordle'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/ai'
+    | '/airhockey'
+    | '/beatbattle'
+    | '/candycrush'
     | '/chess'
+    | '/crystalrealm'
+    | '/ddlc'
     | '/dino'
     | '/game2048'
     | '/games'
     | '/info'
     | '/login'
     | '/music'
+    | '/prismheart'
     | '/profile'
     | '/reset-password'
+    | '/streamer'
+    | '/sudoku'
+    | '/tetris'
     | '/tictactoe'
+    | '/wordle'
   id:
     | '__root__'
     | '/'
     | '/ai'
+    | '/airhockey'
+    | '/beatbattle'
+    | '/candycrush'
     | '/chess'
+    | '/crystalrealm'
+    | '/ddlc'
     | '/dino'
     | '/game2048'
     | '/games'
     | '/info'
     | '/login'
     | '/music'
+    | '/prismheart'
     | '/profile'
     | '/reset-password'
+    | '/streamer'
+    | '/sudoku'
+    | '/tetris'
     | '/tictactoe'
+    | '/wordle'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiRoute: typeof AiRoute
+  AirhockeyRoute: typeof AirhockeyRoute
+  BeatbattleRoute: typeof BeatbattleRoute
+  CandycrushRoute: typeof CandycrushRoute
   ChessRoute: typeof ChessRoute
+  CrystalrealmRoute: typeof CrystalrealmRoute
+  DdlcRoute: typeof DdlcRoute
   DinoRoute: typeof DinoRoute
   Game2048Route: typeof Game2048Route
   GamesRoute: typeof GamesRoute
   InfoRoute: typeof InfoRoute
   LoginRoute: typeof LoginRoute
   MusicRoute: typeof MusicRoute
+  PrismheartRoute: typeof PrismheartRoute
   ProfileRoute: typeof ProfileRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  StreamerRoute: typeof StreamerRoute
+  SudokuRoute: typeof SudokuRoute
+  TetrisRoute: typeof TetrisRoute
   TictactoeRoute: typeof TictactoeRoute
+  WordleRoute: typeof WordleRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -202,11 +332,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/airhockey': {
+      id: '/airhockey'
+      path: '/airhockey'
+      fullPath: '/airhockey'
+      preLoaderRoute: typeof AirhockeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/beatbattle': {
+      id: '/beatbattle'
+      path: '/beatbattle'
+      fullPath: '/beatbattle'
+      preLoaderRoute: typeof BeatbattleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/candycrush': {
+      id: '/candycrush'
+      path: '/candycrush'
+      fullPath: '/candycrush'
+      preLoaderRoute: typeof CandycrushRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/chess': {
       id: '/chess'
       path: '/chess'
       fullPath: '/chess'
       preLoaderRoute: typeof ChessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/crystalrealm': {
+      id: '/crystalrealm'
+      path: '/crystalrealm'
+      fullPath: '/crystalrealm'
+      preLoaderRoute: typeof CrystalrealmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ddlc': {
+      id: '/ddlc'
+      path: '/ddlc'
+      fullPath: '/ddlc'
+      preLoaderRoute: typeof DdlcRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dino': {
@@ -251,6 +416,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MusicRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/prismheart': {
+      id: '/prismheart'
+      path: '/prismheart'
+      fullPath: '/prismheart'
+      preLoaderRoute: typeof PrismheartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/profile': {
       id: '/profile'
       path: '/profile'
@@ -265,11 +437,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/streamer': {
+      id: '/streamer'
+      path: '/streamer'
+      fullPath: '/streamer'
+      preLoaderRoute: typeof StreamerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sudoku': {
+      id: '/sudoku'
+      path: '/sudoku'
+      fullPath: '/sudoku'
+      preLoaderRoute: typeof SudokuRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tetris': {
+      id: '/tetris'
+      path: '/tetris'
+      fullPath: '/tetris'
+      preLoaderRoute: typeof TetrisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tictactoe': {
       id: '/tictactoe'
       path: '/tictactoe'
       fullPath: '/tictactoe'
       preLoaderRoute: typeof TictactoeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wordle': {
+      id: '/wordle'
+      path: '/wordle'
+      fullPath: '/wordle'
+      preLoaderRoute: typeof WordleRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -278,16 +478,26 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiRoute: AiRoute,
+  AirhockeyRoute: AirhockeyRoute,
+  BeatbattleRoute: BeatbattleRoute,
+  CandycrushRoute: CandycrushRoute,
   ChessRoute: ChessRoute,
+  CrystalrealmRoute: CrystalrealmRoute,
+  DdlcRoute: DdlcRoute,
   DinoRoute: DinoRoute,
   Game2048Route: Game2048Route,
   GamesRoute: GamesRoute,
   InfoRoute: InfoRoute,
   LoginRoute: LoginRoute,
   MusicRoute: MusicRoute,
+  PrismheartRoute: PrismheartRoute,
   ProfileRoute: ProfileRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  StreamerRoute: StreamerRoute,
+  SudokuRoute: SudokuRoute,
+  TetrisRoute: TetrisRoute,
   TictactoeRoute: TictactoeRoute,
+  WordleRoute: WordleRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

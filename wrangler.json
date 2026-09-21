@@ -1,51 +1,53 @@
 {
-	"name": "tody-game-hub",
-	"compatibility_date": "2026-08-30",
-	"main": ".output/server/index.mjs",
-	"assets": {
-		"directory": ".output/public",
-		"binding": "ASSETS"
-	},
-	"vars": {
-		"GOOGLE_CLIENT_ID": "replace-with-google-client-id"
-	},
-	"kv_namespaces": [
-		{
-			"binding": "AUTH_USERS_KV",
-			"id": "987d097bccb842538cf6af6ebafdbee5"
-		},
-		{
-			"binding": "GEMINI_CACHE_KV",
-			"id": "9c7d153cb68b46e1b07f0d9c61606999"
-		}
-	],
-	"durable_objects": {
-		"bindings": [
-			{
-				"name": "CHESS_GAME_DO",
-				"class_name": "ChessMatchDO"
-			},
-			{
-				"name": "TTT_GAME_DO",
-				"class_name": "TicTacToeMatchDO"
-			}
-		]
-	},
-	"migrations": [
-		{
-			"tag": "v1",
-			"new_sqlite_classes": [
-				"ChessMatchDO"
-			]
-		},
-		{
-			"tag": "v2",
-			"new_sqlite_classes": [
-				"TicTacToeMatchDO"
-			]
-		}
-	],
-	"compatibility_flags": [
-		"nodejs_compat"
-	]
+  "name": "tody-game-hub",
+  "compatibility_date": "2026-08-30",
+  "main": ".output/server/index.mjs",
+  "assets": {
+    "directory": ".output/public",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "GOOGLE_CLIENT_ID": "replace-with-google-client-id"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "AUTH_USERS_KV",
+      "id": "987d097bccb842538cf6af6ebafdbee5"
+    },
+    {
+      "binding": "GEMINI_CACHE_KV",
+      "id": "9c7d153cb68b46e1b07f0d9c61606999"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHESS_GAME_DO",
+        "class_name": "ChessMatchDO"
+      },
+      {
+        "name": "TTT_GAME_DO",
+        "class_name": "TicTacToeMatchDO"
+      },
+      {
+        "name": "AIR_HOCKEY_DO",
+        "class_name": "AirHockeyDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ChessMatchDO"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["TicTacToeMatchDO"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["AirHockeyDO"]
+    }
+  ],
+  "compatibility_flags": ["nodejs_compat"]
 }

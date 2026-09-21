@@ -2,18 +2,18 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { LogIn, RotateCcw, Share2, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useSiteSettings } from "../components/site/theme";
+import { seoHead } from "../lib/seo";
 import { useTicTacToeOnline } from "../lib/tictactoe-multiplayer";
 
 export const Route = createFileRoute("/tictactoe")({
-  head: () => ({
-    meta: [
-      { title: "Tic Tac Toe — Todor Khristov Gaming" },
-      {
-        name: "description",
-        content: "Play Tic Tac Toe (Morra) — classic two-player game.",
-      },
-    ],
-  }),
+  head: () => {
+    const seo = seoHead({
+      path: "/tictactoe",
+      title: "Tic Tac Toe",
+      description: "Play Tic Tac Toe (Morra) — classic two-player game.",
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   component: TicTacToePage,
 });
 

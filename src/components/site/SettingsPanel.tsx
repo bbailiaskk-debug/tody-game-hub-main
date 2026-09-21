@@ -249,7 +249,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-[#02110d]/70 p-4 backdrop-blur-sm sm:items-center">
-      <div className="w-full max-w-[560px] rounded-[32px] border border-[#2d3d36] bg-[#0d1a17]/90 p-7 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
+      <div className="scrollbar-brand w-full max-w-[560px] max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-[32px] border border-[#2d3d36] bg-[#0d1a17]/90 p-7 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="label-mono text-[0.72rem] tracking-[0.25em] text-[#6ce9ae]">

@@ -2,17 +2,17 @@ import { createFileRoute } from "@tanstack/react-router";
 import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSiteSettings } from "../components/site/theme";
+import { seoHead } from "../lib/seo";
 
 export const Route = createFileRoute("/game2048")({
-  head: () => ({
-    meta: [
-      { title: "2048 — Todor Khristov Gaming" },
-      {
-        name: "description",
-        content: "Play 2048 — slide and merge tiles to reach 2048.",
-      },
-    ],
-  }),
+  head: () => {
+    const seo = seoHead({
+      path: "/game2048",
+      title: "2048",
+      description: "Play 2048 — slide and merge tiles to reach 2048.",
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   component: Game2048Page,
 });
 

@@ -2,10 +2,15 @@ import { Link, useLocation } from "@tanstack/react-router";
 
 import {
   Bot,
+  BookHeart,
+  Candy,
   ChessKnight,
   ChevronDown,
+  Disc3,
   Gamepad2,
   Grid3x3,
+  Keyboard,
+  LayoutGrid,
   LogIn,
   LogOut,
   Mail,
@@ -15,7 +20,12 @@ import {
   Puzzle,
   Settings,
   Sun,
+  Swords,
+  Sparkles,
+  Radio,
   X,
+  Zap,
+  Blocks,
 } from "lucide-react";
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -69,6 +79,16 @@ const menuGames = [
   { to: "/tictactoe", label: "TIC TAC TOE", icon: Grid3x3 },
   { to: "/chess", label: "CHESS", icon: ChessKnight },
   { to: "/game2048", label: "2048", icon: Puzzle },
+  { to: "/airhockey", label: "AIR HOCKEY", icon: Disc3 },
+  { to: "/wordle", label: "WORDLE", icon: Keyboard },
+  { to: "/sudoku", label: "SUDOKU", icon: LayoutGrid },
+  { to: "/candycrush", label: "CANDY CRUSH", icon: Candy },
+  { to: "/ddlc", label: "DDLC", icon: BookHeart },
+  { to: "/crystalrealm", label: "CRYSTAL REALM", icon: Swords },
+  { to: "/prismheart", label: "PRISM HEART", icon: Sparkles },
+  { to: "/streamer", label: "STREAM HEART", icon: Radio },
+  { to: "/beatbattle", label: "BEAT BATTLE", icon: Zap },
+  { to: "/tetris", label: "TETRIS", icon: Blocks },
 ] as const;
 
 export function SiteHeader() {
@@ -192,7 +212,17 @@ export function SiteHeader() {
     location.pathname === "/dino" ||
     location.pathname === "/tictactoe" ||
     location.pathname === "/chess" ||
-    location.pathname === "/game2048";
+    location.pathname === "/game2048" ||
+    location.pathname === "/airhockey" ||
+    location.pathname === "/wordle" ||
+    location.pathname === "/sudoku" ||
+    location.pathname === "/candycrush" ||
+    location.pathname === "/ddlc" ||
+    location.pathname === "/crystalrealm" ||
+    location.pathname === "/prismheart" ||
+    location.pathname === "/streamer" ||
+    location.pathname === "/beatbattle" ||
+    location.pathname === "/tetris";
 
   const navLink =
     "rounded-full px-6 py-2.5 font-mono text-xs tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground";

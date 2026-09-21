@@ -3,6 +3,7 @@ import { Pencil, Trash2, Upload } from "lucide-react";
 import { type ChangeEvent, useEffect, useState } from "react";
 
 import { useSiteSettings } from "../components/site/theme";
+import { seoHead } from "../lib/seo";
 import {
   serverDeleteAccount,
   serverGetUserProfile,
@@ -37,6 +38,15 @@ type StoredUser = {
 };
 
 export const Route = createFileRoute("/profile")({
+  head: () => {
+    const seo = seoHead({
+      path: "/profile",
+      title: "Моят профил",
+      description: "Редактирай профила си в Todor Khristov Gaming.",
+      noindex: true,
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   component: Profile,
 });
 

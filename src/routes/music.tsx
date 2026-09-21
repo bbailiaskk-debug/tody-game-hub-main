@@ -17,6 +17,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useSiteSettings } from "../components/site/theme";
 import { readPersistedAuthSession } from "../lib/local-persistence";
+import { seoHead } from "../lib/seo";
 
 export const Route = createFileRoute("/music")({
   beforeLoad: () => {
@@ -24,62 +25,14 @@ export const Route = createFileRoute("/music")({
       throw redirect({ to: "/login" });
     }
   },
-  head: () => ({
-    meta: [
-      { title: "Музика — Todor Khristov Gaming" },
-      {
-        name: "description",
-        content: "Слушай музиката на Todor Khristov Gaming. Оригинални песни и любими парчета.",
-      },
-      { property: "og:title", content: "Музика — Todor Khristov Gaming" },
-      {
-        property: "og:description",
-        content: "Слушай музиката на Todor Khristov Gaming. Оригинални песни и любими парчета.",
-      },
-      { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/music" },
-      { property: "og:type", content: "website" },
-      {
-        property: "og:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
-      },
-      { property: "og:image:width", content: "1200" },
-      { property: "og:image:height", content: "630" },
-      { property: "og:image:type", content: "image/jpeg" },
-      { name: "twitter:title", content: "Музика — Todor Khristov Gaming" },
-      {
-        name: "twitter:description",
-        content: "Слушай музиката на Todor Khristov Gaming. Оригинални песни и любими парчета.",
-      },
-      { name: "twitter:card", content: "summary_large_image" },
-      {
-        name: "twitter:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
-      },
-    ],
-    links: [
-      { rel: "canonical", href: "https://tody-game-hub.bbailiaskk.workers.dev/music" },
-      {
-        rel: "alternate",
-        hrefLang: "bg",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/music",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "en",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/music?lang=en",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "zh",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/music?lang=zh",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "x-default",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/music",
-      },
-    ],
-  }),
+  head: () => {
+    const seo = seoHead({
+      path: "/music",
+      title: "Музика",
+      description: "Слушай музиката на Todor Khristov Gaming. Оригинални песни и любими парчета.",
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   component: MusicPage,
 });
 

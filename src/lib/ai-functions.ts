@@ -39,7 +39,9 @@ const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta";
 
 const MAX_ATTACHMENTS = 10;
 
-const GEMINI_TIMEOUT_MS = 25_000;
+const GEMINI_TIMEOUT_MS_DEFAULT = 90_000;
+
+const GEMINI_THINKING_BUDGET_DEFAULT = 1024;
 
 const MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024;
 
@@ -131,6 +133,34 @@ function getApiKey(): string {
   return readSecret("GEMINI_API_KEY");
 }
 
+function getGeminiTimeoutMs(): number {
+  const raw = readSecret("GEMINI_TIMEOUT_MS")?.trim();
+  if (!raw) return GEMINI_TIMEOUT_MS_DEFAULT;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : GEMINI_TIMEOUT_MS_DEFAULT;
+}
+
+function getThinkingBudget(): number {
+  const raw = readSecret("GEMINI_THINKING_BUDGET")?.trim();
+  if (!raw) return GEMINI_THINKING_BUDGET_DEFAULT;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : GEMINI_THINKING_BUDGET_DEFAULT;
+}
+
+type GenerationConfig = {
+  temperature?: number;
+  maxOutputTokens: number;
+  thinkingConfig?: { thinkingBudget: number };
+};
+
+function buildGenerationConfig(includeThinking: boolean): GenerationConfig {
+  const thinkingBudget = getThinkingBudget();
+  if (includeThinking && thinkingBudget > 0) {
+    return { maxOutputTokens: 1024, thinkingConfig: { thinkingBudget } };
+  }
+  return { temperature: 0.9, maxOutputTokens: 1024 };
+}
+
 function getModel(): string {
   return readSecret("GEMINI_MODEL") || "gemini-3.5-flash-lite";
 }
@@ -205,7 +235,7 @@ export async function writeGeminiCachedResponse<T>(
 async function fetchWithGeminiTimeout(
   url: string,
   options: RequestInit,
-  timeoutMs = GEMINI_TIMEOUT_MS,
+  timeoutMs = getGeminiTimeoutMs(),
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -266,7 +296,7 @@ async function requestImageGeneration(
       return {
         success: false,
         error: isTimeout
-          ? "Gemini API не отговори в рамките на 25 секунди (Timeout). Моля, опитай отново."
+          ? `Gemini API не отговори в рамките на ${getGeminiTimeoutMs() / 1000} секунди (Timeout). Моля, опитай отново.`
           : "Неуспешна заявка към Gemini API.",
       };
     }
@@ -340,6 +370,17 @@ async function requestImageGeneration(
 }
 
 const MAX_GEMINI_RETRIES = 3;
+
+function isThinkingUnsupportedError(detail: string): boolean {
+  if (!detail) return false;
+  const lower = detail.toLowerCase();
+  return (
+    lower.includes("thinking") ||
+    lower.includes("thought") ||
+    lower.includes("reasoning") ||
+    lower.includes("thinking budget")
+  );
+}
 
 function waitForGeminiRetry(response: Response, attempt: number): Promise<void> {
   const retryAfterHeader = response.headers.get("retry-after");
@@ -489,91 +530,111 @@ export const serverAiChat = createServerFn({ method: "POST" })
 
     try {
       const url = `${GEMINI_ENDPOINT}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const requestBody = JSON.stringify({
-        contents: sanitizedMessages,
-        systemInstruction: {
-          parts: [{ text: SYSTEM_PROMPT }],
-        },
-        generationConfig: {
-          temperature: 0.9,
-          maxOutputTokens: 1024,
-        },
-      });
-
       const cacheKv = getGeminiCacheKv();
-      const cacheKey = buildGeminiCacheKey(model, requestBody);
-      const cached = await readGeminiCachedResponse<GeminiCachedResponse>(cacheKv, cacheKey);
-      if (cached) {
-        return cached;
-      }
+      const wantThinking = getThinkingBudget() > 0;
+      const timeoutMs = getGeminiTimeoutMs();
 
-      let response!: Response;
-      for (let attempt = 1; attempt <= MAX_GEMINI_RETRIES; attempt += 1) {
-        try {
-          response = await fetchWithGeminiTimeout(url, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: requestBody,
-          });
-        } catch (error) {
-          const isTimeout = error instanceof Error && error.name === "AbortError";
+      const requestBody = (includeThinking: boolean) =>
+        JSON.stringify({
+          contents: sanitizedMessages,
+          systemInstruction: {
+            parts: [{ text: SYSTEM_PROMPT }],
+          },
+          generationConfig: buildGenerationConfig(includeThinking),
+        });
+
+      // Deep thinking: ask the model to reason with a thinking budget first. If
+      // the selected model does not support thinkingConfig, the request is
+      // transparently retried once without it so TK-Bot keeps answering anyway.
+      const performRequest = async (includeThinking: boolean): Promise<GeminiCachedResponse> => {
+        const body = requestBody(includeThinking);
+        const cacheKey = buildGeminiCacheKey(model, body);
+        const cached = await readGeminiCachedResponse<GeminiCachedResponse>(cacheKv, cacheKey);
+        if (cached) {
+          return cached;
+        }
+
+        let response!: Response;
+        for (let attempt = 1; attempt <= MAX_GEMINI_RETRIES; attempt += 1) {
+          try {
+            response = await fetchWithGeminiTimeout(
+              url,
+              {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body,
+              },
+              timeoutMs,
+            );
+          } catch (error) {
+            const isTimeout = error instanceof Error && error.name === "AbortError";
+            return {
+              success: false,
+              error: isTimeout
+                ? `Gemini API не отговори в рамките на ${timeoutMs / 1000} секунди (Timeout). Моля, опитай отново.`
+                : "Неуспешна заявка към Gemini API.",
+            };
+          }
+
+          if (
+            (response.status === 429 || response.status === 503) &&
+            attempt < MAX_GEMINI_RETRIES
+          ) {
+            await waitForGeminiRetry(response, attempt);
+            continue;
+          }
+
+          break;
+        }
+
+        if (!response.ok) {
+          let detail = "";
+          try {
+            const body = (await response.json()) as {
+              error?: { message?: string };
+            };
+            detail = body?.error?.message ?? "";
+          } catch {
+            // Ignore malformed error bodies.
+          }
+
+          if (includeThinking && isThinkingUnsupportedError(detail)) {
+            return await performRequest(false);
+          }
+
           return {
             success: false,
-            error: isTimeout
-              ? "Gemini API не отговори в рамките на 25 секунди (Timeout). Моля, опитай отново."
-              : "Неуспешна заявка към Gemini API.",
+            error:
+              response.status === 429
+                ? "Gemini API достигна лимита на заявките (429). Моля, опитай отново след малко."
+                : response.status === 503
+                  ? "AI моделът е претоварен в момента (503). Моля, опитай отново след малко."
+                  : response.status === 404 || response.status === 400
+                    ? hasImages
+                      ? `Грешка при обработка на изображението (${response.status}). ${detail || `Моделът "${model}" може да не поддържа снимки.`}`
+                      : `AI моделът "${model}" не е достъпен (${response.status}). Провери GEMINI_MODEL / GEMINI_API_KEY.`
+                    : `Грешка от Gemini API (${response.status}): ${detail || "неизвестна грешка"}`,
           };
         }
 
-        if ((response.status === 429 || response.status === 503) && attempt < MAX_GEMINI_RETRIES) {
-          await waitForGeminiRetry(response, attempt);
-          continue;
-        }
-
-        break;
-      }
-
-      if (!response.ok) {
-        let detail = "";
-        try {
-          const body = (await response.json()) as {
-            error?: { message?: string };
-          };
-          detail = body?.error?.message ?? "";
-        } catch {
-          // Ignore malformed error bodies.
-        }
-
-        return {
-          success: false,
-          error:
-            response.status === 429
-              ? "Gemini API достигна лимита на заявките (429). Моля, опитай отново след малко."
-              : response.status === 503
-                ? "AI моделът е претоварен в момента (503). Моля, опитай отново след малко."
-                : response.status === 404 || response.status === 400
-                  ? hasImages
-                    ? `Грешка при обработка на изображението (${response.status}). ${detail || `Моделът "${model}" може да не поддържа снимки.`}`
-                    : `AI моделът "${model}" не е достъпен (${response.status}). Провери GEMINI_MODEL / GEMINI_API_KEY.`
-                  : `Грешка от Gemini API (${response.status}): ${detail || "неизвестна грешка"}`,
+        const result = (await response.json()) as {
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string }> };
+          }>;
         };
-      }
 
-      const result = (await response.json()) as {
-        candidates?: Array<{
-          content?: { parts?: Array<{ text?: string }> };
-        }>;
+        const text = result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (!text) {
+          return { success: false, error: "Gemini не върна текст. Моля, опитай пак." };
+        }
+
+        const payload = { success: true, data: { text } } satisfies GeminiCachedResponse;
+        await writeGeminiCachedResponse(cacheKv, cacheKey, payload);
+
+        return payload;
       };
 
-      const text = result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (!text) {
-        return { success: false, error: "Gemini не върна текст. Моля, опитай пак." };
-      }
-
-      const payload = { success: true, data: { text } } satisfies GeminiCachedResponse;
-      await writeGeminiCachedResponse(cacheKv, cacheKey, payload);
-
-      return payload;
+      return await performRequest(wantThinking);
     } catch (error) {
       console.warn("Gemini request failed.", error);
       return { success: false, error: "Неуспешна заявка към Gemini API." };

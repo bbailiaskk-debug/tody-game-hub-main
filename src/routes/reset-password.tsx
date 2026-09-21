@@ -3,9 +3,19 @@ import { useState } from "react";
 
 import { serverResetPassword } from "../lib/auth-functions";
 import { useSiteSettings } from "../components/site/theme";
+import { seoHead } from "../lib/seo";
 import { invalidateCachePrefix } from "../lib/remote-cache";
 
 export const Route = createFileRoute("/reset-password")({
+  head: () => {
+    const seo = seoHead({
+      path: "/reset-password",
+      title: "Смяна на парола",
+      description: "Смяна на парола за акаунта ти в Todor Khristov Gaming.",
+      noindex: true,
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   validateSearch: (search: Record<string, unknown>) => ({
     email: typeof search["email"] === "string" ? search["email"] : "",
     token: typeof search["token"] === "string" ? search["token"] : "",

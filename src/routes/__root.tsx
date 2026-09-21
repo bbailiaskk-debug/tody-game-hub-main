@@ -113,12 +113,6 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="bg" className="dark" suppressHydrationWarning>
       <head>
-        <title>Todor Khristov Gaming — Яки игри и забавление</title>
-        <meta
-          name="description"
-          content="Игри, моменти и енергия директно от командния център на Todor Khristov Gaming."
-        />
-        <link rel="canonical" href="https://tody-game-hub.bbailiaskk.workers.dev/" />
         <HeadContent />
         <style dangerouslySetInnerHTML={{ __html: criticalCss }} />
         <link rel="preload" href={appCssUrl} as="style" fetchPriority="high" />

@@ -31,6 +31,19 @@ import type {
   TttStatus,
   TttTurn,
 } from "./src/lib/tictactoe-online-types";
+import { createAhState, resetAhRound, stepAirHockey } from "./src/lib/airhockey-engine";
+import type { AhInput, AhState as AirHockeyState } from "./src/lib/airhockey-engine";
+import type {
+  AhClientToServerMessage,
+  AhEndReason,
+  AhMatchSnapshot,
+  AhPlayers,
+  AhPreferredRole,
+  AhRematchRequest,
+  AhResult,
+  AhServerToClientMessage,
+  AhStatus,
+} from "./src/lib/airhockey-online-types";
 
 type KvLike = {
   get: (key: string) => Promise<string | null>;
@@ -1021,6 +1034,582 @@ export class TicTacToeMatchDO extends DurableObject<TttEnv> {
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
       if (typeof (parsed as { type?: unknown }).type !== "string") return null;
       return parsed as TttClientToServerMessage;
+    } catch {
+      return null;
+    }
+  }
+}
+
+const AH_TICK_MS = 1000 / 60;
+const AH_PERSIST_EVERY_TICKS = 10;
+const AH_MATCH_MS = 120_000;
+
+type AirHockeyEnv = {
+  AUTH_USERS_KV?: KvLike;
+  AIR_HOCKEY_DO?: DurableObjectNamespace;
+};
+
+type StoredAhGame = {
+  gameId: string;
+  players: AhPlayers;
+  state: AirHockeyState;
+  status: AhStatus;
+  createdAt: number;
+  rematch: AhRematchRequest;
+  timeLeftMs: number;
+  matchOver: boolean;
+  endReason: AhEndReason;
+};
+
+type StoredAhConnections = Record<
+  string,
+  { email: string; name: string; lastSeen: number; preferredRole: AhPreferredRole | null }
+>;
+
+function ahResultOf(game: StoredAhGame): AhResult {
+  if (game.state.winner === 1) return "p1-wins";
+  if (game.state.winner === 2) return "p2-wins";
+  if (game.endReason === "timeup") {
+    if (game.state.score1 > game.state.score2) return "p1-wins";
+    if (game.state.score2 > game.state.score1) return "p2-wins";
+    return "draw";
+  }
+  return null;
+}
+
+function ahStatusOf(game: StoredAhGame): AhStatus {
+  if (game.state.winner === 1) return "p1-wins";
+  if (game.state.winner === 2) return "p2-wins";
+  if (game.endReason === "timeup") {
+    const result = ahResultOf(game);
+    return result === "p1-wins" ? "p1-wins" : result === "p2-wins" ? "p2-wins" : "draw";
+  }
+  return game.players.p1 && game.players.p2 ? "playing" : "waiting";
+}
+
+function inlineAhState(state: AirHockeyState): AirHockeyState {
+  return {
+    p1: { ...state.p1 },
+    p2: { ...state.p2 },
+    puck: { ...state.puck },
+    serveTimer: state.serveTimer,
+    score1: state.score1,
+    score2: state.score2,
+    winner: state.winner,
+  };
+}
+
+function ahToSnapshot(game: StoredAhGame): AhMatchSnapshot {
+  return {
+    gameId: game.gameId,
+    players: {
+      p1: game.players.p1 ? { ...game.players.p1 } : null,
+      p2: game.players.p2 ? { ...game.players.p2 } : null,
+    },
+    state: inlineAhState(game.state),
+    status: game.status,
+    result: ahResultOf(game),
+    rematch: { ...game.rematch },
+    createdAt: game.createdAt,
+    timeLeftMs: game.timeLeftMs,
+    endReason: game.endReason,
+  };
+}
+
+export class AirHockeyDO extends DurableObject<AirHockeyEnv> {
+  private readonly wsToConnId = new Map<WebSocket, string>();
+  private readonly pendingInputs = new Map<string, AhInput>();
+  private tickTimer: ReturnType<typeof setTimeout> | null = null;
+  private tickCount = 0;
+  private cachedConnections: StoredAhConnections | null = null;
+  private cachedGame: StoredAhGame | null = null;
+
+  override async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    const gameId = pathParts[3] ?? "";
+    const upgrade = request.headers.get("Upgrade");
+    const isWebSocketUpgrade =
+      typeof upgrade === "string" && upgrade.toLowerCase() === "websocket";
+
+    if (!isWebSocketUpgrade) {
+      if (!gameId) return json({ error: "invalid-game" }, 400);
+      const snapshot = await this.ctx.blockConcurrencyWhile(() => this.getOrCreateSnapshot(gameId));
+      return json({ snapshot });
+    }
+
+    if (!gameId) return json({ error: "invalid-game" }, 400);
+
+    const email = normalizeEmail(url.searchParams.get("email") ?? "");
+    const connId = (url.searchParams.get("cid") ?? "").trim();
+    const token = url.searchParams.get("auth");
+    const roleQuery = url.searchParams.get("role") ?? "";
+    const preferredRole: AhPreferredRole | null =
+      roleQuery === "p1" || roleQuery === "p2" ? roleQuery : null;
+
+    // Same shared chess secret used by the SSR mint/verify path (see server.ts).
+    const injectedSecret = request.headers.get("x-chess-secret")?.trim();
+    const secret = injectedSecret || (await getChessSecret(this.env.AUTH_USERS_KV));
+    const valid = await verifyChessToken(secret, gameId, email, token);
+    if (!valid || !email || !connId) {
+      return json({ error: "unauthorized" }, 401);
+    }
+
+    const snapshot = await this.ctx.blockConcurrencyWhile(async (): Promise<AhMatchSnapshot> => {
+      const connections = await this.getConnections();
+      connections[connId] = {
+        email,
+        name: email.split("@")[0] || "player",
+        lastSeen: Date.now(),
+        preferredRole,
+      };
+      await this.ctx.storage.put("connections", connections);
+
+      const game = await this.ensureGame();
+      if (!game.matchOver) {
+        this.assignRole(game, email, email.split("@")[0] || "player", preferredRole);
+        game.status = ahStatusOf(game);
+        await this.ctx.storage.put("game", game);
+      }
+      return ahToSnapshot(game);
+    });
+
+    const pair = new WebSocketPair();
+    const serverWs = pair[0];
+    this.wsToConnId.set(serverWs, connId);
+    this.ctx.acceptWebSocket(serverWs, [connId]);
+    this.send(serverWs, { type: "state", snapshot });
+
+    this.startLoop();
+
+    return new Response(null, { status: 101, webSocket: pair[1] } as ResponseInit);
+  }
+
+  override async webSocketMessage(
+    ws: WebSocket,
+    message: string | ArrayBuffer | ArrayBufferView,
+  ): Promise<void> {
+    try {
+      const parsed = this.parseMessage(message);
+      if (!parsed) return;
+      const connectionId = this.getConnectionId(ws);
+      if (!connectionId || parsed.connId !== connectionId) {
+        this.send(ws, { type: "error", message: "unknown-connection" });
+        return;
+      }
+      if (parsed.type === "input") {
+        const mx = Number.isFinite(parsed.mx) ? this.clampToField(parsed.mx as number) : null;
+        const my = Number.isFinite(parsed.my) ? this.clampToField(parsed.my as number) : null;
+        const dx = Math.max(-1, Math.min(1, Number.isFinite(parsed.dx) ? Number(parsed.dx) : 0));
+        const dy = Math.max(-1, Math.min(1, Number.isFinite(parsed.dy) ? Number(parsed.dy) : 0));
+        this.pendingInputs.set(connectionId, { mx, my, dx, dy });
+        const connections = await this.getConnections();
+        if (connections[connectionId]) {
+          connections[connectionId].lastSeen = Date.now();
+        }
+        return;
+      }
+      await this.ctx.blockConcurrencyWhile(async () => {
+        await this.handleClientMessage(ws, parsed);
+      });
+    } catch (error) {
+      console.warn("Unhandled error while handling an air hockey websocket message.", error);
+    }
+  }
+
+  override async webSocketClose(ws: WebSocket): Promise<void> {
+    try {
+      await this.handleConnectionClosed(ws);
+    } catch (error) {
+      console.warn("Unhandled error while closing an air hockey websocket.", error);
+    }
+  }
+
+  override async webSocketError(ws: WebSocket): Promise<void> {
+    try {
+      await this.handleConnectionClosed(ws);
+    } catch (error) {
+      console.warn("Unhandled error while handling an air hockey websocket error.", error);
+    }
+  }
+
+  override async alarm(): Promise<void> {
+    try {
+      await this.ctx.blockConcurrencyWhile(async () => {
+        const connections = await this.getConnections();
+        await this.refreshOnline(connections);
+        if (Object.keys(connections).length > 0) {
+          await this.ctx.storage.setAlarm(Date.now() + SWEEP_INTERVAL_MS);
+        }
+      });
+    } catch (error) {
+      console.warn("Unhandled error in air hockey presence sweep alarm.", error);
+    }
+  }
+
+  private async handleClientMessage(ws: WebSocket, msg: AhClientToServerMessage): Promise<void> {
+    const connections = await this.getConnections();
+    const connection = connections[msg.connId];
+    if (!connection) {
+      this.send(ws, { type: "error", message: "unknown-connection" });
+      return;
+    }
+
+    connection.lastSeen = Date.now();
+
+    const game = await this.ensureGame();
+
+    switch (msg.type) {
+      case "join": {
+        if (game.matchOver) {
+          this.send(ws, { type: "error", message: "game-over" });
+          return;
+        }
+        const name = (msg.name ?? "").trim() || connection.email.split("@")[0] || "player";
+        connection.name = name;
+        await this.ctx.storage.put("connections", connections);
+
+        const role = this.assignRole(game, connection.email, name, connection.preferredRole);
+        game.status = ahStatusOf(game);
+        await this.ctx.storage.put("game", game);
+
+        this.send(ws, { type: "state", snapshot: ahToSnapshot(game) });
+        this.broadcast({
+          type: "playerJoined",
+          players: game.players,
+          message: `${name} (${role}) joined`,
+        });
+        void this.scheduleSweep();
+        break;
+      }
+
+      case "resign": {
+        const role = this.roleOf(game, connection.email);
+        if (role === "spectator") {
+          this.send(ws, { type: "error", message: "spectator" });
+          return;
+        }
+        if (game.matchOver) return;
+        game.state.winner = role === "p1" ? 2 : 1;
+        game.matchOver = true;
+        game.status = ahStatusOf(game);
+        await this.ctx.storage.put("game", game);
+        this.broadcast({ type: "state", snapshot: ahToSnapshot(game) });
+        this.broadcast({ type: "end", result: ahResultOf(game), status: game.status });
+        break;
+      }
+
+      case "rematch": {
+        const role = this.roleOf(game, connection.email);
+        if (role === "spectator" || !game.matchOver) return;
+        game.rematch[role] = true;
+        const ready = game.rematch.p1 && game.rematch.p2;
+        if (ready) {
+          game.state = createAhState();
+          resetAhRound(game.state, Math.random() < 0.5 ? -1 : 1);
+          game.rematch = { p1: false, p2: false };
+          game.timeLeftMs = AH_MATCH_MS;
+          game.matchOver = false;
+          game.endReason = null;
+          game.status = ahStatusOf(game);
+          await this.ctx.storage.put("game", game);
+          this.broadcast({ type: "state", snapshot: ahToSnapshot(game) });
+        } else {
+          await this.ctx.storage.put("game", game);
+          this.broadcast({ type: "rematchUpdate", rematch: game.rematch });
+        }
+        break;
+      }
+
+      case "ping":
+        this.send(ws, { type: "pong" });
+        break;
+      default:
+        break;
+    }
+  }
+
+  private clampToField(value: number): number {
+    return Math.max(-50, Math.min(890, value));
+  }
+
+  private startLoop(): void {
+    if (this.tickTimer !== null) return;
+    this.tickTimer = setTimeout(() => {
+      this.tickTimer = null;
+      void this.tick();
+    }, AH_TICK_MS);
+  }
+
+  private stopLoop(): void {
+    if (this.tickTimer !== null) {
+      clearTimeout(this.tickTimer);
+      this.tickTimer = null;
+    }
+  }
+
+  private async tick(): Promise<void> {
+    const sockets = this.ctx.getWebSockets();
+    if (sockets.length === 0) {
+      this.stopLoop();
+      return;
+    }
+
+    const connections = await this.getConnections();
+    const game = await this.ensureGame();
+
+    if (game.players.p1 && game.players.p2 && !game.matchOver) {
+      const inputFor = (role: "p1" | "p2"): AhInput => {
+        const player = game.players[role];
+        if (!player) return { mx: null, my: null, dx: 0, dy: 0 };
+        const connId = Object.keys(connections).find(
+          (id) => normalizeEmail(connections[id]?.email ?? "") === normalizeEmail(player.email),
+        );
+        const input = connId ? this.pendingInputs.get(connId) : undefined;
+        if (connId) this.pendingInputs.delete(connId);
+        return input ?? { mx: null, my: null, dx: 0, dy: 0 };
+      };
+
+      const a = inputFor("p1");
+      const b = inputFor("p2");
+      stepAirHockey(game.state, AH_TICK_MS / 1000, { a, b });
+
+      if (game.state.winner) {
+        game.matchOver = true;
+      } else {
+        game.timeLeftMs = Math.max(0, game.timeLeftMs - AH_TICK_MS);
+        if (game.timeLeftMs <= 0) {
+          game.endReason = "timeup";
+          game.matchOver = true;
+        }
+      }
+      game.status = ahStatusOf(game);
+
+      this.tickCount += 1;
+      if (game.state.winner || this.tickCount % AH_PERSIST_EVERY_TICKS === 0) {
+        await Promise.all([
+          this.ctx.storage.put("game", game),
+          this.ctx.storage.put("connections", connections),
+        ]);
+      }
+      this.broadcast({ type: "state", snapshot: ahToSnapshot(game) });
+      if (game.endReason === "timeup") {
+        this.broadcast({
+          type: "end",
+          result: ahResultOf(game),
+          status: game.status,
+        });
+      }
+    }
+
+    if (this.ctx.getWebSockets().length > 0) {
+      this.startLoop();
+    }
+  }
+
+  private async handleConnectionClosed(ws: WebSocket): Promise<void> {
+    const connId = this.getConnectionId(ws);
+    this.wsToConnId.delete(ws);
+    this.pendingInputs.delete(connId ?? "");
+    if (!connId) return;
+
+    await this.ctx.blockConcurrencyWhile(async () => {
+      const connections = await this.getConnections();
+      if (connections[connId]) {
+        delete connections[connId];
+        await this.ctx.storage.put("connections", connections);
+      }
+      await this.refreshOnline(connections);
+      void this.scheduleSweep();
+    });
+  }
+
+  private async refreshOnline(connections: StoredAhConnections): Promise<void> {
+    const stored = await this.ensureGame();
+    if (!stored) return;
+    const now = Date.now();
+    let changed = false;
+    for (const role of ["p1", "p2"] as const) {
+      const player = stored.players[role];
+      if (!player) continue;
+      const isOnline = Object.values(connections).some(
+        (conn) =>
+          normalizeEmail(conn.email) === normalizeEmail(player.email) &&
+          now - conn.lastSeen < GAME_STALE_MS,
+      );
+      if (player.online !== isOnline) {
+        player.online = isOnline;
+        changed = true;
+      }
+    }
+    if (changed) {
+      stored.status = ahStatusOf(stored);
+      await this.ctx.storage.put("game", stored);
+      this.broadcast({ type: "state", snapshot: ahToSnapshot(stored) });
+    }
+  }
+
+  private async getOrCreateSnapshot(gameId: string): Promise<AhMatchSnapshot> {
+    if (this.cachedGame) return ahToSnapshot(this.cachedGame);
+    const stored = await this.ctx.storage.get<StoredAhGame>("game");
+    if (stored) {
+      this.cachedGame = this.normalizeGameOnLoad(stored);
+      return ahToSnapshot(stored);
+    }
+    const fresh = this.createFreshGame(gameId);
+    this.cachedGame = fresh;
+    await this.ctx.storage.put("game", fresh);
+    return ahToSnapshot(fresh);
+  }
+
+  private createFreshGame(gameId: string): StoredAhGame {
+    const state = createAhState();
+    return {
+      gameId,
+      players: { p1: null, p2: null },
+      state,
+      status: "waiting",
+      createdAt: Date.now(),
+      rematch: { p1: false, p2: false },
+      timeLeftMs: AH_MATCH_MS,
+      matchOver: false,
+      endReason: null,
+    };
+  }
+
+  private normalizeGameOnLoad(stored: StoredAhGame): StoredAhGame {
+    if (typeof stored.timeLeftMs !== "number") {
+      stored.timeLeftMs = AH_MATCH_MS;
+      stored.matchOver = Boolean(stored.state.winner);
+      stored.endReason = null;
+      delete (stored as Partial<StoredAhGame> & { autoRestartAt?: unknown }).autoRestartAt;
+    }
+    return stored;
+  }
+
+  private async ensureGame(): Promise<StoredAhGame> {
+    if (this.cachedGame) return this.cachedGame;
+    const stored = await this.ctx.storage.get<StoredAhGame>("game");
+    if (stored) {
+      this.cachedGame = this.normalizeGameOnLoad(stored);
+      return this.cachedGame;
+    }
+    const fresh = this.createFreshGame(this.detectMatchId());
+    this.cachedGame = fresh;
+    await this.ctx.storage.put("game", fresh);
+    return fresh;
+  }
+
+  private async getConnections(): Promise<StoredAhConnections> {
+    if (this.cachedConnections) return this.cachedConnections;
+    const loaded = (await this.ctx.storage.get<StoredAhConnections>("connections")) ?? {};
+    this.cachedConnections = loaded;
+    return loaded;
+  }
+
+  private async scheduleSweep(): Promise<void> {
+    try {
+      const existing = await this.ctx.storage.getAlarm();
+      if (existing !== null) return;
+      await this.ctx.storage.setAlarm(Date.now() + GAME_STALE_MS + 5000);
+    } catch (error) {
+      console.warn("Failed to schedule air hockey presence sweep.", error);
+    }
+  }
+
+  private detectMatchId(): string {
+    try {
+      const namespace = this.env.AIR_HOCKEY_DO;
+      if (namespace) return namespace.get(this.ctx.id).name || "";
+    } catch (error) {
+      console.warn("Failed to resolve air hockey match id from DO context.", error);
+    }
+    return "";
+  }
+
+  private roleOf(game: StoredAhGame, email: string): "p1" | "p2" | "spectator" {
+    const normalizedEmail = normalizeEmail(email);
+    if (game.players.p1 && normalizeEmail(game.players.p1.email) === normalizedEmail) return "p1";
+    if (game.players.p2 && normalizeEmail(game.players.p2.email) === normalizedEmail) return "p2";
+    return "spectator";
+  }
+
+  private assignRole(
+    game: StoredAhGame,
+    email: string,
+    name: string,
+    preferredRole: AhPreferredRole | null = null,
+  ): "p1" | "p2" | "spectator" {
+    const existing = this.roleOf(game, email);
+    if (existing === "p1" || existing === "p2") {
+      const player = game.players[existing];
+      if (player) {
+        player.online = true;
+        player.name = name;
+      }
+      return existing;
+    }
+    const role: "p1" | "p2" | "spectator" =
+      preferredRole === "p1" && !game.players.p1
+        ? "p1"
+        : preferredRole === "p2" && !game.players.p2
+          ? "p2"
+          : !game.players.p1
+            ? "p1"
+            : !game.players.p2
+              ? "p2"
+              : "spectator";
+    if (role === "p1" || role === "p2") {
+      game.players[role] = { email, name, role, online: true };
+    }
+    return role;
+  }
+
+  private broadcast(message: AhServerToClientMessage): void {
+    const text = JSON.stringify(message);
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.send(text);
+      } catch (error) {
+        console.warn("Failed to broadcast to an air hockey websocket.", error);
+      }
+    }
+  }
+
+  private send(ws: WebSocket, message: AhServerToClientMessage): void {
+    try {
+      ws.send(JSON.stringify(message));
+    } catch (error) {
+      console.warn("Failed to send an air hockey websocket message.", error);
+    }
+  }
+
+  private getConnectionId(ws: WebSocket): string | null {
+    const mapped = this.wsToConnId.get(ws);
+    if (mapped) return mapped;
+    const tagged = this.ctx.getWebSocketTags(ws)[0];
+    if (!tagged) return null;
+    this.wsToConnId.set(ws, tagged);
+    return tagged;
+  }
+
+  private parseMessage(
+    message: string | ArrayBuffer | ArrayBufferView,
+  ): AhClientToServerMessage | null {
+    let text: string;
+    if (typeof message === "string") {
+      text = message;
+    } else if (message instanceof ArrayBuffer) {
+      text = new TextDecoder().decode(new Uint8Array(message));
+    } else {
+      const bytes = new Uint8Array(message.buffer, message.byteOffset, message.byteLength);
+      text = new TextDecoder().decode(bytes);
+    }
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+      if (typeof (parsed as { type?: unknown }).type !== "string") return null;
+      return parsed as AhClientToServerMessage;
     } catch {
       return null;
     }

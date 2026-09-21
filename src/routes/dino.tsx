@@ -2,17 +2,17 @@ import { createFileRoute } from "@tanstack/react-router";
 import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSiteSettings } from "../components/site/theme";
+import { seoHead } from "../lib/seo";
 
 export const Route = createFileRoute("/dino")({
-  head: () => ({
-    meta: [
-      { title: "Chrome Dinosaur Game — Todor Khristov Gaming" },
-      {
-        name: "description",
-        content: "Playable Chrome Dinosaur Game — jump over the cacti and take a break.",
-      },
-    ],
-  }),
+  head: () => {
+    const seo = seoHead({
+      path: "/dino",
+      title: "Chrome Dinosaur Game",
+      description: "Playable Chrome Dinosaur Game — jump over the cacti and take a break.",
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   component: DinoGamePage,
 });
 

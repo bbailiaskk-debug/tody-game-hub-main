@@ -2,61 +2,19 @@ import { useEffect, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowUpRight, Gamepad2, Info } from "lucide-react";
 import { useSiteSettings } from "../components/site/theme";
+import { seoHead } from "../lib/seo";
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Todor Khristov Gaming — Яки игри и забавление" },
-      {
-        name: "description",
-        content:
-          "Игри, моменти и енергия директно от командния център на Todor Khristov Gaming. Виж какви игри играя и се присъедини към общността.",
-      },
-      { property: "og:title", content: "Яки игри и забавление — Todor Khristov Gaming" },
-      {
-        property: "og:description",
-        content: "Игри, моменти и енергия директно от командния център на Todor Khristov Gaming.",
-      },
-      { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/" },
-      { property: "og:type", content: "website" },
-      {
-        property: "og:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
-      },
-      { property: "og:image:width", content: "1200" },
-      { property: "og:image:height", content: "630" },
-      { property: "og:image:type", content: "image/jpeg" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Яки игри и забавление — Todor Khristov Gaming" },
-      {
-        name: "twitter:description",
-        content: "Игри, моменти и енергия директно от командния център на Todor Khristov Gaming.",
-      },
-      {
-        name: "twitter:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
-      },
-    ],
-    links: [
-      { rel: "canonical", href: "https://tody-game-hub.bbailiaskk.workers.dev/" },
-      { rel: "alternate", hrefLang: "bg", href: "https://tody-game-hub.bbailiaskk.workers.dev/" },
-      {
-        rel: "alternate",
-        hrefLang: "en",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/?lang=en",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "zh",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/?lang=zh",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "x-default",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/",
-      },
-    ],
-  }),
+  head: () => {
+    const seo = seoHead({
+      path: "/",
+      title: "Яки игри и забавление",
+      description:
+        "Игри, моменти и енергия директно от командния център на Todor Khristov Gaming. Виж какви игри играя и се присъедини към общността.",
+      titleSuffix: " — Todor Khristov Gaming",
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   component: Index,
 });
 

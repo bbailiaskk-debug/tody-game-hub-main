@@ -3,6 +3,7 @@ import { LogIn, RotateCcw, Share2, UserPlus, Users } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { useSiteSettings } from "../components/site/theme";
+import { seoHead } from "../lib/seo";
 import {
   FILES,
   PIECE_GLYPH,
@@ -25,15 +26,14 @@ import {
 import { useChessOnline } from "../lib/chess-multiplayer";
 
 export const Route = createFileRoute("/chess")({
-  head: () => ({
-    meta: [
-      { title: "Шах — Todor Khristov Gaming" },
-      {
-        name: "description",
-        content: "Play Chess — classic two-player board game, local or online multiplayer.",
-      },
-    ],
-  }),
+  head: () => {
+    const seo = seoHead({
+      path: "/chess",
+      title: "Шах",
+      description: "Play Chess — classic two-player board game, local or online multiplayer.",
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   component: ChessPage,
 });
 

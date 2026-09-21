@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "dev:public": "concurrently -k -n DEV,TUNNEL -c cyan,magenta \"npm:dev\" \"npm:tunnel\"",
     "tunnel": "cloudflared tunnel --url http://localhost:8080",
-    "build": "vite build && node scripts/normalize-asset-cache.mjs",
+    "build": "vite build && node scripts/normalize-asset-cache.mjs && node scripts/refresh-preview.mjs",
     "build:dev": "vite build --mode development",
     "preview": "npm run build && npx wrangler dev",
     "dev:worker": "npx wrangler dev",

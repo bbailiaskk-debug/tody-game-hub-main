@@ -2,6 +2,7 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { useSiteSettings } from "../components/site/theme";
+import { seoHead } from "../lib/seo";
 import {
   serverRegister,
   serverGetUserProfile,
@@ -59,60 +60,16 @@ const welcomeSlides = [
 ] as const;
 
 export const Route = createFileRoute("/login")({
-  head: () => ({
-    meta: [
-      { title: "Вход — Todor Khristov Gaming" },
-      {
-        name: "description",
-        content:
-          "Влез в своя акаунт в Todor Khristov Gaming. Достъп до игри, музика и ексклузивно съдържание.",
-      },
-      { name: "robots", content: "noindex, nofollow" },
-      { property: "og:title", content: "Вход — Todor Khristov Gaming" },
-      {
-        property: "og:description",
-        content:
-          "Влез в своя акаунт в Todor Khristov Gaming. Достъп до игри, музика и ексклузивно съдържание.",
-      },
-      { property: "og:url", content: "https://tody-game-hub.bbailiaskk.workers.dev/login" },
-      { property: "og:type", content: "website" },
-      {
-        property: "og:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
-      },
-      { property: "og:image:width", content: "1200" },
-      { property: "og:image:height", content: "630" },
-      { property: "og:image:type", content: "image/jpeg" },
-      { name: "twitter:card", content: "summary_large_image" },
-      {
-        name: "twitter:image",
-        content: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
-      },
-    ],
-    links: [
-      { rel: "canonical", href: "https://tody-game-hub.bbailiaskk.workers.dev/login" },
-      {
-        rel: "alternate",
-        hrefLang: "bg",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/login",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "en",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/login?lang=en",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "zh",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/login?lang=zh",
-      },
-      {
-        rel: "alternate",
-        hrefLang: "x-default",
-        href: "https://tody-game-hub.bbailiaskk.workers.dev/login",
-      },
-    ],
-  }),
+  head: () => {
+    const seo = seoHead({
+      path: "/login",
+      title: "Вход",
+      description:
+        "Влез в своя акаунт в Todor Khristov Gaming. Достъп до игри, музика и ексклузивно съдържание.",
+      noindex: true,
+    });
+    return { meta: seo.meta, links: seo.links };
+  },
   component: Login,
 });
 
