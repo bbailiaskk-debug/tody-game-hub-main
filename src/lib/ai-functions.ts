@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { env } from "cloudflare:workers";
 
 export type AiChatImage = {
   mimeType: string;
@@ -24,119 +23,40 @@ type AiChatInput = {
   messages: AiChatMessage[];
 };
 
-type GeminiKvNamespace = {
+type AiChatResult = {
+  success: boolean;
+  error?: string;
+  data?: { text: string; image?: AiChatImage };
+};
+
+type KvNamespace = {
   get: (key: string) => Promise<string | null>;
   put: (key: string, value: string) => Promise<void>;
 };
 
-type GeminiCachedResponse = {
-  success: boolean;
-  error?: string;
-  data?: { text: string; image?: AiChatImage; files?: AiChatFile[] };
-};
+const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1";
+const CHAT_MODEL = "openai/gpt-6-astra";
+const IMAGE_MODEL = "openai/gpt-image-2.5-sunburst";
+const MEDIA_MODEL = "google/gemini-3.8-flash";
 
-const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta";
-
-const MAX_ATTACHMENTS = 10;
-
-const GEMINI_TIMEOUT_MS_DEFAULT = 90_000;
-
-const GEMINI_THINKING_BUDGET_DEFAULT = 1024;
-
+const MAX_IMAGES_PER_REQUEST = 20;
 const MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024;
-
-const IMAGE_GEN_MODEL_DEFAULT = "gemini-3.1-flash-image";
-
-const IMAGE_INTENT_DRAW =
-  /(^|[\s,.;:!?(-])(нарисувай ми|нарисувай|рисувай|draw me|draw)([\s,.;:!?)-]|$)/i;
-const IMAGE_INTENT_GEN = /(?<![\p{L}\d])(генерирай|създай|generate|create|make)(?![\p{L}])/iu;
-const IMAGE_INTENT_NOUN =
-  /(?<![\p{L}\d])(image\p{L}*|picture\p{L}*|изображени\p{L}*|снимк\p{L}*|картинк\p{L}*|илюстраци\p{L}*)(?![\p{L}])/iu;
-
-const IMAGE_PROMPT_STRIP = new RegExp(
-  "^(моля[\\s,!]*)?(?:нарисувай ми|нарисувай|рисувай|draw me|draw|" +
-    "генерирай изображение на|генерирай изображение|генерирай снимка на|генерирай снимка|" +
-    "генерирай картинка на|генерирай картинка|генерирай|" +
-    "създай изображение на|създай изображение|създай снимка на|създай снимка|" +
-    "създай картинка на|създай картинка|създай|" +
-    "generate an? image of|generate an? image|generate a picture|generate picture|generate|" +
-    "create an? image of|create an? image|create a picture|create picture|create|" +
-    "make me an? image of|make an? image of|make me a picture of|make an? image|make a picture|" +
-    "make)" +
-    "\\s*",
-  "i",
-);
-
-const MEDIA_VERB =
-  /(?<![\p{L}\d])(?:направи ми|направи|създай ми|създай|генерирай ми|генерирай|съчини ми|съчини|напиши ми|напиши|пусни ми|пусни|свири ми|make me|make|create me|create|generate|compose|write|produce|play)(?![\p{L}])/iu;
-
-const MUSIC_INTENT_NOUN =
-  /(?<![\p{L}\d])(?:музик\p{L}*|(?:песн|песен)\p{L}*|мелоди\p{L}*|инструментал\p{L}*|бийт\p{L}*|ремик\p{L}*|джем|бас|хук|рит\p{L}*|music|song|melody|instrumental|beat|track|remix|tune|jam)(?![\p{L}])/iu;
-
-const VIDEO_INTENT_NOUN =
-  /(?<![\p{L}\d])(?:видео\p{L}*|клип\p{L}*|анимаци\p{L}*|филм\p{L}*|video|clip|animation|film|reel)(?![\p{L}])/iu;
-
-const STL_INTENT_MARKER =
-  /(?<![\p{L}\d])(?:3d|3д|stl|принт\p{L}*|фигурк\p{L}*|статуетк\p{L}*|бюст\p{L}*|скулптур\p{L}*|модел за печат|за печат)(?![\p{L}])/iu;
-
-export function isMusicRequest(text: string): boolean {
-  const value = typeof text === "string" ? text.trim() : "";
-  if (!value) return false;
-  return MEDIA_VERB.test(value) && MUSIC_INTENT_NOUN.test(value);
-}
-
-export function isVideoRequest(text: string): boolean {
-  const value = typeof text === "string" ? text.trim() : "";
-  if (!value) return false;
-  return MEDIA_VERB.test(value) && VIDEO_INTENT_NOUN.test(value);
-}
-
-export function is3dRequest(text: string): boolean {
-  const value = typeof text === "string" ? text.trim() : "";
-  if (!value) return false;
-  const wantsCreate =
-    MEDIA_VERB.test(value) || /(?<![\p{L}\d])(искам|дай ми)(?![\p{L}])/iu.test(value);
-  return wantsCreate && STL_INTENT_MARKER.test(value);
-}
-
-const MEDIA_PROMPT_STRIP = new RegExp(
-  "^(моля[\\s,!]*)?(?:" +
-    "направи ми|направи|създай ми|създай|генерирай ми|генерирай|съчини ми|съчини|" +
-    "напиши ми|напиши|пусни ми|пусни|свири ми|make me|make|create me|create|generate|" +
-    "compose|write|produce|play" +
-    ")" +
-    "\\s*(?:a|an|една|един|едно)?\\s*(?:музикален клип|музикална|музика|песен|песничка|мелодия|инструментал|бийт|ремикс|" +
-    "видеоклип|клип|анимация|видео|филм|3d модел|3д модел|stl файл|модел|фигурка|статуетка|" +
-    "song|music|melody|instrumental|beat|track|remix|video|clip|animation|model|stl)?\\s*",
-  "i",
-);
-
-export function extractMediaPrompt(text: string): string {
-  const cleaned = text
-    .trim()
-    .replace(MEDIA_PROMPT_STRIP, "")
-    .replace(/[.!?\s]+$/g, "")
-    .trim();
-  return cleaned;
-}
+const MAX_TEXT_FILE_CHARS = 60_000;
 
 const SYSTEM_PROMPT = `Ти си TK-Bot — официалният AI асистент на Todor Khristov Gaming.
 Отговаряй кратко, ясно и полезно. По подразбиране отговаряй на български; ако потребителят пише на друг език, отговори на същия език.
 
 Когато отговорът съдържа код, конфигурационни променливи (например .env ключове), команди за терминал или друг текст, който потребителят би искал да копира, ВИНАГИ го поставяй в markdown код блок, ограден с тройни обратни кавички (\`\`\`), като посочиш езика за синтаксис (например \`\`\`bash, \`\`\`ts, \`\`\`env, \`\`\`json). Никога не показвай такива стойности като обикновен текст в изречение — винаги ги слагай в отделен код блок.
 
-Никога не казвай, че не можеш да отваряш или четеш линкове. Когато получиш линк, отвори го и го разгледай внимателно — ако е налично, съдържанието на страницата ще бъде добавено към контекста на разговора. Отговори полезно на базата на извлеченото съдържание. Ако страницата не може да бъде отворена, обясни коректно какво се случва.
+Имаш инструменти и ги използваш сам, без да питаш:
+- web_search — търси в интернет за актуална информация (новини, дати, цени, резултати, хора, игри, видеа). Използвай го винаги, когато въпросът е за нещо ново, конкретно или което не знаеш със сигурност. Посочвай източниците като линкове.
+- open_url — отваря и чете линкове. Когато потребителят изпрати линк, винаги го отвори и отговори на базата на съдържанието. Никога не казвай, че не можеш да отваряш линкове.
+- generate_image — рисува нови изображения (рисунки, лога, тапети, илюстрации, мемета).
+- edit_image — променя последната снимка в разговора (качена от потребителя или нарисувана от теб).
+Можеш да правиш всичко, което може един умен асистент: да обясняваш, да превеждаш, да пишеш текстове, есета, стихове и код, да решаваш задачи по математика, да помагаш с игри и домашни, да правиш планове и списъци. Не отказвай, освен ако заявката е опасна или незаконна.
 
-Можеш да приемаш и анализираш снимки и файлове, изпратени чрез бутона „Прикачи" или копирани и поставени (paste, Ctrl+V) директно в чата. Когато получиш изображение, го разгледай детайлно, извади нужната информация и отговори на въпросите на потребителя на базата на съдържанието му. Когато получиш файл (например текст, код или документ), го прочети внимателно и го използвай, за да помогнеш на потребителя.
-
-Можеш да приемаш, копираш и поставяш (paste) видеоклипове и мултимедийни файлове директно в чата. Когато получиш видео, го анализирай по неговите кадри или метаданта, извлечи полезна информация и отговори на базата на съдържанието му.
-
-Ти можеш да ГЕНЕРИРАШ медия директно в разговора:
-- Снимки и изображения — когато потребителят поиска да нарисуваш нещо, създай изображение.
-- Видеоклипове — когато потребителят поиска „направи/създай/генерирай видео/клип/анимация", генерирай кратък видеоклип (с аудио).
-- Музика — когато потребителят поиска „направи/създай/генерирай песен/музика/мелодия/бийт", генерирай музикален клип.
-- 3D модели за принтиране — когато потребителят поиска „3D модел", „STL файл", „фигурка/статуетка за печат" или „модел за принтера", създай 3D модел в STL формат и го прикачи към отговора.
-Генерираната медия (песни, видеа, 3D модели) се прикачва автоматично към отговора под формата на файл/плейър — не обяснявай „не мога", а просто изпълни заявката.
+Можеш да приемаш и анализираш снимки, PDF и други файлове, изпратени чрез бутона „Прикачи" или поставени (Ctrl+V) в чата. Разглеждай ги детайлно и отговаряй на базата на съдържанието им.
+Когато получиш видео или аудио, ще получиш подробно описание и транскрипция на съдържанието му — отговаряй така, сякаш си го гледал/слушал.
 
 Структура на сайта Tody Game Hub:
 - / — начална страница.
@@ -145,7 +65,7 @@ const SYSTEM_PROMPT = `Ти си TK-Bot — официалният AI асист
 - /music — музикална секция на канала.
 - /info — инфо и контакт страница.
 - /login — вход в акаунт; /profile — профилът на потребителя.
-- Игри в сайта: 2048, Шах, Кръстче-Нуличка и Chrome Dinosaur.
+- Игри в сайта: Тетрис, Шах, Морски шах, Въздушен хокей, Wordle и други.
 
 Познания за канала:
 - YouTube канал: https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ (Todor Khristov Gaming)
@@ -155,115 +75,9 @@ const SYSTEM_PROMPT = `Ти си TK-Bot — официалният AI асист
 - Нови видеа излизат всеки вторник и петък.
 Ако не знаеш отговора, признай честно и предложи контакт с Discord общността.`;
 
-function readSecret(name: string): string {
-  try {
-    const workerEnv = env as unknown as Record<string, unknown>;
-    const workerValue = workerEnv[name];
-    if (typeof workerValue === "string" && workerValue.trim()) return workerValue.trim();
-  } catch {
-    // Fall through to other sources.
-  }
-
-  try {
-    const nodeValue = globalThis.process?.env?.[name];
-    if (nodeValue?.trim()) return nodeValue.trim();
-  } catch {
-    // Fall through to other sources.
-  }
-
-  try {
-    const metaEnv = (import.meta as unknown as { env?: Record<string, unknown> }).env;
-    const metaValue = metaEnv?.[name];
-    if (typeof metaValue === "string" && metaValue.trim()) return metaValue.trim();
-  } catch {
-    // Fall through to other sources.
-  }
-
-  try {
-    const cfEnv = (globalThis as typeof globalThis & { CF_ENV?: Record<string, unknown> }).CF_ENV;
-    const cfValue = cfEnv?.[name];
-    if (typeof cfValue === "string" && cfValue.trim()) return cfValue.trim();
-  } catch {
-    // Fall through.
-  }
-
-  return "";
-}
-
-function getApiKey(): string {
-  return readSecret("GEMINI_API_KEY");
-}
-
-function getGeminiTimeoutMs(): number {
-  const raw = readSecret("GEMINI_TIMEOUT_MS")?.trim();
-  if (!raw) return GEMINI_TIMEOUT_MS_DEFAULT;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : GEMINI_TIMEOUT_MS_DEFAULT;
-}
-
-function getThinkingBudget(): number {
-  const raw = readSecret("GEMINI_THINKING_BUDGET")?.trim();
-  if (!raw) return GEMINI_THINKING_BUDGET_DEFAULT;
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : GEMINI_THINKING_BUDGET_DEFAULT;
-}
-
-type GenerationConfig = {
-  temperature?: number;
-  maxOutputTokens: number;
-  thinkingConfig?: { thinkingBudget: number };
-};
-
-function buildGenerationConfig(includeThinking: boolean): GenerationConfig {
-  const thinkingBudget = getThinkingBudget();
-  if (includeThinking && thinkingBudget > 0) {
-    return { maxOutputTokens: 1024, thinkingConfig: { thinkingBudget } };
-  }
-  return { temperature: 0.9, maxOutputTokens: 1024 };
-}
-
-function getModel(): string {
-  return readSecret("GEMINI_MODEL") || "gemini-3.5-flash-lite";
-}
-
-function getVisionModel(): string {
-  return readSecret("GEMINI_VISION_MODEL") || getModel() || "gemini-3.5-flash-lite";
-}
-
-function getImageGenerationModel(): string {
-  return readSecret("GEMINI_IMAGE_GEN_MODEL") || IMAGE_GEN_MODEL_DEFAULT;
-}
-
-function getMusicModel(): string {
-  return readSecret("GEMINI_MUSIC_MODEL") || "lyria-3-clip-preview";
-}
-
-function getVideoModel(): string {
-  return readSecret("GEMINI_VIDEO_MODEL") || "veo-3.1-generate-preview";
-}
-
-function get3dPlanningModel(): string {
-  return readSecret("GEMINI_3D_MODEL") || getModel();
-}
-
-function getGeminiCacheKv(): GeminiKvNamespace | null {
-  const workerEnv = env as unknown as {
-    GEMINI_CACHE_KV?: GeminiKvNamespace;
-    AUTH_USERS_KV?: GeminiKvNamespace;
-  };
-  if (workerEnv.GEMINI_CACHE_KV) return workerEnv.GEMINI_CACHE_KV;
-  if (workerEnv.AUTH_USERS_KV) return workerEnv.AUTH_USERS_KV;
-
-  const globalEnv = (
-    globalThis as typeof globalThis & {
-      CF_ENV?: { GEMINI_CACHE_KV?: GeminiKvNamespace; AUTH_USERS_KV?: GeminiKvNamespace };
-    }
-  ).CF_ENV;
-  if (globalEnv?.GEMINI_CACHE_KV) return globalEnv.GEMINI_CACHE_KV;
-  if (globalEnv?.AUTH_USERS_KV) return globalEnv.AUTH_USERS_KV;
-
-  return null;
-}
+// ---------------------------------------------------------------------------
+// Small KV cache helpers (kept for compatibility with existing tests).
+// ---------------------------------------------------------------------------
 
 export function buildGeminiCacheKey(model: string, prompt: string): string {
   let hash = 2166136261;
@@ -271,17 +85,15 @@ export function buildGeminiCacheKey(model: string, prompt: string): string {
     hash ^= prompt.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-
   const key = (hash >>> 0).toString(16).padStart(8, "0");
   return `gemini:${model}:${key}`;
 }
 
 export async function readGeminiCachedResponse<T>(
-  kv: GeminiKvNamespace | null,
+  kv: KvNamespace | null,
   key: string,
 ): Promise<T | null> {
   if (!kv) return null;
-
   try {
     const raw = await kv.get(key);
     if (!raw) return null;
@@ -292,743 +104,21 @@ export async function readGeminiCachedResponse<T>(
 }
 
 export async function writeGeminiCachedResponse<T>(
-  kv: GeminiKvNamespace | null,
+  kv: KvNamespace | null,
   key: string,
   value: T,
 ): Promise<void> {
   if (!kv) return;
-
   try {
     await kv.put(key, JSON.stringify(value));
   } catch {
-    // Ignore cache write failures; the API request still succeeds.
+    // Ignore cache write failures.
   }
 }
 
-async function fetchWithGeminiTimeout(
-  url: string,
-  options: RequestInit,
-  timeoutMs = getGeminiTimeoutMs(),
-): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function isImageRequest(text: string): boolean {
-  const value = typeof text === "string" ? text.trim() : "";
-  if (!value) return false;
-  return (
-    IMAGE_INTENT_DRAW.test(value) || (IMAGE_INTENT_GEN.test(value) && IMAGE_INTENT_NOUN.test(value))
-  );
-}
-
-function extractImagePrompt(text: string): string {
-  const cleaned = text.trim().replace(IMAGE_PROMPT_STRIP, "");
-  const prompt = cleaned.replace(/[.!?\s]+$/g, "").trim();
-  if (!prompt) return "красива, цветна илюстрация в артистичен стил";
-  return prompt;
-}
-
-async function requestImageGeneration(
-  apiKey: string,
-  prompt: string,
-): Promise<{ success: boolean; error?: string; data?: { text: string; image?: AiChatImage } }> {
-  if (hasLovableBackend()) {
-    const lovableImage = await requestLovableImage(prompt, getGeminiTimeoutMs());
-    if (lovableImage.success || !apiKey) return lovableImage;
-    if (lovableImage.status === 401 || lovableImage.status === 403) return lovableImage;
-  }
-
-  const model = getImageGenerationModel();
-  const url = `${GEMINI_ENDPOINT}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const requestBody = JSON.stringify({
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: {
-      temperature: 1,
-      maxOutputTokens: 2048,
-    },
-  });
-
-  const cacheKv = getGeminiCacheKv();
-  const cacheKey = buildGeminiCacheKey(model, requestBody);
-  const cached = await readGeminiCachedResponse<GeminiCachedResponse>(cacheKv, cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  let response!: Response;
-  for (let attempt = 1; attempt <= MAX_GEMINI_RETRIES; attempt += 1) {
-    try {
-      response = await fetchWithGeminiTimeout(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: requestBody,
-      });
-    } catch (error) {
-      const isTimeout = error instanceof Error && error.name === "AbortError";
-      return {
-        success: false,
-        error: isTimeout
-          ? `TK-Bot не отговори в рамките на ${getGeminiTimeoutMs() / 1000} секунди (Timeout). Моля, опитай отново.`
-          : "Неуспешна заявка към TK-Bot.",
-      };
-    }
-
-    if ((response.status === 429 || response.status === 503) && attempt < MAX_GEMINI_RETRIES) {
-      await waitForGeminiRetry(response, attempt);
-      continue;
-    }
-
-    break;
-  }
-
-  if (!response.ok) {
-    let detail = "";
-    try {
-      const body = (await response.json()) as { error?: { message?: string } };
-      detail = body?.error?.message ?? "";
-    } catch {
-      // Ignore malformed error bodies.
-    }
-
-    if (response.status === 429) {
-      return {
-        success: false,
-        error:
-          "Генерирането на изображения временно не е налично (лимит на заявките). Моля, опитай по-късно.",
-      };
-    }
-
-    if (response.status === 503) {
-      return {
-        success: false,
-        error:
-          "Моделът за изображения е претоварен в момента (503). Моля, опитай отново след малко.",
-      };
-    }
-
-    return {
-      success: false,
-      error: `Грешка при генериране на изображение (${response.status}). ${detail || ""}`,
-    };
-  }
-
-  const result = (await response.json()) as {
-    candidates?: Array<{
-      content?: {
-        parts?: Array<{ text?: string; inlineData?: { data?: string; mimeType?: string } }>;
-      };
-    }>;
-  };
-
-  const parts = result?.candidates?.[0]?.content?.parts ?? [];
-  const imagePart = parts.find((part) => part?.inlineData?.data);
-  if (!imagePart?.inlineData?.data) {
-    return { success: false, error: "Моделът не върна изображение. Опитай пак с друга заявка." };
-  }
-
-  const mimeType = imagePart.inlineData.mimeType || "image/png";
-  const textPart = parts.find((part) => part?.text)?.text?.trim() ?? "";
-  const payload = {
-    success: true,
-    data: {
-      text: textPart ? `Ето твоята снимка. ${textPart}` : "Ето твоята снимка.",
-      image: { mimeType, dataUrl: `data:${mimeType};base64,${imagePart.inlineData.data}` },
-    },
-  } satisfies GeminiCachedResponse;
-
-  await writeGeminiCachedResponse(cacheKv, cacheKey, payload);
-
-  return payload;
-}
-
-const MAX_ATTACHMENT_BYTES = 14 * 1024 * 1024;
-
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-function toBase64(bytes: Uint8Array): string {
-  const chunk = 0x8000;
-  let binary = "";
-  for (let index = 0; index < bytes.length; index += chunk) {
-    const slice = bytes.subarray(index, Math.min(index + chunk, bytes.length));
-    binary += String.fromCharCode.apply(null, Array.from(slice));
-  }
-  return btoa(binary);
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
-}
-
-/* ---------------- Lovable AI Gateway backend ---------------- */
-
-const LOVABLE_GATEWAY = "https://ai.gateway.lovable.dev/v1";
-
-function getLovableApiKey(): string {
-  return readSecret("LOVABLE_API_KEY");
-}
-
-function getLovableChatModel(): string {
-  return readSecret("LOVABLE_CHAT_MODEL") || "google/gemini-3.8-flash";
-}
-
-function getLovableImageModel(): string {
-  return readSecret("LOVABLE_IMAGE_MODEL") || "google/gemini-3.1-flash-image";
-}
-
-function hasLovableBackend(): boolean {
-  return Boolean(getLovableApiKey().trim());
-}
-
-async function lovableGatewayRequest(
-  path: string,
-  body: unknown,
-  timeoutMs: number,
-): Promise<{ ok: boolean; json?: unknown; error?: string; status?: number }> {
-  const key = getLovableApiKey();
-  let response!: Response;
-  for (let attempt = 1; attempt <= MAX_GEMINI_RETRIES; attempt += 1) {
-    try {
-      response = await fetchWithGeminiTimeout(
-        `${LOVABLE_GATEWAY}${path}`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            Authorization: `Bearer ${key}`,
-            "Lovable-API-Key": key,
-            "X-Lovable-AIG-SDK": "tk-bot",
-          },
-          body: JSON.stringify(body),
-        },
-        timeoutMs,
-      );
-    } catch (error) {
-      const isTimeout = error instanceof Error && error.name === "AbortError";
-      return {
-        ok: false,
-        error: isTimeout
-          ? `TK-Bot не отговори в рамките на ${timeoutMs / 1000} секунди (Timeout). Моля, опитай отново.`
-          : "Неуспешна заявка към AI услугата.",
-        status: 0,
-      };
-    }
-
-    if ((response.status === 429 || response.status === 503) && attempt < MAX_GEMINI_RETRIES) {
-      await waitForGeminiRetry(response, attempt);
-      continue;
-    }
-
-    break;
-  }
-
-  if (!response) {
-    return { ok: false, error: "Неуспешна заявка към AI услугата.", status: 0 };
-  }
-
-  if (!response.ok) {
-    if (response.status === 429) {
-      return {
-        ok: false,
-        error: "AI услугата има временен лимит на заявките (429). Моля, опитай след малко.",
-        status: response.status,
-      };
-    }
-    if (response.status === 402) {
-      return {
-        ok: false,
-        error: "Кредитите за AI са изчерпани. Добави кредити в настройките на проекта.",
-        status: response.status,
-      };
-    }
-    let detail = "";
-    try {
-      const errorBody = (await response.json()) as { error?: { message?: string } };
-      detail = errorBody?.error?.message ?? "";
-    } catch {
-      // Ignore malformed error bodies.
-    }
-    if (response.status === 401 || response.status === 403) {
-      return {
-        ok: false,
-        error:
-          "Достъпът до Lovable AI е отказан (401). Провери дали са добавени LOVABLE_API_KEY / LOVABLE_CHAT_MODEL в настройките на проекта.",
-        status: response.status,
-      };
-    }
-    return {
-      ok: false,
-      error: `Грешка от AI услугата (${response.status}). ${detail}`,
-      status: response.status,
-    };
-  }
-
-  let json: unknown;
-  try {
-    json = await response.json();
-  } catch {
-    return { ok: false, error: "Невалиден отговор от AI услугата.", status: response.status };
-  }
-
-  return { ok: true, json };
-}
-
-function getLovableText(json: unknown): string | null {
-  const content = (
-    json as {
-      choices?: Array<{ message?: { content?: unknown } }>;
-    }
-  )?.choices?.[0]?.message?.content;
-  if (typeof content === "string" && content.trim()) return content.trim();
-  if (Array.isArray(content)) {
-    const text = content
-      .filter(
-        (part) =>
-          typeof part === "object" &&
-          part !== null &&
-          typeof (part as { text?: unknown }).text === "string",
-      )
-      .map((part) => (part as { text?: string }).text)
-      .join("\n")
-      .trim();
-    if (text) return text;
-  }
-  return null;
-}
-
-function getLovableImageUrl(json: unknown): string | null {
-  const images = (
-    json as {
-      choices?: Array<{ message?: { images?: Array<{ image_url?: { url?: string } }> } }>;
-    }
-  )?.choices?.[0]?.message?.images;
-  return images?.[0]?.image_url?.url ?? null;
-}
-
-function fileNameFromMime(mime: string): string {
-  const normalized = mime.toLowerCase();
-  if (normalized.includes("pdf")) return "document.pdf";
-  if (normalized.startsWith("text/") || normalized.includes("json") || normalized.includes("csv"))
-    return "document.txt";
-  if (normalized.startsWith("audio/"))
-    return normalized.includes("mpeg") ? "audio.mp3" : "audio.wav";
-  if (normalized.startsWith("video/")) return "video.mp4";
-  return "file.bin";
-}
-
-async function requestLovableChat(
-  sanitizedMessages: Array<{
-    role: "user" | "model";
-    parts: Array<{ text?: string; ["inline_data"]?: { ["mime_type"]: string; data: string } }>;
-  }>,
-  timeoutMs: number,
-): Promise<GeminiCachedResponse & { status?: number }> {
-  const messages: Array<{ role: string; content: unknown }> = [
-    { role: "system", content: SYSTEM_PROMPT },
-  ];
-
-  for (const message of sanitizedMessages) {
-    const content: unknown[] = [];
-    for (const part of message.parts) {
-      if (part.text) content.push({ type: "text", text: part.text });
-      const inline = part["inline_data"];
-      if (inline?.data) {
-        const mime = inline["mime_type"] || "";
-        if (mime.startsWith("image/")) {
-          content.push({
-            type: "image_url",
-            image_url: { url: `data:${mime};base64,${inline.data}` },
-          });
-        } else {
-          content.push({
-            type: "file",
-            file: { file_data: inline.data, filename: fileNameFromMime(mime) },
-          });
-        }
-      }
-    }
-    if (content.length === 0) continue;
-    const role = message.role === "model" ? "assistant" : "user";
-    messages.push({ role, content });
-  }
-
-  const body: Record<string, unknown> = {
-    model: getLovableChatModel(),
-    messages,
-    temperature: 0.7,
-  };
-
-  const result = await lovableGatewayRequest("/chat/completions", body, timeoutMs);
-  if (!result.ok) {
-    return {
-      success: false,
-      error: result.error ?? "Неуспешна заявка към AI услугата.",
-      status: result.status,
-    };
-  }
-
-  const text = getLovableText(result.json);
-  if (!text) {
-    return { success: false, error: "TK-Bot не върна текст. Моля, опитай пак." };
-  }
-
-  return { success: true, data: { text } };
-}
-
-async function requestLovableImage(
-  prompt: string,
-  timeoutMs: number,
-): Promise<{
-  success: boolean;
-  error?: string;
-  status?: number;
-  data?: { text: string; image: AiChatImage };
-}> {
-  const body: Record<string, unknown> = {
-    model: getLovableImageModel(),
-    messages: [{ role: "user", content: prompt }],
-    modalities: ["image", "text"],
-  };
-
-  const result = await lovableGatewayRequest("/chat/completions", body, timeoutMs);
-  if (!result.ok) {
-    return {
-      success: false,
-      error: result.error ?? "Неуспешна заявка към AI услугата.",
-      status: result.status,
-    };
-  }
-
-  const imageUrl = getLovableImageUrl(result.json);
-  if (!imageUrl) {
-    return { success: false, error: "Моделът не върна изображение. Опитай пак с друга заявка." };
-  }
-
-  if (imageUrl.startsWith("data:")) {
-    const comma = imageUrl.indexOf(",");
-    if (comma <= 0) return { success: false, error: "Невалиден формат на изображението." };
-    const meta = imageUrl.slice(5, comma);
-    const mimeType = (meta.split(";")[0] || "image/png").trim();
-    const safeMime = mimeType.startsWith("image/") ? mimeType : "image/png";
-    const bytes = base64ToBytes(imageUrl.slice(comma + 1));
-    if (bytes.byteLength === 0) {
-      return { success: false, error: "Генерираното изображение е празно. Опитай пак." };
-    }
-    return {
-      success: true,
-      data: {
-        text: "Ето твоята снимка.",
-        image: { mimeType: safeMime, dataUrl: `data:${safeMime};base64,${toBase64(bytes)}` },
-      },
-    };
-  }
-
-  let imgResponse: Response;
-  try {
-    imgResponse = await fetchWithGeminiTimeout(imageUrl, {}, Math.max(timeoutMs, 90_000));
-  } catch {
-    return { success: false, error: "Не успях да изтегля генерираното изображение. Опитай пак." };
-  }
-  if (!imgResponse.ok) {
-    return {
-      success: false,
-      error: `Не успях да изтегля генерираното изображение (${imgResponse.status}).`,
-    };
-  }
-
-  const bytes = new Uint8Array(await imgResponse.arrayBuffer());
-  if (bytes.byteLength === 0) {
-    return { success: false, error: "Генерираното изображение е празно. Опитай пак." };
-  }
-
-  const rawMime = imgResponse.headers.get("content-type") || "image/png";
-  const safeMime = rawMime.startsWith("image/") ? rawMime : "image/png";
-  return {
-    success: true,
-    data: {
-      text: "Ето твоята снимка.",
-      image: { mimeType: safeMime, dataUrl: `data:${safeMime};base64,${toBase64(bytes)}` },
-    },
-  };
-}
-
-function retryableGeminiFetch(
-  url: string,
-  options: RequestInit,
-  timeoutMs: number,
-): Promise<{ ok: boolean; status: number; response?: Response; error?: string }> {
-  return Promise.resolve({ ok: false, error: "" }).then(async () => {
-    let response: Response | undefined;
-    for (let attempt = 1; attempt <= MAX_GEMINI_RETRIES; attempt += 1) {
-      try {
-        response = await fetchWithGeminiTimeout(url, options, timeoutMs);
-      } catch (error) {
-        const isTimeout = error instanceof Error && error.name === "AbortError";
-        return {
-          ok: false,
-          error: isTimeout
-            ? `TK-Bot не отговори в рамките на ${timeoutMs / 1000} секунди (Timeout).`
-            : "Неуспешна заявка към TK-Bot.",
-        };
-      }
-      if ((response.status === 429 || response.status === 503) && attempt < MAX_GEMINI_RETRIES) {
-        await waitForGeminiRetry(response, attempt);
-        continue;
-      }
-      break;
-    }
-    if (!response) {
-      return { ok: false, error: "Неуспешна заявка към TK-Bot." };
-    }
-    return { ok: response.ok, status: response.status, response };
-  });
-}
-
-async function requestMusicGeneration(
-  apiKey: string,
-  prompt: string,
-): Promise<GeminiCachedResponse> {
-  const model = getMusicModel();
-  const url = `${GEMINI_ENDPOINT}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const requestBody = JSON.stringify({
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-  });
-
-  const { ok, status, response, error } = await retryableGeminiFetch(
-    url,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: requestBody,
-    },
-    getGeminiTimeoutMs(),
-  );
-  if (!ok) {
-    if (status === 429) {
-      return {
-        success: false,
-        error: "Генерирането на музика временно не е налично (лимит на заявките). Опитай по-късно.",
-      };
-    }
-    return { success: false, error: error || `Грешка при генериране на музика (${status ?? 0}).` };
-  }
-
-  const result = (await response!.json()) as {
-    candidates?: Array<{
-      content?: {
-        parts?: Array<{ text?: string; inlineData?: { data?: string; mimeType?: string } }>;
-      };
-    }>;
-  };
-
-  const parts = result?.candidates?.[0]?.content?.parts ?? [];
-  const audioPart = parts.find(
-    (part) =>
-      part?.inlineData?.data && (part.inlineData.mimeType || "").toLowerCase().startsWith("audio/"),
-  );
-  const base64 = audioPart?.inlineData?.data;
-  if (!base64) {
-    return { success: false, error: "Моделът не върна аудио. Моля, опитай пак." };
-  }
-
-  const mimeType = audioPart.inlineData?.mimeType || "audio/mpeg";
-  const size = Math.ceil((base64.length / 4) * 3);
-  if (size > MAX_ATTACHMENT_BYTES) {
-    return { success: false, error: "Генерираната песен е твърде голяма за изпращане в чата." };
-  }
-
-  const textParts = parts
-    .filter((part) => part?.text)
-    .map((part) => part.text?.trim() ?? "")
-    .filter(Boolean);
-  const text = textParts.join("\n\n") || "Ето твоята музика. Прикачих я като файл в отговора. 🎵";
-  const extension = mimeType.includes("wav") ? "wav" : "mp3";
-
-  return {
-    success: true,
-    data: {
-      text,
-      files: [
-        {
-          name: `tk-music-${Date.now()}.${extension}`,
-          mimeType,
-          dataUrl: `data:${mimeType};base64,${base64}`,
-          size,
-        },
-      ],
-    },
-  };
-}
-
-type VeoGeneratedSample = {
-  video?: { uri?: string };
-};
-
-async function requestVideoGeneration(
-  apiKey: string,
-  prompt: string,
-): Promise<GeminiCachedResponse> {
-  const model = getVideoModel();
-  const startUrl = `${GEMINI_ENDPOINT}/models/${model}:predictLongRunning`;
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "x-goog-api-key": apiKey,
-  };
-  const startBody = JSON.stringify({
-    instances: [{ prompt }],
-    parameters: {
-      aspectRatio: "16:9",
-      resolution: "720p",
-      durationSeconds: 8,
-      sampleCount: 1,
-    },
-  });
-
-  const started = await retryableGeminiFetch(
-    `${startUrl}?key=${encodeURIComponent(apiKey)}`,
-    { method: "POST", headers, body: startBody },
-    getGeminiTimeoutMs(),
-  );
-  if (!started.ok || !started.response) {
-    return {
-      success: false,
-      error:
-        started.status === 429
-          ? "Генерирането на видео временно не е налично (лимит на заявките). Опитай по-късно."
-          : started.error || "Грешка при стартиране на генерирането на видео.",
-    };
-  }
-
-  const startResult = (await started.response.json()) as {
-    name?: string;
-    error?: { message?: string };
-  };
-  if (startResult.error?.message) {
-    return {
-      success: false,
-      error: `Грешка при генериране на видео: ${startResult.error.message}`,
-    };
-  }
-  const operationName = startResult.name;
-  if (!operationName) {
-    return { success: false, error: "API-то не върна задание за генериране на видео." };
-  }
-
-  const pollUrl = `${GEMINI_ENDPOINT}/${operationName}?key=${encodeURIComponent(apiKey)}`;
-  const pollHeaders: Record<string, string> = { "x-goog-api-key": apiKey };
-  const maxPolls = 30;
-  let videoUri = "";
-
-  for (let poll = 0; poll < maxPolls; poll += 1) {
-    const polled = await retryableGeminiFetch(
-      pollUrl,
-      { method: "GET", headers: pollHeaders },
-      getGeminiTimeoutMs(),
-    );
-    if (!polled.ok || !polled.response) {
-      await sleep(5000);
-      continue;
-    }
-
-    const pollResult = (await polled.response.json()) as {
-      done?: boolean;
-      error?: { message?: string };
-      response?: { generateVideoResponse?: { generatedSamples?: VeoGeneratedSample[] } };
-    };
-
-    if (pollResult.error?.message) {
-      return {
-        success: false,
-        error: `Грешка при генериране на видео: ${pollResult.error.message}`,
-      };
-    }
-
-    if (pollResult.done) {
-      videoUri =
-        pollResult.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri ?? "";
-      if (videoUri) break;
-      return { success: false, error: "Моделът не върна видео файл. Моля, опитай пак." };
-    }
-
-    await sleep(5000);
-  }
-
-  if (!videoUri) {
-    return {
-      success: false,
-      error: "Генерирането на видео отнема твърде много време. Моля, опитай отново след малко.",
-    };
-  }
-
-  let videoResponse: Response;
-  try {
-    videoResponse = await fetchWithGeminiTimeout(
-      videoUri,
-      { headers: { "x-goog-api-key": apiKey } },
-      Math.max(getGeminiTimeoutMs(), 120_000),
-    );
-  } catch {
-    return { success: false, error: "Не успях да изтегля генерираното видео. Моля, опитай пак." };
-  }
-  if (!videoResponse.ok) {
-    return { success: false, error: "Не успях да изтегля генерираното видео. Моля, опитай пак." };
-  }
-
-  const bytes = new Uint8Array(await videoResponse.arrayBuffer());
-  if (bytes.byteLength === 0) {
-    return { success: false, error: "Генерираното видео е празно. Моля, опитай пак." };
-  }
-  if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
-    return { success: false, error: "Генерираното видео е твърде голямо за изпращане в чата." };
-  }
-
-  return {
-    success: true,
-    data: {
-      text: "Ето твоето видео — 8 секунди, с аудио. Прикачих го като файл в отговора. 🎬",
-      files: [
-        {
-          name: `tk-video-${Date.now()}.mp4`,
-          mimeType: "video/mp4",
-          dataUrl: `data:video/mp4;base64,${toBase64(bytes)}`,
-          size: bytes.byteLength,
-        },
-      ],
-    },
-  };
-}
-
-const MAX_GEMINI_RETRIES = 3;
-
-function isThinkingUnsupportedError(detail: string): boolean {
-  if (!detail) return false;
-  const lower = detail.toLowerCase();
-  return (
-    lower.includes("thinking") ||
-    lower.includes("thought") ||
-    lower.includes("reasoning") ||
-    lower.includes("thinking budget")
-  );
-}
-
-function waitForGeminiRetry(response: Response, attempt: number): Promise<void> {
-  const retryAfterHeader = response.headers.get("retry-after");
-  const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : 0;
-  const backoffMs = Math.min(
-    retryAfterMs > 0 ? retryAfterMs : 1000 * 2 ** Math.min(attempt, 4),
-    20000,
-  );
-  return new Promise((resolve) => setTimeout(resolve, backoffMs));
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -1038,7 +128,7 @@ function formatSize(bytes: number): string {
 
 function parseImageDataUrl(dataUrl: string): { mimeType: string; base64: string } | null {
   if (typeof dataUrl !== "string") return null;
-  const groups = /^data:image\/(png|jpeg|jpg|webp|gif|avif);base64,([A-Za-z0-9+/=]+)$/.exec(
+  const groups = /^data:image\/(png|jpeg|jpg|webp|gif);base64,([A-Za-z0-9+/=]+)$/.exec(
     dataUrl.trim(),
   );
   if (!groups) return null;
@@ -1050,837 +140,833 @@ function parseImageDataUrl(dataUrl: string): { mimeType: string; base64: string 
 
 function parseFileDataUrl(dataUrl: string): { mimeType: string; base64: string } | null {
   if (typeof dataUrl !== "string") return null;
-  const groups = /^data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(
-    dataUrl.trim(),
-  );
+  const groups =
+    /^data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+)(?:;[^,]*)?;base64,([A-Za-z0-9+/=]+)$/.exec(
+      dataUrl.trim(),
+    );
   if (!groups) return null;
-  return { mimeType: groups[1] as string, base64: groups[2] as string };
+  return { mimeType: (groups[1] as string).toLowerCase(), base64: groups[2] as string };
 }
 
-type Vec3 = [number, number, number];
-
-type MeshTriangle = { v0: Vec3; v1: Vec3; v2: Vec3 };
-
-const STL_PLAN_PROMPT = `Ти си програма, която планира прости 3D модели за 3D принтиране. Отговори САМО с валиден JSON (без markdown, без пояснения, без коментари).
-
-Изисквания:
-- Колекция от 1 до 8 части. Типове (само тези): box, sphere, cylinder, cone, torus.
-- Всички части трябва да се допират и да образуват ЕДНО свързано, устойчиво цяло, което може да се печата без подпори. Поставяй по-големи/тежки части долу като основа.
-- Размери в сантиметри. Общият размер на модела: между 3 и 8 cm.
-- Не използвай тънки стени или остри елементи под 0.2 cm.
-- Реалистичен, печатаем и максимално близък до описанието на потребителя.
-
-Формат (единствено тези полета):
-{
-  "name": "кратко име на модела",
-  "parts": [
-    {
-      "name": "име на част",
-      "type": "box|sphere|cylinder|cone|torus",
-      "params": { ... },
-      "position": [x, y, z],
-      "rotation": [x_deg, y_deg, z_deg],
-      "scale": [sx, sy, sz]
-    }
-  ]
-}
-
-Параметри по тип:
-- box: { "size": [x_len, y_len, z_len] }
-- sphere: { "radius": r }
-- cylinder: { "radius": r, "height": h }
-- cone: { "radius": r, "height": h }
-- torus: { "major": R, "minor": r }
-
-position (по подразбиране [0,0,0]), rotation в градуси (по подразбиране [0,0,0]), scale (по подразбиране [1,1,1]).`;
-
-function toFiniteNumber(value: unknown, fallback: number): number {
-  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value));
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function toVec3(value: unknown, fallback: Vec3): Vec3 {
-  if (Array.isArray(value) && value.length >= 3) {
-    return [
-      toFiniteNumber(value[0], fallback[0]),
-      toFiniteNumber(value[1], fallback[1]),
-      toFiniteNumber(value[2], fallback[2]),
-    ];
+function isTextLikeMime(mimeType: string, name: string): boolean {
+  if (mimeType.startsWith("text/")) return true;
+  if (
+    /(json|xml|javascript|typescript|x-sh|x-python|yaml|toml|csv|x-httpd-php|sql)/.test(mimeType)
+  ) {
+    return true;
   }
-  return fallback;
+  return /\.(txt|md|json|js|jsx|ts|tsx|py|java|c|cpp|h|cs|go|rs|rb|php|html|css|scss|xml|yml|yaml|toml|csv|sql|sh|env|ini|log)$/i.test(
+    name,
+  );
 }
 
-function parsePlanJson(text: string): unknown {
-  if (!text) return null;
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
+function decodeBase64Utf8(base64: string): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
   try {
-    return JSON.parse(text.slice(start, end + 1)) as unknown;
+    const text = await response.text();
+    try {
+      const json = JSON.parse(text) as { error?: { message?: string } | string; message?: string };
+      if (typeof json.error === "string") return json.error;
+      return json.error?.message || json.message || text.slice(0, 300);
+    } catch {
+      return text.slice(0, 300);
+    }
+  } catch {
+    return "";
+  }
+}
+
+function describeGatewayError(status: number, detail: string, kind: "chat" | "image"): string {
+  if (status === 402) {
+    return "AI кредитите на сайта са изчерпани. Собственикът на сайта трябва да добави кредити.";
+  }
+  if (status === 429) {
+    return "AI е натоварен в момента (твърде много заявки). Моля, опитай отново след малко.";
+  }
+  if (status === 403) {
+    return detail
+      ? `AI отказа заявката: ${detail}`
+      : "AI отказа заявката. Моля, опитай с друго съобщение.";
+  }
+  if (status >= 500) {
+    return "AI услугата временно не отговаря. Моля, опитай отново след малко.";
+  }
+  const prefix = kind === "image" ? "Грешка при генериране на изображение" : "Грешка от AI";
+  return `${prefix} (${status})${detail ? `: ${detail}` : "."}`;
+}
+
+async function* readSse(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<{ event: string; data: string }> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let boundary = buffer.search(/\r?\n\r?\n/);
+      while (boundary !== -1) {
+        const raw = buffer.slice(0, boundary);
+        const sepLength = buffer.slice(boundary).startsWith("\r\n\r\n") ? 4 : 2;
+        buffer = buffer.slice(boundary + sepLength);
+        let event = "";
+        const dataLines: string[] = [];
+        for (const line of raw.split(/\r?\n/)) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""));
+        }
+        if (dataLines.length > 0) yield { event, data: dataLines.join("\n") };
+        boundary = buffer.search(/\r?\n\r?\n/);
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Image generation & editing
+// ---------------------------------------------------------------------------
+
+type ImageResult = { ok: true; b64: string } | { ok: false; error: string };
+
+async function readImageStream(response: Response): Promise<{
+  b64: string;
+  error: string;
+  sawEvent: boolean;
+}> {
+  let b64 = "";
+  let error = "";
+  let sawEvent = false;
+  if (!response.body) return { b64, error, sawEvent };
+  for await (const { event, data } of readSse(response.body)) {
+    if (data === "[DONE]") continue;
+    let payload: { type?: string; b64_json?: string; error?: { message?: string } } | undefined;
+    try {
+      payload = JSON.parse(data);
+    } catch {
+      continue;
+    }
+    const type = event || payload?.type || "";
+    if (type === "error" || payload?.type === "error") {
+      sawEvent = true;
+      error = payload?.error?.message || "Грешка при създаване на изображение.";
+      continue;
+    }
+    if (
+      type === "image_generation.partial_image" ||
+      type === "image_generation.completed" ||
+      type === "image_edit.partial_image" ||
+      type === "image_edit.completed"
+    ) {
+      sawEvent = true;
+      if (payload?.b64_json) b64 = payload.b64_json;
+    }
+  }
+  return { b64, error, sawEvent };
+}
+
+async function generateImage(apiKey: string, prompt: string): Promise<ImageResult> {
+  const send = (stream: boolean) =>
+    fetch(`${GATEWAY_URL}/images/generations`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(
+        stream
+          ? { model: IMAGE_MODEL, prompt, stream: true, partial_images: 1 }
+          : { model: IMAGE_MODEL, prompt },
+      ),
+    });
+  return runImageRequest(send);
+}
+
+async function editImage(
+  apiKey: string,
+  prompt: string,
+  images: AiChatImage[],
+): Promise<ImageResult> {
+  const blobs: Blob[] = [];
+  for (const image of images.slice(0, 4)) {
+    const parsed = parseImageDataUrl(image.dataUrl);
+    if (!parsed) continue;
+    const binary = atob(parsed.base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    blobs.push(new Blob([bytes], { type: parsed.mimeType }));
+  }
+  if (blobs.length === 0) return { ok: false, error: "Няма снимка за редактиране." };
+
+  const send = (stream: boolean) => {
+    const form = new FormData();
+    form.append("model", IMAGE_MODEL);
+    form.append("prompt", prompt);
+    blobs.forEach((blob, index) => {
+      const ext = blob.type.split("/")[1] || "png";
+      form.append(blobs.length > 1 ? "image[]" : "image", blob, `image-${index + 1}.${ext}`);
+    });
+    form.append("stream", String(stream));
+    if (stream) form.append("partial_images", "1");
+    return fetch(`${GATEWAY_URL}/images/edits`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+    });
+  };
+  return runImageRequest(send);
+}
+
+async function runImageRequest(send: (stream: boolean) => Promise<Response>): Promise<ImageResult> {
+  let response: Response;
+  try {
+    response = await send(true);
+  } catch {
+    return { ok: false, error: "Неуспешна връзка с AI за изображения." };
+  }
+  if (!response.ok || !response.body) {
+    const detail = await readErrorMessage(response);
+    return { ok: false, error: describeGatewayError(response.status, detail, "image") };
+  }
+  const streamed = await readImageStream(response);
+  if (streamed.sawEvent) {
+    if (streamed.b64) return { ok: true, b64: streamed.b64 };
+    return { ok: false, error: streamed.error || "AI не върна изображение." };
+  }
+  const replay = await send(false);
+  if (!replay.ok) {
+    const detail = await readErrorMessage(replay);
+    return { ok: false, error: describeGatewayError(replay.status, detail, "image") };
+  }
+  const json = (await replay.json()) as { data?: { b64_json?: string }[] };
+  const b64 = json.data?.[0]?.b64_json;
+  return b64 ? { ok: true, b64 } : { ok: false, error: "AI не върна изображение." };
+}
+
+// ---------------------------------------------------------------------------
+// Web tools
+// ---------------------------------------------------------------------------
+
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCharCode(parseInt(code, 16)));
+}
+
+function stripHtml(html: string): string {
+  return decodeEntities(
+    html
+      .replace(/<(script|style|noscript|svg|template)[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr)[^>]*>/gi, "\n")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/[ \t\f\v]+/g, " ")
+    .replace(/\n\s*\n+/g, "\n")
+    .trim();
+}
+
+function isBlockedHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === "localhost" ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    /^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    host === "[::1]"
+  );
+}
+
+async function webSearch(query: string): Promise<string> {
+  const q = query.trim();
+  if (!q) return "Празна заявка за търсене.";
+  try {
+    const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, {
+      headers: { "User-Agent": BROWSER_UA, "Accept-Language": "bg,en;q=0.8" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return `Търсенето не успя (${response.status}).`;
+    const html = await response.text();
+    const blocks = html.split(/class="result results_links/).slice(1);
+    const results: string[] = [];
+    for (const block of blocks) {
+      const link = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/.exec(block);
+      if (!link) continue;
+      let url = decodeEntities(link[1] ?? "");
+      const uddg = /[?&]uddg=([^&]+)/.exec(url);
+      if (uddg?.[1]) url = decodeURIComponent(uddg[1]);
+      if (url.startsWith("//")) url = `https:${url}`;
+      if (/duckduckgo\.com\/y\.js/.test(url)) continue; // ads
+      const title = stripHtml(link[2] ?? "");
+      const snippetMatch = /class="result__snippet"[^>]*>([\s\S]*?)<\/(a|div)>/.exec(block);
+      const snippet = snippetMatch ? stripHtml(snippetMatch[1] ?? "") : "";
+      results.push(`${results.length + 1}. ${title}\n${url}\n${snippet}`);
+      if (results.length >= 8) break;
+    }
+    return results.length > 0 ? results.join("\n\n") : "Няма намерени резултати.";
+  } catch {
+    return "Търсенето в интернет не успя в момента.";
+  }
+}
+
+async function openUrl(rawUrl: string): Promise<string> {
+  let url: URL;
+  try {
+    url = new URL(rawUrl.trim().startsWith("http") ? rawUrl.trim() : `https://${rawUrl.trim()}`);
+  } catch {
+    return "Невалиден линк.";
+  }
+  if (!/^https?:$/.test(url.protocol) || isBlockedHost(url.hostname)) {
+    return "Този линк не може да бъде отворен.";
+  }
+
+  const parts: string[] = [];
+  const isYouTube = /(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(url.hostname);
+  if (isYouTube) {
+    try {
+      const oembed = await fetch(
+        `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url.toString())}`,
+        { signal: AbortSignal.timeout(10_000) },
+      );
+      if (oembed.ok) {
+        const info = (await oembed.json()) as { title?: string; author_name?: string };
+        parts.push(`YouTube: „${info.title ?? ""}" от ${info.author_name ?? "неизвестен автор"}`);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  try {
+    const response = await fetch(url.toString(), {
+      headers: {
+        "User-Agent": BROWSER_UA,
+        Accept: "text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.5",
+        "Accept-Language": "bg,en;q=0.8",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15_000),
+    });
+    const type = response.headers.get("content-type") || "";
+    if (!response.ok) {
+      parts.push(`Страницата върна грешка ${response.status}.`);
+      return parts.join("\n");
+    }
+    if (!/text|json|xml|html/.test(type)) {
+      parts.push(`Линкът сочи към файл от тип ${type || "неизвестен"}, който не е текст.`);
+      return parts.join("\n");
+    }
+    const body = (await response.text()).slice(0, 1_500_000);
+    if (/html/.test(type)) {
+      const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(body)?.[1];
+      const meta = (name: string) =>
+        new RegExp(
+          `<meta[^>]+(?:name|property)=["']${name}["'][^>]+content=["']([^"']*)["']`,
+          "i",
+        ).exec(body)?.[1] ??
+        new RegExp(
+          `<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property)=["']${name}["']`,
+          "i",
+        ).exec(body)?.[1];
+      if (title) parts.push(`Заглавие: ${decodeEntities(title.trim())}`);
+      const description = meta("description") || meta("og:description");
+      if (description) parts.push(`Описание: ${decodeEntities(description)}`);
+      const text = stripHtml(body.replace(/^[\s\S]*?<body[^>]*>/i, ""));
+      parts.push(`Текст на страницата:\n${text.slice(0, 15_000)}`);
+    } else {
+      parts.push(body.slice(0, 15_000));
+    }
+    return `Адрес: ${response.url || url.toString()}\n${parts.join("\n")}`;
+  } catch {
+    parts.push("Страницата не отговори навреме или блокира достъпа.");
+    return parts.join("\n");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Audio / video understanding
+// ---------------------------------------------------------------------------
+
+async function describeMedia(
+  apiKey: string,
+  file: AiChatFile,
+  mimeType: string,
+  base64: string,
+  question: string,
+): Promise<string | null> {
+  const isVideo = mimeType.startsWith("video/");
+  const format = (mimeType.split("/")[1] || "mp3").replace("mpeg", "mp3").replace("x-", "");
+  const part = isVideo
+    ? { type: "video_url", video_url: { url: `data:${mimeType};base64,${base64}` } }
+    : { type: "input_audio", input_audio: { data: base64, format } };
+  try {
+    const response = await fetch(`${GATEWAY_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Lovable-API-Key": apiKey,
+        "X-Lovable-AIG-SDK": "fetch",
+      },
+      body: JSON.stringify({
+        model: MEDIA_MODEL,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text:
+                  `Файл: ${file.name}. ${isVideo ? "Опиши подробно какво се случва във видеото (сцени, хора, текст на екрана) и транскрибирай всяка реч." : "Транскрибирай дословно всяка реч и опиши звуците/музиката."}` +
+                  (question
+                    ? ` Въпросът на потребителя е: „${question}". Включи и информацията, нужна за отговора.`
+                    : ""),
+              },
+              part,
+            ],
+          },
+        ],
+      }),
+    });
+    if (!response.ok) return null;
+    const json = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+    return json.choices?.[0]?.message?.content?.trim() || null;
   } catch {
     return null;
   }
 }
 
-function rotatePoint(point: Vec3, rotation: Vec3): Vec3 {
-  let [x, y, z] = point;
-  const [rx, ry, rz] = rotation.map((value) => (value * Math.PI) / 180);
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
 
-  const cosX = Math.cos(rx);
-  const sinX = Math.sin(rx);
-  const y1 = y * cosX - z * sinX;
-  const z1 = y * sinX + z * cosX;
-  y = y1;
-  z = z1;
+type ResponsesContentPart =
+  | { type: "input_text"; text: string }
+  | { type: "input_image"; image_url: string }
+  | { type: "input_file"; filename: string; file_data: string }
+  | { type: "output_text"; text: string };
 
-  const cosY = Math.cos(ry);
-  const sinY = Math.sin(ry);
-  const x1 = x * cosY + z * sinY;
-  const z2 = -x * sinY + z * cosY;
-  x = x1;
-  z = z2;
+type ResponsesInputItem =
+  { role: "user" | "assistant"; content: ResponsesContentPart[] } | Record<string, unknown>;
 
-  const cosZ = Math.cos(rz);
-  const sinZ = Math.sin(rz);
-  const x2 = x * cosZ - y * sinZ;
-  const y2 = x * sinZ + y * cosZ;
+async function buildInput(
+  apiKey: string,
+  messages: AiChatMessage[],
+): Promise<ResponsesInputItem[]> {
+  const recent = messages.slice(-20);
+  const items: ResponsesInputItem[] = [];
+  let imageCount = 0;
+  let inlineBytes = 0;
+  const lastUserIndex = (() => {
+    for (let i = recent.length - 1; i >= 0; i -= 1) if (recent[i]?.role === "user") return i;
+    return -1;
+  })();
 
-  return [x2, y2, z];
-}
+  const canInline = (length: number) => inlineBytes + length <= MAX_INLINE_MEDIA_BYTES;
 
-function transformTriangle(
-  triangle: MeshTriangle,
-  scale: Vec3,
-  rotation: Vec3,
-  position: Vec3,
-): MeshTriangle {
-  const apply = (vertex: Vec3): Vec3 => {
-    let point: Vec3 = [vertex[0] * scale[0], vertex[1] * scale[1], vertex[2] * scale[2]];
-    point = rotatePoint(point, rotation);
-    return [point[0] + position[0], point[1] + position[1], point[2] + position[2]];
-  };
-  return { v0: apply(triangle.v0), v1: apply(triangle.v1), v2: apply(triangle.v2) };
-}
+  // Walk from newest to oldest so the latest attachments get priority.
+  for (let index = recent.length - 1; index >= 0; index -= 1) {
+    const message = recent[index];
+    if (!message || (message.role !== "user" && message.role !== "model")) continue;
+    const text = typeof message.text === "string" ? message.text.trim() : "";
 
-function buildBoxTriangles(size: Vec3): MeshTriangle[] {
-  const hx = size[0] / 2;
-  const hy = size[1] / 2;
-  const hz = size[2] / 2;
-  const c0: Vec3 = [-hx, -hy, -hz];
-  const c1: Vec3 = [hx, -hy, -hz];
-  const c2: Vec3 = [hx, hy, -hz];
-  const c3: Vec3 = [-hx, hy, -hz];
-  const c4: Vec3 = [-hx, -hy, hz];
-  const c5: Vec3 = [hx, -hy, hz];
-  const c6: Vec3 = [hx, hy, hz];
-  const c7: Vec3 = [-hx, hy, hz];
-  const quad = (a: Vec3, b: Vec3, c: Vec3, d: Vec3): MeshTriangle[] => [
-    { v0: a, v1: b, v2: c },
-    { v0: a, v1: c, v2: d },
-  ];
-  return [
-    ...quad(c0, c4, c5, c1), // -Y
-    ...quad(c1, c5, c6, c2), // -Z
-    ...quad(c2, c6, c7, c3), // +Y
-    ...quad(c3, c7, c4, c0), // +Z
-    ...quad(c0, c1, c2, c3), // -X
-    ...quad(c4, c7, c6, c5), // +X
-  ];
-}
-
-function buildSphereTriangles(radius: number): MeshTriangle[] {
-  const slices = 16;
-  const stacks = 12;
-  const triangles: MeshTriangle[] = [];
-  const point = (row: number, column: number): Vec3 => {
-    const phi = (row / stacks) * Math.PI;
-    const theta = (column / slices) * Math.PI * 2;
-    return [
-      radius * Math.sin(phi) * Math.cos(theta),
-      radius * Math.cos(phi),
-      radius * Math.sin(phi) * Math.sin(theta),
-    ];
-  };
-  for (let row = 0; row < stacks; row += 1) {
-    for (let column = 0; column < slices; column += 1) {
-      const a0 = point(row, column);
-      const a1 = point(row + 1, column);
-      const a2 = point(row + 1, column + 1);
-      const a3 = point(row, column + 1);
-      triangles.push({ v0: a0, v1: a1, v2: a2 }, { v0: a0, v1: a2, v2: a3 });
+    if (message.role === "model") {
+      const hasImage = (message.images?.length ?? 0) > 0;
+      const combined = [text, hasImage ? "[Тук TK-Bot изпрати изображение.]" : ""]
+        .filter(Boolean)
+        .join("\n");
+      if (combined)
+        items.unshift({ role: "assistant", content: [{ type: "output_text", text: combined }] });
+      continue;
     }
-  }
-  return triangles;
-}
 
-function buildCylinderTriangles(radius: number, height: number): MeshTriangle[] {
-  const sides = 22;
-  const triangles: MeshTriangle[] = [];
-  const topY = height / 2;
-  const bottomY = -height / 2;
-  const ring = (row: number, angle: number, y: number): Vec3 => [
-    radius * Math.cos(angle),
-    y,
-    radius * Math.sin(angle),
-  ];
-  for (let side = 0; side < sides; side += 1) {
-    const angle0 = (side / sides) * Math.PI * 2;
-    const angle1 = ((side + 1) / sides) * Math.PI * 2;
-    const bottom0 = ring(0, angle0, bottomY);
-    const bottom1 = ring(0, angle1, bottomY);
-    const top0 = ring(0, angle0, topY);
-    const top1 = ring(0, angle1, topY);
-    triangles.push({ v0: top0, v1: top1, v2: bottom1 }, { v0: top0, v1: bottom1, v2: bottom0 });
-    const centerBottom: Vec3 = [0, bottomY, 0];
-    const centerTop: Vec3 = [0, topY, 0];
-    triangles.push({ v0: centerBottom, v1: bottom0, v2: bottom1 });
-    triangles.push({ v0: top0, v1: centerTop, v2: top1 });
-  }
-  return triangles;
-}
+    const parts: ResponsesContentPart[] = [];
+    const notes: string[] = [];
 
-function buildConeTriangles(radius: number, height: number): MeshTriangle[] {
-  const sides = 22;
-  const triangles: MeshTriangle[] = [];
-  const apex: Vec3 = [0, height / 2, 0];
-  const bottomY = -height / 2;
-  const center: Vec3 = [0, bottomY, 0];
-  for (let side = 0; side < sides; side += 1) {
-    const angle0 = (side / sides) * Math.PI * 2;
-    const angle1 = ((side + 1) / sides) * Math.PI * 2;
-    const base0: Vec3 = [radius * Math.cos(angle0), bottomY, radius * Math.sin(angle0)];
-    const base1: Vec3 = [radius * Math.cos(angle1), bottomY, radius * Math.sin(angle1)];
-    triangles.push({ v0: apex, v1: base0, v2: base1 });
-    triangles.push({ v0: center, v1: base1, v2: base0 });
-  }
-  return triangles;
-}
-
-function buildTorusTriangles(major: number, minor: number): MeshTriangle[] {
-  const majorSides = 22;
-  const minorSides = 10;
-  const triangles: MeshTriangle[] = [];
-  const point = (u: number, v: number): Vec3 => {
-    const theta = (u / majorSides) * Math.PI * 2;
-    const phi = (v / minorSides) * Math.PI * 2;
-    const x = (major + minor * Math.cos(phi)) * Math.cos(theta);
-    const y = minor * Math.sin(phi);
-    const z = (major + minor * Math.cos(phi)) * Math.sin(theta);
-    return [x, y, z];
-  };
-  for (let u = 0; u < majorSides; u += 1) {
-    for (let v = 0; v < minorSides; v += 1) {
-      const a0 = point(u, v);
-      const a1 = point(u + 1, v);
-      const a2 = point(u + 1, v + 1);
-      const a3 = point(u, v + 1);
-      triangles.push({ v0: a0, v1: a2, v2: a1 }, { v0: a0, v1: a3, v2: a2 });
+    for (const image of Array.isArray(message.images) ? message.images : []) {
+      const parsed = image ? parseImageDataUrl(image.dataUrl) : null;
+      if (!parsed) {
+        notes.push("Потребителят е прикачил изображение, но съдържанието му не е налично.");
+        continue;
+      }
+      if (imageCount >= MAX_IMAGES_PER_REQUEST || !canInline(parsed.base64.length)) {
+        notes.push("Прикачено изображение е пропуснато поради ограничение на размера.");
+        continue;
+      }
+      imageCount += 1;
+      inlineBytes += parsed.base64.length;
+      parts.push({
+        type: "input_image",
+        image_url: `data:${parsed.mimeType};base64,${parsed.base64}`,
+      });
     }
+
+    for (const file of Array.isArray(message.files) ? message.files : []) {
+      if (!file) continue;
+      const name = file.name || "файл";
+      const declared = typeof file.mimeType === "string" ? file.mimeType.toLowerCase() : "";
+      const sizeLabel = formatSize(typeof file.size === "number" ? file.size : 0);
+      const parsed = parseFileDataUrl(file.dataUrl);
+      const mimeType = parsed?.mimeType || declared;
+
+      if (mimeType.startsWith("video/") || mimeType.startsWith("audio/")) {
+        const kind = mimeType.startsWith("video/") ? "видео" : "аудио";
+        if (parsed && index === lastUserIndex) {
+          const description = await describeMedia(apiKey, file, mimeType, parsed.base64, text);
+          if (description) {
+            notes.push(
+              `Съдържание на прикачения ${kind} файл „${name}" (${sizeLabel}):\n${description}`,
+            );
+            continue;
+          }
+        }
+        notes.push(
+          parsed
+            ? `Прикачен ${kind} файл: ${name}, размер: ${sizeLabel}.`
+            : `Прикачен ${kind} файл: ${name}, размер: ${sizeLabel}. Файлът е твърде голям (над 4 MB), за да бъде гледан/слушан — помоли за по-кратък откъс.`,
+        );
+        continue;
+      }
+
+      if (parsed && mimeType.startsWith("image/")) {
+        const img = parseImageDataUrl(file.dataUrl);
+        if (img && imageCount < MAX_IMAGES_PER_REQUEST && canInline(img.base64.length)) {
+          imageCount += 1;
+          inlineBytes += img.base64.length;
+          parts.push({
+            type: "input_image",
+            image_url: `data:${img.mimeType};base64,${img.base64}`,
+          });
+          continue;
+        }
+      }
+
+      if (parsed && mimeType === "application/pdf" && canInline(parsed.base64.length)) {
+        inlineBytes += parsed.base64.length;
+        parts.push({
+          type: "input_file",
+          filename: name.toLowerCase().endsWith(".pdf") ? name : `${name}.pdf`,
+          file_data: `data:application/pdf;base64,${parsed.base64}`,
+        });
+        continue;
+      }
+
+      if (parsed && isTextLikeMime(mimeType, name)) {
+        try {
+          let content = decodeBase64Utf8(parsed.base64);
+          if (content.length > MAX_TEXT_FILE_CHARS) {
+            content = `${content.slice(0, MAX_TEXT_FILE_CHARS)}\n…(файлът е съкратен)`;
+          }
+          parts.push({
+            type: "input_text",
+            text: `Съдържание на прикачения файл „${name}":\n\`\`\`\n${content}\n\`\`\``,
+          });
+          continue;
+        } catch {
+          // Fall through to a note.
+        }
+      }
+
+      notes.push(`Прикачен файл: ${name}, тип: ${mimeType || "неизвестен"}, размер: ${sizeLabel}.`);
+    }
+
+    const combined = [...(text ? [text] : []), ...notes].join("\n");
+    if (combined) parts.unshift({ type: "input_text", text: combined });
+    if (parts.length === 0) continue;
+    items.unshift({ role: "user", content: parts });
   }
-  return triangles;
+
+  return items;
 }
 
-function orientOutward(triangles: MeshTriangle[], centroid: Vec3): MeshTriangle[] {
-  return triangles.map((triangle) => {
-    const triCenter: Vec3 = [
-      (triangle.v0[0] + triangle.v1[0] + triangle.v2[0]) / 3,
-      (triangle.v0[1] + triangle.v1[1] + triangle.v2[1]) / 3,
-      (triangle.v0[2] + triangle.v1[2] + triangle.v2[2]) / 3,
-    ];
-    const ux = triangle.v1[0] - triangle.v0[0];
-    const uy = triangle.v1[1] - triangle.v0[1];
-    const uz = triangle.v1[2] - triangle.v0[2];
-    const wx = triangle.v2[0] - triangle.v0[0];
-    const wy = triangle.v2[1] - triangle.v0[1];
-    const wz = triangle.v2[2] - triangle.v0[2];
-    const nx = uy * wz - uz * wy;
-    const ny = uz * wx - ux * wz;
-    const nz = ux * wy - uy * wx;
-    const toCenterX = triCenter[0] - centroid[0];
-    const toCenterY = triCenter[1] - centroid[1];
-    const toCenterZ = triCenter[2] - centroid[2];
-    if (nx * toCenterX + ny * toCenterY + nz * toCenterZ < 0) {
-      return { ...triangle, v1: triangle.v2, v2: triangle.v1 };
+/** Most recent images in the conversation (user uploads or TK-Bot drawings), newest first. */
+function collectRecentImages(messages: AiChatMessage[]): AiChatImage[] {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (!message) continue;
+    const found: AiChatImage[] = [];
+    for (const image of message.images ?? []) {
+      if (image && parseImageDataUrl(image.dataUrl)) found.push(image);
     }
-    return triangle;
-  });
+    for (const file of message.files ?? []) {
+      if (file && parseImageDataUrl(file.dataUrl)) {
+        found.push({ mimeType: file.mimeType, dataUrl: file.dataUrl });
+      }
+    }
+    if (found.length > 0) return found;
+  }
+  return [];
 }
 
-function buildPartTriangles(planPart: {
-  type?: unknown;
-  params?: Record<string, unknown>;
-  position?: unknown;
-  rotation?: unknown;
-  scale?: unknown;
-}): MeshTriangle[] | null {
-  const type = String(planPart.type ?? "").toLowerCase();
-  const params = planPart.params && typeof planPart.params === "object" ? planPart.params : {};
-  const position = toVec3(planPart.position, [0, 0, 0]);
-  const rotation = toVec3(planPart.rotation, [0, 0, 0]);
-  const scale = toVec3(planPart.scale, [1, 1, 1]);
-
-  let local: MeshTriangle[];
-  switch (type) {
-    case "box":
-      local = buildBoxTriangles(toVec3(params.size, [1, 1, 1]));
-      break;
-    case "sphere": {
-      const radius = Math.max(0.1, toFiniteNumber(params.radius, 1));
-      local = buildSphereTriangles(radius);
-      break;
-    }
-    case "cylinder": {
-      const radius = Math.max(0.1, toFiniteNumber(params.radius, 0.5));
-      const height = Math.max(0.1, toFiniteNumber(params.height, 1));
-      local = buildCylinderTriangles(radius, height);
-      break;
-    }
-    case "cone": {
-      const radius = Math.max(0.1, toFiniteNumber(params.radius, 0.5));
-      const height = Math.max(0.1, toFiniteNumber(params.height, 1));
-      local = buildConeTriangles(radius, height);
-      break;
-    }
-    case "torus": {
-      const major = Math.max(0.2, toFiniteNumber(params.major, 1));
-      const minor = Math.max(0.1, toFiniteNumber(params.minor, 0.3));
-      local = buildTorusTriangles(major, minor);
-      break;
-    }
-    default:
-      return null;
-  }
-
-  const transformed = local.map((triangle) =>
-    transformTriangle(triangle, scale, rotation, position),
-  );
-  const centroid: Vec3 = [
-    transformed.reduce(
-      (sum, triangle) => sum + triangle.v0[0] + triangle.v1[0] + triangle.v2[0],
-      0,
-    ) /
-      (transformed.length * 3),
-    transformed.reduce(
-      (sum, triangle) => sum + triangle.v0[1] + triangle.v1[1] + triangle.v2[1],
-      0,
-    ) /
-      (transformed.length * 3),
-    transformed.reduce(
-      (sum, triangle) => sum + triangle.v0[2] + triangle.v1[2] + triangle.v2[2],
-      0,
-    ) /
-      (transformed.length * 3),
-  ];
-  return orientOutward(transformed, centroid);
-}
-
-export function compileMeshPlan(plan: unknown): MeshTriangle[] | null {
-  if (!plan || typeof plan !== "object") return null;
-  const parts = (plan as { parts?: unknown }).parts;
-  if (!Array.isArray(parts) || parts.length === 0) return null;
-
-  const triangles: MeshTriangle[] = [];
-  for (const part of parts.slice(0, 10)) {
-    if (!part || typeof part !== "object") continue;
-    const built = buildPartTriangles(part as Record<string, unknown>);
-    if (built) triangles.push(...built);
-  }
-  return triangles.length > 0 ? triangles : null;
-}
-
-export function encodeBinaryStl(triangles: MeshTriangle[]): Uint8Array {
-  const buffer = new ArrayBuffer(84 + 50 * triangles.length);
-  const view = new DataView(buffer);
-  view.setUint32(80, triangles.length, true);
-  let offset = 84;
-
-  for (const triangle of triangles) {
-    const ux = triangle.v1[0] - triangle.v0[0];
-    const uy = triangle.v1[1] - triangle.v0[1];
-    const uz = triangle.v1[2] - triangle.v0[2];
-    const wx = triangle.v2[0] - triangle.v0[0];
-    const wy = triangle.v2[1] - triangle.v0[1];
-    const wz = triangle.v2[2] - triangle.v0[2];
-    let nx = uy * wz - uz * wy;
-    let ny = uz * wx - ux * wz;
-    let nz = ux * wy - uy * wx;
-    const length = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
-    nx /= length;
-    ny /= length;
-    nz /= length;
-
-    view.setFloat32(offset, nx, true);
-    view.setFloat32(offset + 4, ny, true);
-    view.setFloat32(offset + 8, nz, true);
-    const vertices = [triangle.v0, triangle.v1, triangle.v2];
-    let vertexOffset = offset + 12;
-    for (const vertex of vertices) {
-      view.setFloat32(vertexOffset, vertex[0], true);
-      view.setFloat32(vertexOffset + 4, vertex[1], true);
-      view.setFloat32(vertexOffset + 8, vertex[2], true);
-      vertexOffset += 12;
-    }
-    offset += 50;
-  }
-
-  return new Uint8Array(buffer);
-}
-
-async function request3dPlan(apiKey: string, prompt: string): Promise<unknown> {
-  const model = get3dPlanningModel();
-  const url = `${GEMINI_ENDPOINT}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const requestBody = JSON.stringify({
-    contents: [
-      { role: "user", parts: [{ text: `${STL_PLAN_PROMPT}\n\nПотребителска заявка: ${prompt}` }] },
-    ],
-    generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
-  });
-
-  const { ok, response } = await retryableGeminiFetch(
-    url,
-    { method: "POST", headers: { "content-type": "application/json" }, body: requestBody },
-    getGeminiTimeoutMs(),
-  );
-  if (!ok || !response) return null;
-
-  const result = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text = result?.candidates?.[0]?.content?.parts?.find((part) => part?.text)?.text;
-  return text ? parsePlanJson(text) : null;
-}
-
-async function request3dGeneration(apiKey: string, prompt: string): Promise<GeminiCachedResponse> {
-  const rawPrompt = extractMediaPrompt(prompt);
-  const planPrompt = rawPrompt || "Абстрактна декоративна фигурка с широка основа";
-  const plan = await request3dPlan(apiKey, planPrompt);
-  if (!plan) {
-    return {
-      success: false,
-      error: "Не успях да планирам 3D модела. Моля, опитай с по-кратко описание.",
-    };
-  }
-
-  const triangles = compileMeshPlan(plan);
-  if (!triangles) {
-    return { success: false, error: "Не успях да построя мрежата на 3D модела. Моля, опитай пак." };
-  }
-
-  const stlBytes = encodeBinaryStl(triangles);
-  if (stlBytes.byteLength === 0) {
-    return { success: false, error: "Полученият 3D модел е празен. Моля, опитай пак." };
-  }
-
-  const planName = (plan as { name?: unknown }).name;
-  const slug =
-    String(planName ?? "model")
-      .toLowerCase()
-      .replace(/[^a-z0-9а-я]+/gi, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 40) || "tk-model";
-
-  return {
-    success: true,
-    data: {
-      text: `Ето един 3D модел за принтиране (.stl). Свали файла и го отвори в слайсър софтуер (Cura, PrusaSlicer, Bambu Studio или OrcaSlicer), за да го прегледаш и отпечаташ. 🖨️`,
-      files: [
-        {
-          name: `${slug}.stl`,
-          mimeType: "model/stl",
-          dataUrl: `data:model/stl;base64,${toBase64(stlBytes)}`,
-          size: stlBytes.byteLength,
-        },
-      ],
+const TOOLS = [
+  {
+    type: "function",
+    name: "web_search",
+    description:
+      "Търси в интернет актуална информация (новини, факти, цени, резултати, хора, игри, видеа). Връща заглавия, линкове и кратки откъси.",
+    strict: true,
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string", description: "Заявка за търсене" } },
+      required: ["query"],
+      additionalProperties: false,
     },
-  };
-}
+  },
+  {
+    type: "function",
+    name: "open_url",
+    description:
+      "Отваря уеб страница по линк и връща заглавието и текста ѝ. Използвай винаги, когато потребителят даде линк или трябва да прочетеш резултат от търсене.",
+    strict: true,
+    parameters: {
+      type: "object",
+      properties: { url: { type: "string", description: "Пълният адрес (URL)" } },
+      required: ["url"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "generate_image",
+    description:
+      "Рисува/генерира ново изображение по описание. Използвай, когато потребителят поиска картинка, рисунка, лого, тапет, илюстрация и т.н.",
+    strict: true,
+    parameters: {
+      type: "object",
+      properties: {
+        prompt: { type: "string", description: "Подробно описание на изображението на английски" },
+      },
+      required: ["prompt"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "edit_image",
+    description:
+      "Променя последната снимка в разговора (качена от потребителя или нарисувана от TK-Bot) — смяна на фон, добавяне/махане на обекти, стил, цветове и т.н.",
+    strict: true,
+    parameters: {
+      type: "object",
+      properties: {
+        prompt: {
+          type: "string",
+          description: "Какво да се промени и какво да остане същото, на английски",
+        },
+      },
+      required: ["prompt"],
+      additionalProperties: false,
+    },
+  },
+];
 
-const MAX_URLS = 3;
-const MAX_FETCH_BYTES = 1_200_000;
-const MAX_URL_CHARS = 7000;
+type StreamOutcome = {
+  text: string;
+  reasoning: string;
+  output: Array<Record<string, unknown>>;
+  error: string;
+};
 
-export function isBlockedHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  if (host === "0.0.0.0" || host === "::1" || host === "localhost") return true;
-  if (host.endsWith(".local")) return true;
-  if (host === "metadata.google.internal" || host === "169.254.169.254") return true;
-
-  const ipMatch = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (ipMatch) {
-    const a = Number(ipMatch[1]);
-    const b = Number(ipMatch[2]);
-    if (a === 10 || a === 127 || a === 0 || a >= 224) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 169 && b === 254) return true;
+async function streamResponse(
+  apiKey: string,
+  input: ResponsesInputItem[],
+  instructions: string,
+): Promise<StreamOutcome | { httpError: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${GATEWAY_URL}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Lovable-API-Key": apiKey,
+        "X-Lovable-AIG-SDK": "fetch",
+      },
+      body: JSON.stringify({
+        model: CHAT_MODEL,
+        instructions,
+        input,
+        tools: TOOLS,
+        stream: true,
+        store: false,
+        reasoning: { effort: "low", summary: "auto" },
+        include: ["reasoning.encrypted_content"],
+      }),
+    });
+  } catch {
+    return { httpError: "Неуспешна връзка с AI. Моля, опитай отново." };
   }
-  return false;
-}
 
-export function extractUrls(text: string): string[] {
-  const matches = text.match(/https?:\/\/[^\s"'<>{}]+/gi) ?? [];
-  const urls: string[] = [];
-  for (const raw of matches) {
-    const cleaned = raw.replace(/[),.;!?]+$/g, "");
+  if (!response.ok || !response.body) {
+    const detail = await readErrorMessage(response);
+    return { httpError: describeGatewayError(response.status, detail, "chat") };
+  }
+
+  const outcome: StreamOutcome = { text: "", reasoning: "", output: [], error: "" };
+  const doneItems: Array<Record<string, unknown>> = [];
+
+  for await (const { data } of readSse(response.body)) {
+    if (data === "[DONE]") continue;
+    let payload: {
+      type?: string;
+      delta?: string;
+      message?: string;
+      item?: Record<string, unknown>;
+      error?: { message?: string };
+      response?: {
+        error?: { message?: string } | null;
+        output?: Array<Record<string, unknown>>;
+      };
+    };
     try {
-      const parsed = new URL(cleaned);
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
-      if (isBlockedHostname(parsed.hostname)) continue;
-      if (!urls.includes(cleaned)) urls.push(cleaned);
+      payload = JSON.parse(data);
     } catch {
       continue;
     }
-    if (urls.length >= MAX_URLS) break;
-  }
-  return urls;
-}
-
-function cleanHtml(raw: string): string {
-  return raw
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-async function readBodyWithLimit(res: Response, limitBytes: number): Promise<string> {
-  try {
-    const reader = res.body?.getReader?.();
-    if (reader) {
-      const chunks: Uint8Array[] = [];
-      let total = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (total + value.byteLength > limitBytes) {
-          await reader.cancel();
-          break;
-        }
-        chunks.push(value);
-        total += value.byteLength;
-      }
-      const bytes = new Uint8Array(total);
-      let offset = 0;
-      for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.byteLength;
-      }
-      return new TextDecoder().decode(bytes);
+    switch (payload.type) {
+      case "response.output_text.delta":
+        outcome.text += payload.delta ?? "";
+        break;
+      case "response.reasoning_summary_text.delta":
+        outcome.reasoning += payload.delta ?? "";
+        break;
+      case "response.output_item.done":
+        if (payload.item) doneItems.push(payload.item);
+        break;
+      case "response.completed":
+        outcome.output = payload.response?.output ?? [];
+        break;
+      case "response.failed":
+      case "response.incomplete":
+        outcome.error =
+          payload.response?.error?.message || outcome.error || "AI не успя да отговори.";
+        break;
+      case "error":
+        outcome.error = payload.error?.message || payload.message || "Грешка от AI.";
+        break;
+      default:
+        break;
     }
-  } catch {
-    return "";
   }
-  const text = await res.text();
-  return text.slice(0, limitBytes);
+
+  if (outcome.output.length === 0) outcome.output = doneItems;
+  if (!outcome.text) {
+    outcome.text = outcome.output
+      .filter((item) => item["type"] === "message")
+      .flatMap((item) => (item["content"] as Array<{ type?: string; text?: string }>) ?? [])
+      .filter((part) => part.type === "output_text")
+      .map((part) => part.text ?? "")
+      .join("");
+  }
+  return outcome;
 }
 
-async function fetchPageText(url: string): Promise<string> {
-  try {
-    const response = await fetchWithGeminiTimeout(
-      url,
-      { headers: { "user-agent": "Mozilla/5.0 (compatible; TK-Bot/1.0)" } },
-      20_000,
-    );
-    if (!response.ok) return "";
-    const raw = await readBodyWithLimit(response, MAX_FETCH_BYTES);
-    return cleanHtml(raw).slice(0, MAX_URL_CHARS);
-  } catch {
-    return "";
-  }
-}
+const MAX_TOOL_ROUNDS = 8;
 
-async function buildUrlContext(text: string): Promise<string> {
-  const urls = extractUrls(text);
-  if (urls.length === 0) return "";
-  const snippets: string[] = [];
-  for (const url of urls) {
-    const body = await fetchPageText(url);
-    snippets.push(
-      body ? `- ${url}:\n${body}` : `- ${url}:\n(страницата не можа да бъде прочетена)`,
-    );
+async function runAgent(apiKey: string, messages: AiChatMessage[]): Promise<AiChatResult> {
+  const input = await buildInput(apiKey, messages);
+  const last = input[input.length - 1] as { role?: string } | undefined;
+  if (input.length === 0 || last?.role !== "user") {
+    return { success: false, error: "Няма въпрос или изображение за изпращане." };
   }
-  return `\n\n[Съдържание, което потребителят поиска да отвориш и разгледаш — извадка:]\n${snippets.join("\n\n")}`;
+
+  const now = new Date();
+  const instructions = `${SYSTEM_PROMPT}\n\nДнешна дата и час (UTC): ${now.toISOString().slice(0, 16).replace("T", " ")}.`;
+  let resultImage: AiChatImage | undefined;
+  let lastReasoning = "";
+  let lastError = "";
+  let conversationImages = collectRecentImages(messages);
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+    const outcome = await streamResponse(apiKey, input, instructions);
+    if ("httpError" in outcome) {
+      if (resultImage) return { success: true, data: { text: "Ето го.", image: resultImage } };
+      return { success: false, error: outcome.httpError };
+    }
+    lastReasoning = outcome.reasoning || lastReasoning;
+    lastError = outcome.error || lastError;
+
+    const calls = outcome.output.filter((item) => item["type"] === "function_call");
+    if (calls.length === 0) {
+      const text = outcome.text.trim();
+      if (text || resultImage) {
+        return {
+          success: true,
+          data: { text: text || "Ето го.", ...(resultImage ? { image: resultImage } : {}) },
+        };
+      }
+      break;
+    }
+
+    input.push(...outcome.output);
+    for (const call of calls) {
+      const name = String(call["name"] ?? "");
+      let args: Record<string, string> = {};
+      try {
+        args = JSON.parse(String(call["arguments"] ?? "{}"));
+      } catch {
+        args = {};
+      }
+      let output = "";
+      if (name === "web_search") {
+        output = await webSearch(args["query"] ?? "");
+      } else if (name === "open_url") {
+        output = await openUrl(args["url"] ?? "");
+      } else if (name === "generate_image" || name === "edit_image") {
+        const prompt = (args["prompt"] ?? "").trim() || "a colorful artistic illustration";
+        const result =
+          name === "edit_image"
+            ? conversationImages.length > 0
+              ? await editImage(apiKey, prompt, conversationImages)
+              : ({ ok: false, error: "В разговора няма снимка за редактиране." } as ImageResult)
+            : await generateImage(apiKey, prompt);
+        if (result.ok) {
+          resultImage = { mimeType: "image/png", dataUrl: `data:image/png;base64,${result.b64}` };
+          conversationImages = [resultImage];
+          output =
+            "Изображението е готово и ще бъде показано на потребителя под отговора ти. Не слагай линкове или markdown картинки — само кратко изречение.";
+        } else {
+          output = `Неуспех: ${result.error}`;
+        }
+      } else {
+        output = "Непознат инструмент.";
+      }
+      input.push({ type: "function_call_output", call_id: call["call_id"], output });
+    }
+  }
+
+  if (resultImage) return { success: true, data: { text: "Ето го.", image: resultImage } };
+  if (lastError) return { success: false, error: lastError };
+  if (lastReasoning.trim()) return { success: true, data: { text: lastReasoning.trim() } };
+  return { success: false, error: "AI не върна отговор. Моля, опитай пак." };
 }
 
 export const serverAiChat = createServerFn({ method: "POST" })
   .validator((data: AiChatInput) => data)
-  .handler(async ({ data }) => {
-    const apiKey = getApiKey();
-    if (!apiKey && !hasLovableBackend()) {
-      return {
-        success: false,
-        error:
-          "AI услугата не е настроена. Добави LOVABLE_API_KEY или GEMINI_API_KEY в настройките на сайта.",
-      };
-    }
-
-    const rawMessages = data.messages ?? [];
-    const lastUserMessage = [...rawMessages].reverse().find((message) => message?.role === "user");
-    const lastUserText =
-      lastUserMessage && typeof lastUserMessage.text === "string"
-        ? lastUserMessage.text.trim()
-        : "";
-
-    if (lastUserText && is3dRequest(lastUserText)) {
-      if (hasLovableBackend() && !apiKey) {
-        return {
-          success: false,
-          error: "3D моделите ще бъдат налични скоро. Дотогава опитай снимка, линк или въпрос.",
-        };
-      }
-      return await request3dGeneration(apiKey, lastUserText);
-    }
-    if (lastUserText && isImageRequest(lastUserText)) {
-      return await requestImageGeneration(apiKey, extractImagePrompt(lastUserText));
-    }
-    if (lastUserText && isVideoRequest(lastUserText)) {
-      if (hasLovableBackend() && !apiKey) {
-        return {
-          success: false,
-          error:
-            "Генерирането на видео ще бъде налично скоро. Дотогава опитай снимка, линк или въпрос.",
-        };
-      }
-      const prompt =
-        extractMediaPrompt(lastUserText) ||
-        "Кратък кинематографичен клип с красив кадър и плавно движение на камерата";
-      return await requestVideoGeneration(apiKey, prompt);
-    }
-    if (lastUserText && isMusicRequest(lastUserText)) {
-      if (hasLovableBackend() && !apiKey) {
-        return {
-          success: false,
-          error:
-            "Генерирането на музика ще бъде налично скоро. Дотогава опитай снимка, линк или въпрос.",
-        };
-      }
-      const prompt =
-        extractMediaPrompt(lastUserText) || "Енергично, весело и модерно инструментално парче";
-      return await requestMusicGeneration(apiKey, prompt);
-    }
-
-    const sanitizedMessages: Array<{
-      role: "user" | "model";
-      parts: Array<{ text?: string; ["inline_data"]?: { ["mime_type"]: string; data: string } }>;
-    }> = [];
-
-    for (const message of (data.messages ?? []).slice(-20)) {
-      if (!message || (message.role !== "user" && message.role !== "model")) continue;
-
-      const text = typeof message.text === "string" ? message.text.trim() : "";
-      const parts: Array<{
-        text?: string;
-        ["inline_data"]?: { ["mime_type"]: string; data: string };
-      }> = [];
-      const mediaNotes: string[] = [];
-      let inlineCount = 0;
-      let inlineBytes = 0;
-
-      const canInline = (base64Length: number) =>
-        inlineCount < MAX_ATTACHMENTS && inlineBytes + base64Length <= MAX_INLINE_MEDIA_BYTES;
-
-      if (message.role === "user") {
-        for (const image of Array.isArray(message.images) ? message.images : []) {
-          if (!image) continue;
-          const parsed = parseImageDataUrl(image?.dataUrl);
-          if (!parsed) {
-            mediaNotes.push(
-              "Потребителят е прикачил изображение, но съдържанието му не е налично.",
-            );
-            continue;
-          }
-          if (!canInline(parsed.base64.length)) {
-            mediaNotes.push(
-              `Прикачено изображение (${parsed.mimeType}) е пропуснато поради ограничение на общия размер.`,
-            );
-            continue;
-          }
-          inlineCount += 1;
-          inlineBytes += parsed.base64.length;
-          parts.push({
-            ["inline_data"]: { ["mime_type"]: parsed.mimeType, data: parsed.base64 },
-          });
-        }
-        for (const file of Array.isArray(message.files) ? message.files : []) {
-          if (!file) continue;
-          const mimeType = typeof file.mimeType === "string" ? file.mimeType.toLowerCase() : "";
-          const size = typeof file.size === "number" && file.size > 0 ? file.size : 0;
-          const sizeLabel = formatSize(size);
-
-          if (mimeType.startsWith("video/") || mimeType.startsWith("audio/")) {
-            mediaNotes.push(
-              `Прикачен медиен файл: ${file.name || "файл"}, тип: ${mimeType}, размер: ${sizeLabel}.`,
-            );
-            continue;
-          }
-
-          const parsed = parseFileDataUrl(file?.dataUrl);
-          if (parsed && !parsed.mimeType.startsWith("image/") && canInline(parsed.base64.length)) {
-            inlineCount += 1;
-            inlineBytes += parsed.base64.length;
-            parts.push({
-              ["inline_data"]: { ["mime_type"]: parsed.mimeType, data: parsed.base64 },
-            });
-          } else {
-            mediaNotes.push(
-              `Прикачен файл: ${file.name || "файл"}, тип: ${mimeType}, размер: ${sizeLabel}.`,
-            );
-          }
-        }
-      }
-
-      const combinedText =
-        mediaNotes.length > 0 ? [...(text ? [text] : []), ...mediaNotes].join("\n") : text;
-      if (combinedText) parts.push({ text: combinedText });
-      if (parts.length === 0) continue;
-
-      sanitizedMessages.push({ role: message.role, parts });
-    }
-
-    const urlContext = await buildUrlContext(lastUserText);
-    if (urlContext && sanitizedMessages.length > 0) {
-      const lastPart = sanitizedMessages[sanitizedMessages.length - 1];
-      if (lastPart && lastPart.role === "user") {
-        const textPart = lastPart.parts.find((part) => part.text);
-        if (textPart) {
-          textPart.text = `${textPart.text}\n\n${urlContext}`;
-        } else {
-          lastPart.parts.push({ text: urlContext });
-        }
-      }
-    }
-
-    if (sanitizedMessages.length === 0) {
-      return { success: false, error: "Няма въпрос или изображение за изпращане." };
-    }
-
-    const hasImages = sanitizedMessages.some((message) =>
-      message.parts.some((part) => part["inline_data"]),
-    );
-    const model = hasImages ? getVisionModel() : getModel();
-
-    if (hasLovableBackend()) {
-      const lovableResult = await requestLovableChat(sanitizedMessages, getGeminiTimeoutMs());
-      if (lovableResult.success || !apiKey) return lovableResult;
-      if (lovableResult.status === 401 || lovableResult.status === 403) return lovableResult;
+  .handler(async ({ data }): Promise<AiChatResult> => {
+    const apiKey = process.env["LOVABLE_API_KEY"];
+    if (!apiKey) {
+      return { success: false, error: "AI не е настроен на сайта." };
     }
 
     try {
-      const url = `${GEMINI_ENDPOINT}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const cacheKv = getGeminiCacheKv();
-      const wantThinking = getThinkingBudget() > 0;
-      const timeoutMs = getGeminiTimeoutMs();
-
-      const requestBody = (includeThinking: boolean) =>
-        JSON.stringify({
-          contents: sanitizedMessages,
-          systemInstruction: {
-            parts: [{ text: SYSTEM_PROMPT }],
-          },
-          generationConfig: buildGenerationConfig(includeThinking),
-        });
-
-      // Deep thinking: ask the model to reason with a thinking budget first. If
-      // the selected model does not support thinkingConfig, the request is
-      // transparently retried once without it so TK-Bot keeps answering anyway.
-      const performRequest = async (includeThinking: boolean): Promise<GeminiCachedResponse> => {
-        const body = requestBody(includeThinking);
-        const cacheKey = buildGeminiCacheKey(model, body);
-        const cached = await readGeminiCachedResponse<GeminiCachedResponse>(cacheKv, cacheKey);
-        if (cached) {
-          return cached;
-        }
-
-        let response!: Response;
-        for (let attempt = 1; attempt <= MAX_GEMINI_RETRIES; attempt += 1) {
-          try {
-            response = await fetchWithGeminiTimeout(
-              url,
-              {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body,
-              },
-              timeoutMs,
-            );
-          } catch (error) {
-            const isTimeout = error instanceof Error && error.name === "AbortError";
-            return {
-              success: false,
-              error: isTimeout
-                ? `TK-Bot не отговори в рамките на ${timeoutMs / 1000} секунди (Timeout). Моля, опитай отново.`
-                : "Неуспешна заявка към TK-Bot.",
-            };
-          }
-
-          if (
-            (response.status === 429 || response.status === 503) &&
-            attempt < MAX_GEMINI_RETRIES
-          ) {
-            await waitForGeminiRetry(response, attempt);
-            continue;
-          }
-
-          break;
-        }
-
-        if (!response.ok) {
-          let detail = "";
-          try {
-            const body = (await response.json()) as {
-              error?: { message?: string };
-            };
-            detail = body?.error?.message ?? "";
-          } catch {
-            // Ignore malformed error bodies.
-          }
-
-          if (includeThinking && isThinkingUnsupportedError(detail)) {
-            return await performRequest(false);
-          }
-
-          return {
-            success: false,
-            error:
-              response.status === 429
-                ? "TK-Bot достигна лимита на заявките (429). Моля, опитай отново след малко."
-                : response.status === 503
-                  ? "AI моделът е претоварен в момента (503). Моля, опитай отново след малко."
-                  : response.status === 401 || response.status === 403
-                    ? "Текущият GEMINI_API_KEY е невалиден или изтекъл (401). Обнови ключа или използвай TK-Bot през Lovable."
-                    : response.status === 404 || response.status === 400
-                      ? hasImages
-                        ? `Грешка при обработка на изображението (${response.status}). ${detail || `Моделът "${model}" може да не поддържа снимки.`}`
-                        : `AI моделът "${model}" не е достъпен (${response.status}). Провери GEMINI_MODEL / GEMINI_API_KEY.`
-                      : `Грешка от TK-Bot (${response.status}): ${detail || "неизвестна грешка"}`,
-          };
-        }
-
-        const result = (await response.json()) as {
-          candidates?: Array<{
-            content?: { parts?: Array<{ text?: string }> };
-          }>;
-        };
-
-        const text = result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (!text) {
-          return { success: false, error: "TK-Bot не върна текст. Моля, опитай пак." };
-        }
-
-        const payload = { success: true, data: { text } } satisfies GeminiCachedResponse;
-        await writeGeminiCachedResponse(cacheKv, cacheKey, payload);
-
-        return payload;
-      };
-
-      return await performRequest(wantThinking);
+      return await runAgent(apiKey, data.messages ?? []);
     } catch (error) {
-      console.warn("Gemini request failed.", error);
-      return { success: false, error: "Неуспешна заявка към TK-Bot." };
+      console.warn("AI request failed.", error);
+      return { success: false, error: "Неуспешна заявка към AI. Моля, опитай отново." };
     }
   });
