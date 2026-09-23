@@ -49,8 +49,9 @@ const IMAGE_GEN_MODEL_DEFAULT = "gemini-3.1-flash-image";
 
 const IMAGE_INTENT_DRAW =
   /(^|[\s,.;:!?(-])(нарисувай ми|нарисувай|рисувай|draw me|draw)([\s,.;:!?)-]|$)/i;
-const IMAGE_INTENT_GEN = /(генерирай|създай|generate|create|make)\b/i;
-const IMAGE_INTENT_NOUN = /\b(image|picture|изображение|снимка|картинка|илюстрация)\b/i;
+const IMAGE_INTENT_GEN = /(?<![\p{L}\d])(генерирай|създай|generate|create|make)(?![\p{L}])/iu;
+const IMAGE_INTENT_NOUN =
+  /(?<![\p{L}\d])(image\p{L}*|picture\p{L}*|изображени\p{L}*|снимк\p{L}*|картинк\p{L}*|илюстраци\p{L}*)(?![\p{L}])/iu;
 
 const IMAGE_PROMPT_STRIP = new RegExp(
   "^(моля[\\s,!]*)?(?:нарисувай ми|нарисувай|рисувай|draw me|draw|" +
@@ -338,6 +339,12 @@ async function requestImageGeneration(
   apiKey: string,
   prompt: string,
 ): Promise<{ success: boolean; error?: string; data?: { text: string; image?: AiChatImage } }> {
+  if (hasLovableBackend()) {
+    const lovableImage = await requestLovableImage(prompt, getGeminiTimeoutMs());
+    if (lovableImage.success || !apiKey) return lovableImage;
+    if (lovableImage.status === 401 || lovableImage.status === 403) return lovableImage;
+  }
+
   const model = getImageGenerationModel();
   const url = `${GEMINI_ENDPOINT}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const requestBody = JSON.stringify({
@@ -368,8 +375,8 @@ async function requestImageGeneration(
       return {
         success: false,
         error: isTimeout
-          ? `Gemini API не отговори в рамките на ${getGeminiTimeoutMs() / 1000} секунди (Timeout). Моля, опитай отново.`
-          : "Неуспешна заявка към Gemini API.",
+          ? `TK-Bot не отговори в рамките на ${getGeminiTimeoutMs() / 1000} секунди (Timeout). Моля, опитай отново.`
+          : "Неуспешна заявка към TK-Bot.",
       };
     }
 
@@ -455,6 +462,305 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+/* ---------------- Lovable AI Gateway backend ---------------- */
+
+const LOVABLE_GATEWAY = "https://ai.gateway.lovable.dev/v1";
+
+function getLovableApiKey(): string {
+  return readSecret("LOVABLE_API_KEY");
+}
+
+function getLovableChatModel(): string {
+  return readSecret("LOVABLE_CHAT_MODEL") || "google/gemini-3.8-flash";
+}
+
+function getLovableImageModel(): string {
+  return readSecret("LOVABLE_IMAGE_MODEL") || "google/gemini-3.1-flash-image";
+}
+
+function hasLovableBackend(): boolean {
+  return Boolean(getLovableApiKey().trim());
+}
+
+async function lovableGatewayRequest(
+  path: string,
+  body: unknown,
+  timeoutMs: number,
+): Promise<{ ok: boolean; json?: unknown; error?: string; status?: number }> {
+  const key = getLovableApiKey();
+  let response!: Response;
+  for (let attempt = 1; attempt <= MAX_GEMINI_RETRIES; attempt += 1) {
+    try {
+      response = await fetchWithGeminiTimeout(
+        `${LOVABLE_GATEWAY}${path}`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            Authorization: `Bearer ${key}`,
+            "Lovable-API-Key": key,
+            "X-Lovable-AIG-SDK": "tk-bot",
+          },
+          body: JSON.stringify(body),
+        },
+        timeoutMs,
+      );
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.name === "AbortError";
+      return {
+        ok: false,
+        error: isTimeout
+          ? `TK-Bot не отговори в рамките на ${timeoutMs / 1000} секунди (Timeout). Моля, опитай отново.`
+          : "Неуспешна заявка към AI услугата.",
+        status: 0,
+      };
+    }
+
+    if ((response.status === 429 || response.status === 503) && attempt < MAX_GEMINI_RETRIES) {
+      await waitForGeminiRetry(response, attempt);
+      continue;
+    }
+
+    break;
+  }
+
+  if (!response) {
+    return { ok: false, error: "Неуспешна заявка към AI услугата.", status: 0 };
+  }
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      return {
+        ok: false,
+        error: "AI услугата има временен лимит на заявките (429). Моля, опитай след малко.",
+        status: response.status,
+      };
+    }
+    if (response.status === 402) {
+      return {
+        ok: false,
+        error: "Кредитите за AI са изчерпани. Добави кредити в настройките на проекта.",
+        status: response.status,
+      };
+    }
+    let detail = "";
+    try {
+      const errorBody = (await response.json()) as { error?: { message?: string } };
+      detail = errorBody?.error?.message ?? "";
+    } catch {
+      // Ignore malformed error bodies.
+    }
+    if (response.status === 401 || response.status === 403) {
+      return {
+        ok: false,
+        error:
+          "Достъпът до Lovable AI е отказан (401). Провери дали са добавени LOVABLE_API_KEY / LOVABLE_CHAT_MODEL в настройките на проекта.",
+        status: response.status,
+      };
+    }
+    return {
+      ok: false,
+      error: `Грешка от AI услугата (${response.status}). ${detail}`,
+      status: response.status,
+    };
+  }
+
+  let json: unknown;
+  try {
+    json = await response.json();
+  } catch {
+    return { ok: false, error: "Невалиден отговор от AI услугата.", status: response.status };
+  }
+
+  return { ok: true, json };
+}
+
+function getLovableText(json: unknown): string | null {
+  const content = (
+    json as {
+      choices?: Array<{ message?: { content?: unknown } }>;
+    }
+  )?.choices?.[0]?.message?.content;
+  if (typeof content === "string" && content.trim()) return content.trim();
+  if (Array.isArray(content)) {
+    const text = content
+      .filter(
+        (part) =>
+          typeof part === "object" &&
+          part !== null &&
+          typeof (part as { text?: unknown }).text === "string",
+      )
+      .map((part) => (part as { text?: string }).text)
+      .join("\n")
+      .trim();
+    if (text) return text;
+  }
+  return null;
+}
+
+function getLovableImageUrl(json: unknown): string | null {
+  const images = (
+    json as {
+      choices?: Array<{ message?: { images?: Array<{ image_url?: { url?: string } }> } }>;
+    }
+  )?.choices?.[0]?.message?.images;
+  return images?.[0]?.image_url?.url ?? null;
+}
+
+function fileNameFromMime(mime: string): string {
+  const normalized = mime.toLowerCase();
+  if (normalized.includes("pdf")) return "document.pdf";
+  if (normalized.startsWith("text/") || normalized.includes("json") || normalized.includes("csv"))
+    return "document.txt";
+  if (normalized.startsWith("audio/"))
+    return normalized.includes("mpeg") ? "audio.mp3" : "audio.wav";
+  if (normalized.startsWith("video/")) return "video.mp4";
+  return "file.bin";
+}
+
+async function requestLovableChat(
+  sanitizedMessages: Array<{
+    role: "user" | "model";
+    parts: Array<{ text?: string; ["inline_data"]?: { ["mime_type"]: string; data: string } }>;
+  }>,
+  timeoutMs: number,
+): Promise<GeminiCachedResponse & { status?: number }> {
+  const messages: Array<{ role: string; content: unknown }> = [
+    { role: "system", content: SYSTEM_PROMPT },
+  ];
+
+  for (const message of sanitizedMessages) {
+    const content: unknown[] = [];
+    for (const part of message.parts) {
+      if (part.text) content.push({ type: "text", text: part.text });
+      const inline = part["inline_data"];
+      if (inline?.data) {
+        const mime = inline["mime_type"] || "";
+        if (mime.startsWith("image/")) {
+          content.push({
+            type: "image_url",
+            image_url: { url: `data:${mime};base64,${inline.data}` },
+          });
+        } else {
+          content.push({
+            type: "file",
+            file: { file_data: inline.data, filename: fileNameFromMime(mime) },
+          });
+        }
+      }
+    }
+    if (content.length === 0) continue;
+    const role = message.role === "model" ? "assistant" : "user";
+    messages.push({ role, content });
+  }
+
+  const body: Record<string, unknown> = {
+    model: getLovableChatModel(),
+    messages,
+    temperature: 0.7,
+  };
+
+  const result = await lovableGatewayRequest("/chat/completions", body, timeoutMs);
+  if (!result.ok) {
+    return {
+      success: false,
+      error: result.error ?? "Неуспешна заявка към AI услугата.",
+      status: result.status,
+    };
+  }
+
+  const text = getLovableText(result.json);
+  if (!text) {
+    return { success: false, error: "TK-Bot не върна текст. Моля, опитай пак." };
+  }
+
+  return { success: true, data: { text } };
+}
+
+async function requestLovableImage(
+  prompt: string,
+  timeoutMs: number,
+): Promise<{
+  success: boolean;
+  error?: string;
+  status?: number;
+  data?: { text: string; image: AiChatImage };
+}> {
+  const body: Record<string, unknown> = {
+    model: getLovableImageModel(),
+    messages: [{ role: "user", content: prompt }],
+    modalities: ["image", "text"],
+  };
+
+  const result = await lovableGatewayRequest("/chat/completions", body, timeoutMs);
+  if (!result.ok) {
+    return {
+      success: false,
+      error: result.error ?? "Неуспешна заявка към AI услугата.",
+      status: result.status,
+    };
+  }
+
+  const imageUrl = getLovableImageUrl(result.json);
+  if (!imageUrl) {
+    return { success: false, error: "Моделът не върна изображение. Опитай пак с друга заявка." };
+  }
+
+  if (imageUrl.startsWith("data:")) {
+    const comma = imageUrl.indexOf(",");
+    if (comma <= 0) return { success: false, error: "Невалиден формат на изображението." };
+    const meta = imageUrl.slice(5, comma);
+    const mimeType = (meta.split(";")[0] || "image/png").trim();
+    const safeMime = mimeType.startsWith("image/") ? mimeType : "image/png";
+    const bytes = base64ToBytes(imageUrl.slice(comma + 1));
+    if (bytes.byteLength === 0) {
+      return { success: false, error: "Генерираното изображение е празно. Опитай пак." };
+    }
+    return {
+      success: true,
+      data: {
+        text: "Ето твоята снимка.",
+        image: { mimeType: safeMime, dataUrl: `data:${safeMime};base64,${toBase64(bytes)}` },
+      },
+    };
+  }
+
+  let imgResponse: Response;
+  try {
+    imgResponse = await fetchWithGeminiTimeout(imageUrl, {}, Math.max(timeoutMs, 90_000));
+  } catch {
+    return { success: false, error: "Не успях да изтегля генерираното изображение. Опитай пак." };
+  }
+  if (!imgResponse.ok) {
+    return {
+      success: false,
+      error: `Не успях да изтегля генерираното изображение (${imgResponse.status}).`,
+    };
+  }
+
+  const bytes = new Uint8Array(await imgResponse.arrayBuffer());
+  if (bytes.byteLength === 0) {
+    return { success: false, error: "Генерираното изображение е празно. Опитай пак." };
+  }
+
+  const rawMime = imgResponse.headers.get("content-type") || "image/png";
+  const safeMime = rawMime.startsWith("image/") ? rawMime : "image/png";
+  return {
+    success: true,
+    data: {
+      text: "Ето твоята снимка.",
+      image: { mimeType: safeMime, dataUrl: `data:${safeMime};base64,${toBase64(bytes)}` },
+    },
+  };
+}
+
 function retryableGeminiFetch(
   url: string,
   options: RequestInit,
@@ -470,8 +776,8 @@ function retryableGeminiFetch(
         return {
           ok: false,
           error: isTimeout
-            ? `Gemini API не отговори в рамките на ${timeoutMs / 1000} секунди (Timeout).`
-            : "Неуспешна заявка към Gemini API.",
+            ? `TK-Bot не отговори в рамките на ${timeoutMs / 1000} секунди (Timeout).`
+            : "Неуспешна заявка към TK-Bot.",
         };
       }
       if ((response.status === 429 || response.status === 503) && attempt < MAX_GEMINI_RETRIES) {
@@ -481,7 +787,7 @@ function retryableGeminiFetch(
       break;
     }
     if (!response) {
-      return { ok: false, error: "Неуспешна заявка към Gemini API." };
+      return { ok: false, error: "Неуспешна заявка към TK-Bot." };
     }
     return { ok: response.ok, status: response.status, response };
   });
@@ -1305,10 +1611,11 @@ export const serverAiChat = createServerFn({ method: "POST" })
   .validator((data: AiChatInput) => data)
   .handler(async ({ data }) => {
     const apiKey = getApiKey();
-    if (!apiKey) {
+    if (!apiKey && !hasLovableBackend()) {
       return {
         success: false,
-        error: "AI ключът не е настроен. Добави GEMINI_API_KEY в настройките на сайта.",
+        error:
+          "AI услугата не е настроена. Добави LOVABLE_API_KEY или GEMINI_API_KEY в настройките на сайта.",
       };
     }
 
@@ -1320,18 +1627,38 @@ export const serverAiChat = createServerFn({ method: "POST" })
         : "";
 
     if (lastUserText && is3dRequest(lastUserText)) {
+      if (hasLovableBackend() && !apiKey) {
+        return {
+          success: false,
+          error: "3D моделите ще бъдат налични скоро. Дотогава опитай снимка, линк или въпрос.",
+        };
+      }
       return await request3dGeneration(apiKey, lastUserText);
     }
     if (lastUserText && isImageRequest(lastUserText)) {
       return await requestImageGeneration(apiKey, extractImagePrompt(lastUserText));
     }
     if (lastUserText && isVideoRequest(lastUserText)) {
+      if (hasLovableBackend() && !apiKey) {
+        return {
+          success: false,
+          error:
+            "Генерирането на видео ще бъде налично скоро. Дотогава опитай снимка, линк или въпрос.",
+        };
+      }
       const prompt =
         extractMediaPrompt(lastUserText) ||
         "Кратък кинематографичен клип с красив кадър и плавно движение на камерата";
       return await requestVideoGeneration(apiKey, prompt);
     }
     if (lastUserText && isMusicRequest(lastUserText)) {
+      if (hasLovableBackend() && !apiKey) {
+        return {
+          success: false,
+          error:
+            "Генерирането на музика ще бъде налично скоро. Дотогава опитай снимка, линк или въпрос.",
+        };
+      }
       const prompt =
         extractMediaPrompt(lastUserText) || "Енергично, весело и модерно инструментално парче";
       return await requestMusicGeneration(apiKey, prompt);
@@ -1437,6 +1764,12 @@ export const serverAiChat = createServerFn({ method: "POST" })
     );
     const model = hasImages ? getVisionModel() : getModel();
 
+    if (hasLovableBackend()) {
+      const lovableResult = await requestLovableChat(sanitizedMessages, getGeminiTimeoutMs());
+      if (lovableResult.success || !apiKey) return lovableResult;
+      if (lovableResult.status === 401 || lovableResult.status === 403) return lovableResult;
+    }
+
     try {
       const url = `${GEMINI_ENDPOINT}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const cacheKv = getGeminiCacheKv();
@@ -1480,8 +1813,8 @@ export const serverAiChat = createServerFn({ method: "POST" })
             return {
               success: false,
               error: isTimeout
-                ? `Gemini API не отговори в рамките на ${timeoutMs / 1000} секунди (Timeout). Моля, опитай отново.`
-                : "Неуспешна заявка към Gemini API.",
+                ? `TK-Bot не отговори в рамките на ${timeoutMs / 1000} секунди (Timeout). Моля, опитай отново.`
+                : "Неуспешна заявка към TK-Bot.",
             };
           }
 
@@ -1515,14 +1848,16 @@ export const serverAiChat = createServerFn({ method: "POST" })
             success: false,
             error:
               response.status === 429
-                ? "Gemini API достигна лимита на заявките (429). Моля, опитай отново след малко."
+                ? "TK-Bot достигна лимита на заявките (429). Моля, опитай отново след малко."
                 : response.status === 503
                   ? "AI моделът е претоварен в момента (503). Моля, опитай отново след малко."
-                  : response.status === 404 || response.status === 400
-                    ? hasImages
-                      ? `Грешка при обработка на изображението (${response.status}). ${detail || `Моделът "${model}" може да не поддържа снимки.`}`
-                      : `AI моделът "${model}" не е достъпен (${response.status}). Провери GEMINI_MODEL / GEMINI_API_KEY.`
-                    : `Грешка от Gemini API (${response.status}): ${detail || "неизвестна грешка"}`,
+                  : response.status === 401 || response.status === 403
+                    ? "Текущият GEMINI_API_KEY е невалиден или изтекъл (401). Обнови ключа или използвай TK-Bot през Lovable."
+                    : response.status === 404 || response.status === 400
+                      ? hasImages
+                        ? `Грешка при обработка на изображението (${response.status}). ${detail || `Моделът "${model}" може да не поддържа снимки.`}`
+                        : `AI моделът "${model}" не е достъпен (${response.status}). Провери GEMINI_MODEL / GEMINI_API_KEY.`
+                      : `Грешка от TK-Bot (${response.status}): ${detail || "неизвестна грешка"}`,
           };
         }
 
@@ -1534,7 +1869,7 @@ export const serverAiChat = createServerFn({ method: "POST" })
 
         const text = result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         if (!text) {
-          return { success: false, error: "Gemini не върна текст. Моля, опитай пак." };
+          return { success: false, error: "TK-Bot не върна текст. Моля, опитай пак." };
         }
 
         const payload = { success: true, data: { text } } satisfies GeminiCachedResponse;
@@ -1546,6 +1881,6 @@ export const serverAiChat = createServerFn({ method: "POST" })
       return await performRequest(wantThinking);
     } catch (error) {
       console.warn("Gemini request failed.", error);
-      return { success: false, error: "Неуспешна заявка към Gemini API." };
+      return { success: false, error: "Неуспешна заявка към TK-Bot." };
     }
   });

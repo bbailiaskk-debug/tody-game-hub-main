@@ -782,7 +782,7 @@ function SidebarContent({
             TK-BOT
           </p>
           <p className="truncate font-mono text-[0.65rem] uppercase tracking-[0.18em] text-[var(--tk-accent-text)]">
-            {isBg ? "Google Gemini — онлайн" : "Google Gemini — online"}
+            {isBg ? "TK-Bot — онлайн" : "TK-Bot — online"}
           </p>
         </div>
         {showCloseButton ? (
@@ -1584,8 +1584,8 @@ function AiPage() {
 
     const textareaPlaceholder = isCenter
       ? isBg
-        ? "Попитай Gemini"
-        : "Ask Gemini"
+        ? "Попитай TK-Bot"
+        : "Ask TK-Bot"
       : isBg
         ? "Попитай нещо за канала или игрите…"
         : "Ask about the channel or games…";
