@@ -133,6 +133,15 @@ function redirectToHttps(request: Request): Response | null {
   return Response.redirect(redirectUrl.toString(), 301);
 }
 
+function redirectAiToLovable(request: Request): Response | null {
+  const url = new URL(request.url);
+  if (url.pathname !== "/ai") return null;
+
+  const target = new URL("https://tody-game-port.lovable.app/ai");
+  target.search = url.search;
+  return Response.redirect(target.toString(), 302);
+}
+
 // Initialize Cloudflare Worker environment for server functions. Nitro dispatches
 // the ssr service with only the Request (env param is undefined), but it stashes
 // the real env on globalThis.__env__ before the service runs — fall back to it.
@@ -413,6 +422,11 @@ export default {
     const httpsRedirect = redirectToHttps(request);
     if (httpsRedirect) {
       return httpsRedirect;
+    }
+
+    const aiRedirect = redirectAiToLovable(request);
+    if (aiRedirect) {
+      return aiRedirect;
     }
 
     const sitemapResponse = serveSitemap(request);
