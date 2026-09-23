@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowUp,
+  Box,
   Check,
   Copy,
   FileText,
@@ -703,12 +704,18 @@ function getChatTheme(key: string): ChatTheme {
 const suggestionItems = (isBg: boolean) =>
   isBg
     ? [
+        { icon: Music, label: "Направи ми песен" },
+        { icon: Video, label: "Направи ми видео" },
+        { icon: Box, label: "Направи ми 3D модел" },
         { icon: Lightbulb, label: "Кои дни излизат нови видеа?" },
         { icon: Volume2, label: "Как да открия канала в Spotify?" },
         { icon: Sparkles, label: "Какво представлява TK-Bot?" },
         { icon: MessageSquareText, label: "Как да вляза в Discord?" },
       ]
     : [
+        { icon: Music, label: "Make me a song" },
+        { icon: Video, label: "Make me a video" },
+        { icon: Box, label: "Make me a 3D model" },
         { icon: Lightbulb, label: "When do new videos come out?" },
         { icon: Volume2, label: "How do I find you on Spotify?" },
         { icon: Sparkles, label: "What is TK-Bot?" },
@@ -1406,11 +1413,13 @@ function AiPage() {
         const storedReplyImage = replyImage
           ? { mimeType: replyImage.mimeType, dataUrl: await makeImageThumb(replyImage.dataUrl) }
           : undefined;
+        const replyFiles = "files" in result.data ? result.data.files : undefined;
         replyMessage = {
           id: `model-${Date.now()}`,
           role: "model",
           text: result.data.text,
           ...(storedReplyImage ? { images: [storedReplyImage] } : {}),
+          ...(replyFiles && replyFiles.length > 0 ? { files: replyFiles } : {}),
         };
         setMessages((current) => [...current, replyMessage as ChatMessage]);
       } else {
