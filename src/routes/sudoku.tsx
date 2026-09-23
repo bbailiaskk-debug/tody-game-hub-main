@@ -175,6 +175,36 @@ function isComplete(board: number[][]): boolean {
   return true;
 }
 
+function fmt(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function Stopwatch({
+  running,
+  onTimeUpdate,
+}: {
+  running: boolean;
+  onTimeUpdate: (seconds: number) => void;
+}) {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => {
+      setSeconds((s) => {
+        const next = s + 1;
+        onTimeUpdate(next);
+        return next;
+      });
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [running, onTimeUpdate]);
+
+  return <span>{fmt(seconds)}</span>;
+}
+
 function SudokuPage() {
   const { lang } = useSiteSettings();
   const isBg = lang === "bg";
@@ -188,18 +218,13 @@ function SudokuPage() {
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
   const [pencilMode, setPencilMode] = useState(false);
   const [status, setStatus] = useState<"playing" | "won">("playing");
-  const [seconds, setSeconds] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
+  const [gameKey, setGameKey] = useState(0);
+  const elapsedSecondsRef = useRef(0);
   const gameRef = useRef(game);
   gameRef.current = game;
   const boardRef = useRef(board);
   boardRef.current = board;
-
-  useEffect(() => {
-    if (status !== "playing") return;
-    const id = window.setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => window.clearInterval(id);
-  }, [status]);
 
   const startNewGame = useCallback((d: Difficulty) => {
     const next = makeGame(d);
@@ -211,7 +236,8 @@ function SudokuPage() {
     setSelectedNumber(null);
     setPencilMode(false);
     setStatus("playing");
-    setSeconds(0);
+    setGameKey((k) => k + 1);
+    elapsedSecondsRef.current = 0;
     setMessage(null);
   }, []);
 
@@ -405,11 +431,9 @@ function SudokuPage() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [status, difficulty, startNewGame, placeNumber, clearCell, checkBoard]);
 
-  const fmt = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-  };
+  const handleTimeUpdate = useCallback((next: number) => {
+    elapsedSecondsRef.current = next;
+  }, []);
 
   const peers = new Set<string>();
   if (selected) {
@@ -480,7 +504,12 @@ function SudokuPage() {
               ))}
             </div>
             <span className="font-mono text-[0.65rem] tracking-[0.2em] text-brand uppercase">
-              {isBg ? "ВРЕМЕ" : isZh ? "时间" : "TIME"} — {fmt(seconds)}
+              {isBg ? "ВРЕМЕ" : isZh ? "时间" : "TIME"} —{" "}
+              <Stopwatch
+                key={gameKey}
+                running={status === "playing"}
+                onTimeUpdate={handleTimeUpdate}
+              />
             </span>
           </div>
 
@@ -596,7 +625,7 @@ function SudokuPage() {
                 {isBg ? "ПОБЕДА" : isZh ? "胜利" : "VICTORY"}
               </span>
               <span className="font-mono text-xs tracking-[0.2em] text-muted-foreground uppercase">
-                {isBg ? "Време" : isZh ? "用时" : "Time"} — {fmt(seconds)}
+                {isBg ? "Време" : isZh ? "用时" : "Time"} — {fmt(elapsedSecondsRef.current)}
               </span>
               <button
                 type="button"

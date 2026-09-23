@@ -607,6 +607,15 @@ function CrystalRealmPage() {
   const [toast, setToast] = useState<Toast>(null);
   const [isTouch, setIsTouch] = useState(false);
 
+  const hpRef = useRef(hp);
+  hpRef.current = hp;
+  const shardsRef = useRef(shards);
+  shardsRef.current = shards;
+  const totalRef = useRef(total);
+  totalRef.current = total;
+  const areaRef = useRef(area);
+  areaRef.current = area;
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     setIsTouch("ontouchstart" in window || navigator.maxTouchPoints > 0);
@@ -776,17 +785,29 @@ function CrystalRealmPage() {
         }
         return;
       }
-      if (g.hp !== hp) setHp(g.hp);
-      if (g.shards !== shards) setShards(g.shards);
-      if (g.totalShards !== total) setTotal(g.totalShards);
-      if (g.world.name !== area) setArea(g.world.name);
+      if (g.hp !== hpRef.current) {
+        hpRef.current = g.hp;
+        setHp(g.hp);
+      }
+      if (g.shards !== shardsRef.current) {
+        shardsRef.current = g.shards;
+        setShards(g.shards);
+      }
+      if (g.totalShards !== totalRef.current) {
+        totalRef.current = g.totalShards;
+        setTotal(g.totalShards);
+      }
+      if (g.world.name !== areaRef.current) {
+        areaRef.current = g.world.name;
+        setArea(g.world.name);
+      }
       draw(g);
     };
     rafRef.current = requestAnimationFrame(step);
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [phase, hp, shards, total, area, handleEvents, draw]);
+  }, [phase, handleEvents, draw]);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {

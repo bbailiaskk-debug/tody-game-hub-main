@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 import {
   readPersistedSiteSettings,
@@ -225,25 +233,36 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     [theme, setTheme],
   );
 
-  return (
-    <SiteSettingsContext.Provider
-      value={{
-        theme,
-        lang,
-        graphicsSize,
-        accentColor,
-        backgroundImage,
-        setTheme,
-        setLang,
-        setGraphicsSize,
-        setAccentColor,
-        setBackgroundImage,
-        toggleTheme,
-      }}
-    >
-      {children}
-    </SiteSettingsContext.Provider>
+  const value = useMemo(
+    () => ({
+      theme,
+      lang,
+      graphicsSize,
+      accentColor,
+      backgroundImage,
+      setTheme,
+      setLang,
+      setGraphicsSize,
+      setAccentColor,
+      setBackgroundImage,
+      toggleTheme,
+    }),
+    [
+      theme,
+      lang,
+      graphicsSize,
+      accentColor,
+      backgroundImage,
+      setTheme,
+      setLang,
+      setGraphicsSize,
+      setAccentColor,
+      setBackgroundImage,
+      toggleTheme,
+    ],
   );
+
+  return <SiteSettingsContext.Provider value={value}>{children}</SiteSettingsContext.Provider>;
 }
 
 export function useSiteSettings() {

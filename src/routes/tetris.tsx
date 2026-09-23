@@ -145,6 +145,7 @@ function TetrisPage() {
   const linesRef = useRef(0);
   const levelRef = useRef(1);
   const bestRef = useRef(0);
+  const dirtyRef = useRef(true);
 
   const [phase, setPhase] = useState<Phase>("title");
   const [score, setScore] = useState(0);
@@ -515,8 +516,11 @@ function TetrisPage() {
           gravityRef.current -= interval;
           gravityStep();
         }
+        draw(ctx, performance.now());
+      } else if (dirtyRef.current) {
+        dirtyRef.current = false;
+        draw(ctx, performance.now());
       }
-      draw(ctx, performance.now());
     };
     rafRef.current = requestAnimationFrame(step);
     return () => {
@@ -602,6 +606,7 @@ function TetrisPage() {
     canvas.width = CANVAS_W * dpr;
     canvas.height = CANVAS_H * dpr;
     ctx.scale(dpr, dpr);
+    dirtyRef.current = true;
   }, [phase]);
 
   const stat = (label: string, value: string, accent: string) => (

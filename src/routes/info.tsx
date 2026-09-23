@@ -90,11 +90,6 @@ const schedule = {
   ],
 } as const;
 
-const artImages = [
-  "/cute-gamer-girl-making-heart-gesture-artwork-vector.jpg",
-  "/cartoon-gamer-girl-mascot-logo-with-anime-style-for-esport-use-vector.jpg",
-] as const;
-
 const contentItems = {
   bg: [
     { label: "ПОСЛЕДНИ ЮТУБ ВИДЕА", hint: "Виж последните клипове", target: "youtube-videos" },
@@ -120,21 +115,12 @@ function InfoPage() {
   const { lang } = useSiteSettings();
   const isBg = lang === "bg";
   const isZh = lang === "zh";
-  const [activeArt, setActiveArt] = useState(0);
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactMessage, setContactMessage] = useState("");
   const [contactStatus, setContactStatus] = useState<"idle" | "sending" | "success" | "error">(
     "idle",
   );
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setActiveArt((current) => (current + 1) % artImages.length);
-    }, 7000);
-
-    return () => window.clearInterval(timer);
-  }, []);
 
   const handleContactSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -183,10 +169,11 @@ function InfoPage() {
         <div className="mt-10 grid gap-6 items-start md:grid-cols-[0.8fr_1.2fr]">
           <div className="flex flex-col gap-6">
             <div className="flex flex-col rounded-3xl border border-border bg-card p-6">
-              <div className="relative grid h-[320px] overflow-hidden rounded-2xl bg-surface/70 p-3 sm:h-[360px]">
-                <div
-                  aria-hidden="true"
-                  className={`art-image-${activeArt} absolute inset-3 h-[calc(100%-1.5rem)] w-[calc(100%-1.5rem)] rounded-xl bg-cover bg-center`}
+              <div className="relative aspect-[7/10] w-full overflow-hidden rounded-2xl bg-surface/70">
+                <img
+                  src="/Screenshot_32.png"
+                  alt={isBg ? "Профилна снимка" : "Profile photo"}
+                  className="absolute inset-0 h-full w-full rounded-xl object-cover object-center"
                 />
               </div>
               <p className="label-mono mt-5 text-[0.6rem]">

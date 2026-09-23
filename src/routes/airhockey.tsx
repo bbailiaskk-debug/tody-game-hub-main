@@ -510,6 +510,8 @@ function AirHockeyPage() {
     [handleGoal, movePaddleToward, collidePuckPaddle],
   );
 
+  const tableCache = useRef<HTMLCanvasElement | null>(null);
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -517,7 +519,16 @@ function AirHockeyPage() {
     if (!ctx) return;
     const s = stateRef.current;
 
-    drawTable(ctx);
+    if (!tableCache.current) {
+      const off = document.createElement("canvas");
+      off.width = GAME_W;
+      off.height = GAME_H;
+      const octx = off.getContext("2d");
+      if (octx) drawTable(octx);
+      tableCache.current = off;
+    }
+    ctx.clearRect(0, 0, GAME_W, GAME_H);
+    ctx.drawImage(tableCache.current, 0, 0);
 
     drawPuck(ctx, s.puck.x, s.puck.y, PUCK_R);
     drawPaddle(ctx, s.p1.x, s.p1.y, PADDLE_R, "#ef4444", "#7f1d1d");
@@ -1032,11 +1043,17 @@ function OnlineAirHockeyGame() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       const current = lastSnapRef.current;
-      if (!current) {
-        drawTable(ctx);
-        return;
+      ctx.clearRect(0, 0, GAME_W, GAME_H);
+      if (!tableCache.current) {
+        const off = document.createElement("canvas");
+        off.width = GAME_W;
+        off.height = GAME_H;
+        const octx = off.getContext("2d");
+        if (octx) drawTable(octx);
+        tableCache.current = off;
       }
-      drawTable(ctx);
+      ctx.drawImage(tableCache.current, 0, 0);
+      if (!current) return;
 
       const prevReceivedAt = prevSnapRef.current?.receivedAt ?? current.receivedAt;
       const span = Math.max(1, current.receivedAt - prevReceivedAt);

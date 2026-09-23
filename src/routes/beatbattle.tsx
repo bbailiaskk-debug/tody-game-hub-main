@@ -176,6 +176,7 @@ function BeatBattlePage() {
   const barsRef = useRef({ player: 100, rival: 100 });
   const laneFlashRef = useRef<number[]>([0, 0, 0, 0]);
   const popupsRef = useRef<Popup[]>([]);
+  const needsCanvasDrawRef = useRef(true);
 
   const [phase, setPhase] = useState<Phase>("title");
   const [songId, setSongId] = useState(0);
@@ -247,6 +248,7 @@ function BeatBattlePage() {
       if (endedRef.current) return;
       endedRef.current = true;
       phaseRef.current = "result";
+      needsCanvasDrawRef.current = true;
       const s = statsRef.current;
       const total = s.perfect + s.good + s.miss;
       const accuracy = total === 0 ? 0 : (s.perfect + s.good * 0.6) / total;
@@ -387,6 +389,7 @@ function BeatBattlePage() {
       setPhase("play");
       setSongId(song.id);
       dirtyRef.current = true;
+      needsCanvasDrawRef.current = true;
       syncStates();
     },
     [ensureAudio, syncStates],
@@ -396,6 +399,7 @@ function BeatBattlePage() {
     if (typeof window === "undefined") return;
     setBest(Number(window.localStorage.getItem("beat-battle-best") || "0"));
     phaseRef.current = "title";
+    needsCanvasDrawRef.current = true;
   }, []);
 
   useEffect(() => {
@@ -509,7 +513,15 @@ function BeatBattlePage() {
       }
 
       if (dirtyRef.current) syncStates();
-      draw(ctx, timeRef.current);
+
+      if (
+        phaseRef.current === "play" ||
+        needsCanvasDrawRef.current ||
+        popupsRef.current.length > 0
+      ) {
+        needsCanvasDrawRef.current = false;
+        draw(ctx, timeRef.current);
+      }
     };
     rafRef.current = requestAnimationFrame(step);
     return () => {
@@ -561,6 +573,7 @@ function BeatBattlePage() {
   const toTitle = () => {
     endedRef.current = true;
     phaseRef.current = "title";
+    needsCanvasDrawRef.current = true;
     setPhase("title");
   };
 
