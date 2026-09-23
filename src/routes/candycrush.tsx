@@ -226,7 +226,7 @@ function CandyCrushPage() {
     [selected, processCascade],
   );
 
-  const tileClass = "grid size-9 place-items-center rounded-md sm:size-11";
+  const tileClass = "grid aspect-square w-full place-items-center rounded-md";
   const selectedTile = (r: number, c: number) => selected?.[0] === r && selected?.[1] === c;
   const cursorRef = useRef<[number, number]>([0, 0]);
 
@@ -292,7 +292,7 @@ function CandyCrushPage() {
           </div>
 
           <div className="mt-4 rounded-2xl bg-[#0d1a17] p-2 sm:p-3">
-            <div className="grid grid-cols-8 gap-1 sm:gap-1.5">
+            <div className="mx-auto grid w-full max-w-[26rem] grid-cols-8 gap-1 sm:gap-1.5">
               {board.map((row, r) =>
                 row.map((v, c) => (
                   <button

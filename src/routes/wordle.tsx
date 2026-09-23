@@ -959,16 +959,16 @@ function WordlePage() {
             </span>
           </div>
 
-          <div className="mt-4 grid gap-1.5">
+          <div className="mx-auto mt-4 grid w-full max-w-xs gap-1.5 sm:max-w-sm">
             {gridRows.map((row, r) => (
-              <div key={r} className="flex justify-center gap-1.5">
+              <div key={r} className="grid grid-cols-5 gap-1.5">
                 {Array.from({ length: WORD_LENGTH }, (_, c) => {
                   const ch = row.guess[c] ?? "";
                   const state: TileState = row.reveal?.[c] ?? "empty";
                   return (
                     <div
                       key={c}
-                      className={`grid size-12 place-items-center rounded-lg border font-mono text-xl font-bold uppercase transition-all duration-150 sm:size-14 ${TILE_STATE_CLASSES[state]}`}
+                      className={`grid aspect-square w-full place-items-center rounded-lg border font-mono text-xl font-bold uppercase transition-all duration-150 ${TILE_STATE_CLASSES[state]}`}
                       aria-label={ch ? `${ch} ${state}` : "empty"}
                     >
                       {ch}
@@ -979,14 +979,14 @@ function WordlePage() {
             ))}
           </div>
 
-          <div className="mt-6 space-y-1.5">
+          <div className="mx-auto mt-6 w-full max-w-[30rem] space-y-1.5">
             {KEYBOARD_ROWS.map((row, r) => (
-              <div key={row} className="flex justify-center gap-1 sm:gap-1.5">
+              <div key={row} className="flex gap-1 sm:gap-1.5">
                 {r === 2 ? (
                   <button
                     type="button"
                     onClick={submitGuess}
-                    className="grid h-[3.25rem] w-[3.5rem] shrink-0 place-items-center rounded-lg border border-border/60 bg-surface font-mono text-[0.6rem] font-bold tracking-widest text-foreground uppercase transition-colors hover:bg-surface-2"
+                    className="grid h-[3.25rem] min-w-0 flex-1 place-items-center rounded-lg border border-border/60 bg-surface font-mono text-[0.6rem] font-bold tracking-widest text-foreground uppercase transition-colors hover:bg-surface-2 active:brightness-125"
                   >
                     {isBg ? "ГО" : isZh ? "搞定" : "GO"}
                   </button>
@@ -1003,7 +1003,7 @@ function WordlePage() {
                           ? setCurrent((c) => (c.length < WORD_LENGTH ? c + key : c))
                           : undefined
                       }
-                      className={`grid h-[3.25rem] w-[2.35rem] shrink-0 place-items-center rounded-lg border font-mono text-sm font-bold uppercase transition-colors sm:w-[2.75rem] ${keyClass(key)}`}
+                      className={`grid h-[3.25rem] min-w-0 flex-1 place-items-center rounded-lg border font-mono text-sm font-bold uppercase transition-colors active:brightness-125 ${keyClass(key)}`}
                     >
                       {key}
                     </button>
@@ -1012,7 +1012,7 @@ function WordlePage() {
                   <button
                     type="button"
                     onClick={() => setCurrent((c) => c.slice(0, -1))}
-                    className="grid h-[3.25rem] w-[3.5rem] shrink-0 place-items-center rounded-lg border border-border/60 bg-surface text-muted-foreground transition-colors hover:bg-surface-2"
+                    className="grid h-[3.25rem] min-w-0 flex-1 place-items-center rounded-lg border border-border/60 bg-surface text-muted-foreground transition-colors hover:bg-surface-2 active:brightness-125"
                     aria-label="Backspace"
                   >
                     <Delete className="size-4" />
