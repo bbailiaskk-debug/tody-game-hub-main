@@ -14,10 +14,11 @@ import {
   Volume2,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSiteSettings } from "../components/site/theme";
 import { readPersistedAuthSession } from "../lib/local-persistence";
 import { seoHead } from "../lib/seo";
+import { rafThrottle } from "../lib/schedule";
 
 export const Route = createFileRoute("/music")({
   beforeLoad: () => {
@@ -190,11 +191,15 @@ function MusicPage() {
     if (nextTrack) void selectTrack(nextTrack);
   };
 
-  const handleSeek = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextProgress = Number(event.target.value);
-    setProgress(nextProgress);
-    if (audioRef.current) audioRef.current.currentTime = nextProgress;
-  };
+  const handleSeek = useMemo(
+    () =>
+      rafThrottle((event: React.ChangeEvent<HTMLInputElement>) => {
+        const nextProgress = Number(event.target.value);
+        setProgress(nextProgress);
+        if (audioRef.current) audioRef.current.currentTime = nextProgress;
+      }),
+    [],
+  );
 
   mediaActionsRef.current = {
     play: togglePlayback,

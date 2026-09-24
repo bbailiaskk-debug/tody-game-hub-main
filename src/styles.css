@@ -230,11 +230,11 @@
 
 @keyframes splash-shine {
   0% {
-    background-position: 220% 0;
+    transform: translateX(-120%);
   }
 
   100% {
-    background-position: -220% 0;
+    transform: translateX(260%);
   }
 }
 
@@ -242,12 +242,10 @@
   0%,
   100% {
     transform: scale(0.98);
-    filter: drop-shadow(0 0 18px color-mix(in oklab, var(--brand) 35%, transparent));
   }
 
   50% {
     transform: scale(1.02);
-    filter: drop-shadow(0 0 32px color-mix(in oklab, var(--brand) 65%, transparent));
   }
 }
 
@@ -358,6 +356,8 @@
 }
 
 .splash-fill {
+  position: relative;
+  overflow: hidden;
   height: 100%;
   border-radius: 9999px;
   transform-origin: left;
@@ -376,9 +376,24 @@
     rgba(29, 185, 84, 0.2) 100%
   );
   background-size: 220% 100%;
-  animation:
-    splash-bar-fill 1800ms ease-out forwards,
-    splash-shine 1.3s linear infinite;
+  background-position: center;
+  animation: splash-bar-fill 1800ms ease-out forwards;
+}
+
+.splash-fill::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: "";
+  background-image: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, 0.32) 50%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  transform: translateX(-120%);
+  animation: splash-shine 1.3s linear infinite;
+  will-change: transform;
 }
 
 @layer base {
@@ -424,7 +439,8 @@
 @layer utilities {
   .ai-chat-root {
     color-scheme: dark;
-    background-image: linear-gradient(
+    background-image:
+      linear-gradient(
         color-mix(in srgb, #05070a 42%, transparent),
         color-mix(in srgb, #05070a 42%, transparent)
       ),

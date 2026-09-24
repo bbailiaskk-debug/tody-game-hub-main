@@ -5,6 +5,14 @@
 //     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { loadEnv } from "vite";
+
+// Make .env keys available to SSR server code in dev, so they survive even
+// when readSecret falls back to process.env.
+const env = loadEnv("development", process.cwd(), "");
+for (const [k, v] of Object.entries(env)) {
+  process.env[k] ??= v;
+}
 
 export default defineConfig({
   tanstackStart: {

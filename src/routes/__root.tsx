@@ -14,6 +14,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SiteHeader } from "../components/site/SiteHeader";
 import { SiteSettingsProvider } from "../components/site/theme";
 import { SplashScreen } from "../components/site/SplashScreen";
+import { SiteTutorial } from "../components/site/SiteTutorial";
 
 function NotFoundComponent() {
   return (
@@ -174,6 +175,12 @@ function RootShell({ children }: { children: ReactNode }) {
               <Link to="/games" className="label-mono text-[0.6rem] hover:text-foreground">
                 Игри
               </Link>
+              <Link to="/rules" className="label-mono text-[0.6rem] hover:text-foreground">
+                Правила
+              </Link>
+              <Link to="/tutorial" className="label-mono text-[0.6rem] hover:text-foreground">
+                Туториал
+              </Link>
               <Link to="/music" className="label-mono text-[0.6rem] hover:text-foreground">
                 Музика
               </Link>
@@ -211,6 +218,7 @@ function RootComponent() {
     <SiteSettingsProvider>
       <SplashScreen />
       <SiteHeader />
+      <SiteTutorial />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </SiteSettingsProvider>

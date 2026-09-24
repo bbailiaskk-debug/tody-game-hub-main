@@ -1,4 +1,4 @@
-import "./lib/error-capture";
+﻿import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -20,7 +20,7 @@ async function getServerEntry(): Promise<ServerEntry> {
 }
 
 // h3 swallows in-handler throws into a normal 500 Response with body
-// {"unhandled":true,"message":"HTTPError"} — try/catch alone never fires for those.
+// {"unhandled":true,"message":"HTTPError"} вЂ” try/catch alone never fires for those.
 async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
   if (response.status < 500) return response;
   const contentType = response.headers.get("content-type") ?? "";
@@ -97,7 +97,7 @@ function redirectToHttps(request: Request): Response | null {
 
   // The production Workers edge terminates TLS and this handler is the origin
   // that must upgrade http to https. During `vite dev` (including the LAN IP and
-  // cloudflared trycloudflare tunnels) the origin is plain http — redirecting to
+  // cloudflared trycloudflare tunnels) the origin is plain http вЂ” redirecting to
   // https would loop forever against the same host.
   if (import.meta.env.DEV) {
     return null;
@@ -105,7 +105,7 @@ function redirectToHttps(request: Request): Response | null {
 
   // NGINX Unit deployment: Unit terminates TLS and redirects :80 -> :443 itself
   // (Unit does NOT inject x-forwarded-proto when proxying to this app, so the
-  // internal URL here is always plain http — trusting it would redirect every
+  // internal URL here is always plain http вЂ” trusting it would redirect every
   // request and loop). The systemd unit sets HTTPS_REDIRECT=off in that case.
   if (typeof process !== "undefined" && process.env?.["HTTPS_REDIRECT"] === "off") {
     return null;
@@ -135,7 +135,7 @@ function redirectToHttps(request: Request): Response | null {
 
 // Initialize Cloudflare Worker environment for server functions. Nitro dispatches
 // the ssr service with only the Request (env param is undefined), but it stashes
-// the real env on globalThis.__env__ before the service runs — fall back to it.
+// the real env on globalThis.__env__ before the service runs вЂ” fall back to it.
 function initializeCloudflareEnv(env: unknown): void {
   const realEnv = env ?? (globalThis as typeof globalThis & { __env__?: unknown }).__env__;
   (globalThis as typeof globalThis & { CF_ENV?: unknown }).CF_ENV = realEnv;
@@ -160,7 +160,8 @@ function buildSitemapXml(): string {
     { loc: "/streamer", changefreq: "weekly", priority: "0.7" },
     { loc: "/beatbattle", changefreq: "weekly", priority: "0.7" },
     { loc: "/tetris", changefreq: "weekly", priority: "0.7" },
-    { loc: "/ai", changefreq: "weekly", priority: "0.8" },
+    { loc: "/rules", changefreq: "monthly", priority: "0.5" },
+    { loc: "/tutorial", changefreq: "monthly", priority: "0.5" },
     { loc: "/music", changefreq: "weekly", priority: "0.8" },
     { loc: "/info", changefreq: "weekly", priority: "0.8" },
   ];
@@ -284,8 +285,8 @@ async function serveChessGameRequest(request: Request, env: unknown): Promise<Re
   const id = namespace.idFromName(gameId);
   const stub = namespace.get(id);
 
-  // For WebSocket upgrades, mint (or read) the chess secret on the SSR side —
-  // the same secret serverChessAuth uses — and pass it to the DO as a header so
+  // For WebSocket upgrades, mint (or read) the chess secret on the SSR side вЂ”
+  // the same secret serverChessAuth uses вЂ” and pass it to the DO as a header so
   // token verification and minting always agree, independent of the DO's KV
   // binding resolution.
   let doRequest = request;
@@ -320,7 +321,7 @@ async function serveTicTacToeGameRequest(request: Request, env: unknown): Promis
   const stub = namespace.get(id);
 
   // For WebSocket upgrades, mint (or read) the shared chess secret on the SSR
-  // side — the same secret serverTicTacToeAuth uses — and pass it to the DO as
+  // side вЂ” the same secret serverTicTacToeAuth uses вЂ” and pass it to the DO as
   // a header so token verification and minting always agree.
   let doRequest = request;
   if ((request.headers.get("Upgrade") ?? "").toLowerCase() === "websocket") {
@@ -386,7 +387,7 @@ async function serveAirHockeyGameRequest(request: Request, env: unknown): Promis
   const stub = namespace.get(id);
 
   // For WebSocket upgrades, mint (or read) the shared chess secret on the SSR
-  // side — the same secret serverAirHockeyAuth uses — and pass it to the DO as
+  // side вЂ” the same secret serverAirHockeyAuth uses вЂ” and pass it to the DO as
   // a header so token verification and minting always agree.
   let doRequest = request;
   if ((request.headers.get("Upgrade") ?? "").toLowerCase() === "websocket") {

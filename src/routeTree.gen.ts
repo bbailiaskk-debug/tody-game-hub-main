@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AiRouteImport } from './routes/ai'
 import { Route as AirhockeyRouteImport } from './routes/airhockey'
 import { Route as BeatbattleRouteImport } from './routes/beatbattle'
 import { Route as CandycrushRouteImport } from './routes/candycrush'
@@ -26,20 +25,17 @@ import { Route as MusicRouteImport } from './routes/music'
 import { Route as PrismheartRouteImport } from './routes/prismheart'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RulesRouteImport } from './routes/rules'
 import { Route as StreamerRouteImport } from './routes/streamer'
 import { Route as SudokuRouteImport } from './routes/sudoku'
 import { Route as TetrisRouteImport } from './routes/tetris'
 import { Route as TictactoeRouteImport } from './routes/tictactoe'
+import { Route as TutorialRouteImport } from './routes/tutorial'
 import { Route as WordleRouteImport } from './routes/wordle'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AiRoute = AiRouteImport.update({
-  id: '/ai',
-  path: '/ai',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AirhockeyRoute = AirhockeyRouteImport.update({
@@ -117,6 +113,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RulesRoute = RulesRouteImport.update({
+  id: '/rules',
+  path: '/rules',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StreamerRoute = StreamerRouteImport.update({
   id: '/streamer',
   path: '/streamer',
@@ -137,6 +138,11 @@ const TictactoeRoute = TictactoeRouteImport.update({
   path: '/tictactoe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TutorialRoute = TutorialRouteImport.update({
+  id: '/tutorial',
+  path: '/tutorial',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WordleRoute = WordleRouteImport.update({
   id: '/wordle',
   path: '/wordle',
@@ -145,7 +151,6 @@ const WordleRoute = WordleRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/ai': typeof AiRoute
   '/airhockey': typeof AirhockeyRoute
   '/beatbattle': typeof BeatbattleRoute
   '/candycrush': typeof CandycrushRoute
@@ -161,15 +166,16 @@ export interface FileRoutesByFullPath {
   '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/rules': typeof RulesRoute
   '/streamer': typeof StreamerRoute
   '/sudoku': typeof SudokuRoute
   '/tetris': typeof TetrisRoute
   '/tictactoe': typeof TictactoeRoute
+  '/tutorial': typeof TutorialRoute
   '/wordle': typeof WordleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/ai': typeof AiRoute
   '/airhockey': typeof AirhockeyRoute
   '/beatbattle': typeof BeatbattleRoute
   '/candycrush': typeof CandycrushRoute
@@ -185,16 +191,17 @@ export interface FileRoutesByTo {
   '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/rules': typeof RulesRoute
   '/streamer': typeof StreamerRoute
   '/sudoku': typeof SudokuRoute
   '/tetris': typeof TetrisRoute
   '/tictactoe': typeof TictactoeRoute
+  '/tutorial': typeof TutorialRoute
   '/wordle': typeof WordleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/ai': typeof AiRoute
   '/airhockey': typeof AirhockeyRoute
   '/beatbattle': typeof BeatbattleRoute
   '/candycrush': typeof CandycrushRoute
@@ -210,17 +217,18 @@ export interface FileRoutesById {
   '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/rules': typeof RulesRoute
   '/streamer': typeof StreamerRoute
   '/sudoku': typeof SudokuRoute
   '/tetris': typeof TetrisRoute
   '/tictactoe': typeof TictactoeRoute
+  '/tutorial': typeof TutorialRoute
   '/wordle': typeof WordleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/ai'
     | '/airhockey'
     | '/beatbattle'
     | '/candycrush'
@@ -236,15 +244,16 @@ export interface FileRouteTypes {
     | '/prismheart'
     | '/profile'
     | '/reset-password'
+    | '/rules'
     | '/streamer'
     | '/sudoku'
     | '/tetris'
     | '/tictactoe'
+    | '/tutorial'
     | '/wordle'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/ai'
     | '/airhockey'
     | '/beatbattle'
     | '/candycrush'
@@ -260,15 +269,16 @@ export interface FileRouteTypes {
     | '/prismheart'
     | '/profile'
     | '/reset-password'
+    | '/rules'
     | '/streamer'
     | '/sudoku'
     | '/tetris'
     | '/tictactoe'
+    | '/tutorial'
     | '/wordle'
   id:
     | '__root__'
     | '/'
-    | '/ai'
     | '/airhockey'
     | '/beatbattle'
     | '/candycrush'
@@ -284,16 +294,17 @@ export interface FileRouteTypes {
     | '/prismheart'
     | '/profile'
     | '/reset-password'
+    | '/rules'
     | '/streamer'
     | '/sudoku'
     | '/tetris'
     | '/tictactoe'
+    | '/tutorial'
     | '/wordle'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AiRoute: typeof AiRoute
   AirhockeyRoute: typeof AirhockeyRoute
   BeatbattleRoute: typeof BeatbattleRoute
   CandycrushRoute: typeof CandycrushRoute
@@ -309,10 +320,12 @@ export interface RootRouteChildren {
   PrismheartRoute: typeof PrismheartRoute
   ProfileRoute: typeof ProfileRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  RulesRoute: typeof RulesRoute
   StreamerRoute: typeof StreamerRoute
   SudokuRoute: typeof SudokuRoute
   TetrisRoute: typeof TetrisRoute
   TictactoeRoute: typeof TictactoeRoute
+  TutorialRoute: typeof TutorialRoute
   WordleRoute: typeof WordleRoute
 }
 
@@ -323,13 +336,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ai': {
-      id: '/ai'
-      path: '/ai'
-      fullPath: '/ai'
-      preLoaderRoute: typeof AiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/airhockey': {
@@ -437,6 +443,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rules': {
+      id: '/rules'
+      path: '/rules'
+      fullPath: '/rules'
+      preLoaderRoute: typeof RulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/streamer': {
       id: '/streamer'
       path: '/streamer'
@@ -465,6 +478,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TictactoeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tutorial': {
+      id: '/tutorial'
+      path: '/tutorial'
+      fullPath: '/tutorial'
+      preLoaderRoute: typeof TutorialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/wordle': {
       id: '/wordle'
       path: '/wordle'
@@ -477,7 +497,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AiRoute: AiRoute,
   AirhockeyRoute: AirhockeyRoute,
   BeatbattleRoute: BeatbattleRoute,
   CandycrushRoute: CandycrushRoute,
@@ -493,10 +512,12 @@ const rootRouteChildren: RootRouteChildren = {
   PrismheartRoute: PrismheartRoute,
   ProfileRoute: ProfileRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  RulesRoute: RulesRoute,
   StreamerRoute: StreamerRoute,
   SudokuRoute: SudokuRoute,
   TetrisRoute: TetrisRoute,
   TictactoeRoute: TictactoeRoute,
+  TutorialRoute: TutorialRoute,
   WordleRoute: WordleRoute,
 }
 export const routeTree = rootRouteImport

@@ -11,10 +11,6 @@ declare module "cloudflare:workers" {
       get: (key: string) => Promise<string | null>;
       put: (key: string, value: string) => Promise<void>;
     };
-    GEMINI_CACHE_KV?: {
-      get: (key: string) => Promise<string | null>;
-      put: (key: string, value: string) => Promise<void>;
-    };
     CHESS_GAME_DO?: DurableObjectNamespace;
     TTT_GAME_DO?: DurableObjectNamespace;
   };

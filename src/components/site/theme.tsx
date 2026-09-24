@@ -277,7 +277,7 @@ export const copy = {
       home: "НАЧАЛО",
       games: "ИГРИ",
       music: "МУЗИКА",
-      ai: "ИЗК. ИНТЕЛЕКТ",
+      rules: "ПРАВИЛА",
       info: "ИНФОРМАЦИЯ",
     },
     online: "ОНЛАЙН",
@@ -296,7 +296,13 @@ export const copy = {
     bgErrorGeneral: "Неуспешно зареждане. Опитайте с друг файл.",
   },
   en: {
-    nav: { home: "HOME", games: "GAMES", music: "MUSIC", ai: "AI", info: "INFO" },
+    nav: {
+      home: "HOME",
+      games: "GAMES",
+      music: "MUSIC",
+      rules: "RULES",
+      info: "INFO",
+    },
     online: "ONLINE",
     settings: "Settings",
     settingsLabel: "CONTROL PANEL",
@@ -313,7 +319,13 @@ export const copy = {
     bgErrorGeneral: "Failed to load. Try another file.",
   },
   zh: {
-    nav: { home: "首页", games: "游戏", music: "音乐", ai: "人工智能", info: "信息" },
+    nav: {
+      home: "首页",
+      games: "游戏",
+      music: "音乐",
+      rules: "规则",
+      info: "信息",
+    },
     online: "在线",
     settings: "设置",
     settingsLabel: "控制面板",

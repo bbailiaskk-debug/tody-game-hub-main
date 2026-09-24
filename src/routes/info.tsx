@@ -4,6 +4,7 @@ import {
   Calendar,
   Check,
   Flame,
+  Gauge,
   Mail,
   Music,
   Play,
@@ -21,6 +22,7 @@ import {
   EMAILJS_CONTACT_SERVICE_ID,
   EMAILJS_CONTACT_TEMPLATE_ID,
 } from "../lib/emailjs-config";
+import { serverGetEmailjsQuota, type EmailjsQuota } from "../lib/emailjs-quota";
 import { sendEmailJsWithFallback } from "../lib/emailjs-send";
 import { seoHead } from "../lib/seo";
 
@@ -121,6 +123,19 @@ function InfoPage() {
   const [contactStatus, setContactStatus] = useState<"idle" | "sending" | "success" | "error">(
     "idle",
   );
+  const [contactQuota, setContactQuota] = useState<EmailjsQuota | null>(null);
+
+  const loadContactQuota = async () => {
+    try {
+      setContactQuota(await serverGetEmailjsQuota({ data: { purpose: "contacts" } }));
+    } catch {
+      setContactQuota(null);
+    }
+  };
+
+  useEffect(() => {
+    void loadContactQuota();
+  }, []);
 
   const handleContactSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -144,6 +159,7 @@ function InfoPage() {
       setContactEmail("");
       setContactMessage("");
       setContactStatus("success");
+      window.setTimeout(() => void loadContactQuota(), 800);
     } catch (error) {
       console.error("Contact email failed.", error);
       setContactStatus("error");
@@ -603,6 +619,35 @@ function InfoPage() {
             {isBg ? "ПИШЕТЕ МИ" : isZh ? "联系我" : "GET IN TOUCH"}
           </span>
         </div>
+        {contactQuota ? (
+          <div className="mt-3">
+            {(() => {
+              const low = contactQuota.remaining <= 50;
+              return (
+                <p
+                  className={`inline-flex flex-wrap items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
+                    low
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                      : "border-border/60 bg-surface/40 text-muted-foreground"
+                  }`}
+                >
+                  <Gauge className="size-3.5" />
+                  {isZh
+                    ? low
+                      ? `⚠ 已发送 ${contactQuota.used} · 只剩 ${contactQuota.remaining} / ${contactQuota.limit} 次了！`
+                      : `已发送 ${contactQuota.used} · 剩余 ${contactQuota.remaining} / ${contactQuota.limit}`
+                    : isBg
+                      ? low
+                        ? `⚠ Изпратени ${contactQuota.used} · остават само ${contactQuota.remaining} от ${contactQuota.limit}!`
+                        : `Изпратени ${contactQuota.used} · остават ${contactQuota.remaining} от ${contactQuota.limit}`
+                      : low
+                        ? `⚠ Sent ${contactQuota.used} · only ${contactQuota.remaining} left of ${contactQuota.limit}!`
+                        : `Sent ${contactQuota.used} · ${contactQuota.remaining} left of ${contactQuota.limit}`}
+                </p>
+              );
+            })()}
+          </div>
+        ) : null}
         <form
           onSubmit={handleContactSubmit}
           className="mt-4 grid gap-4 rounded-3xl border border-border bg-card p-6 md:grid-cols-2"

@@ -1,9 +1,26 @@
 import emailjs from "@emailjs/browser";
 
-import { EMAILJS_PUBLIC_KEY } from "./emailjs-config";
+import { EMAILJS_CONTACT_SERVICE_ID, EMAILJS_PUBLIC_KEY } from "./emailjs-config";
 import { recordMockEmail, shouldMockEmailFor } from "./email-mock";
 
 const configuredPublicKey = EMAILJS_PUBLIC_KEY;
+
+const inUnitTestEnv = typeof process !== "undefined" && process.env?.["NODE_ENV"] === "test";
+
+function recordEmailjsAttempt(serviceId: string): void {
+  if (inUnitTestEnv) return;
+  const isContact = serviceId === EMAILJS_CONTACT_SERVICE_ID;
+  void import("./emailjs-quota")
+    .then(({ serverRecordEmailjsSend }) => {
+      const jobs = [serverRecordEmailjsSend({ data: { purpose: isContact ? "contacts" : "all" } })];
+      // contact sends also count toward the site-wide total
+      if (isContact) jobs.push(serverRecordEmailjsSend({ data: { purpose: "all" } }));
+      return Promise.all(jobs);
+    })
+    .catch(() => {
+      // best-effort counter; never block the email flow
+    });
+}
 
 const RECIPIENT_KEYS = ["email", "email_to", "toEmail", "recipient", "to_email"];
 const RECIPIENT_NAME_KEYS = ["name", "recipient_name", "recipientName", "to_name"];
@@ -69,5 +86,7 @@ export async function sendEmailJsWithFallback(
       `EmailJS send failed for service "${serviceId}" template "${templateId}". ${describeEmailJsError(error)}`,
     );
     throw error;
+  } finally {
+    recordEmailjsAttempt(serviceId);
   }
 }

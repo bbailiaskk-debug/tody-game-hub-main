@@ -988,6 +988,7 @@ function OnlineAirHockeyGame() {
   const lastSnapRef = useRef<{ state: AhState; receivedAt: number } | null>(null);
   const prevSnapRef = useRef<{ state: AhState; receivedAt: number } | null>(null);
   const ownPaddleRef = useRef<Paddle | null>(null);
+  const tableCache = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
