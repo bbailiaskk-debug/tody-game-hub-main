@@ -52,7 +52,6 @@ import {
   readPersistedAuthSession,
   readPersistedUserProfile,
   storageGet,
-  storageRemove,
   storageSet,
 } from "../lib/local-persistence";
 
@@ -103,7 +102,6 @@ const debouncedSaveAiChats = createDebouncedWriter(
 );
 
 const CHATS_STORAGE_KEY = "tody_ai_chats_v1";
-const LAST_CHAT_STORAGE_KEY = "tody_ai_last_chat";
 const CHATS_DB_NAME = "tody_ai_chats";
 const CHATS_DB_STORE = "chats";
 
@@ -777,7 +775,7 @@ function SidebarContent({
             TK-BOT
           </p>
           <p className="truncate font-mono text-[0.65rem] uppercase tracking-[0.18em] text-[var(--tk-accent-text)]">
-            {isBg ? "TK-Bot — онлайн" : "TK-Bot — online"}
+            {isBg ? "Google Gemini — онлайн" : "Google Gemini — online"}
           </p>
         </div>
         {showCloseButton ? (
@@ -1148,27 +1146,15 @@ function AiPage() {
 
       setChats(stored);
 
-      // Reopen the requested chat, or the last one the user had open, so the
-      // conversation is still there after closing and reopening the app.
-      const wantedId = chatParam || storageGet(LAST_CHAT_STORAGE_KEY) || "";
-      const target = wantedId
-        ? stored.find((chat) => chat.id === wantedId && chat.userEmail === scope)
-        : undefined;
+      const target = stored.find((chat) => chat.id === chatParam && chat.userEmail === scope);
       if (target) {
         setActiveChatId(target.id);
         setMessages(target.messages);
-        if (!chatParam) {
-          navigate({ to: "/ai", search: { chat: target.id }, replace: true });
-        }
       }
 
       setHistoryLoaded(true);
     })();
   }, [chatParam]);
-
-  useEffect(() => {
-    if (activeChatId) storageSet(LAST_CHAT_STORAGE_KEY, activeChatId);
-  }, [activeChatId]);
 
   useEffect(() => {
     if (!historyLoaded || messages.length === 0) return;
@@ -1401,44 +1387,15 @@ function AiPage() {
       },
     ];
 
-    const isNewChat = !activeChatId;
-    const chatId = activeChatId ?? createChatId();
-    const messagesWithQuestion: ChatMessage[] = [...messages, userMessage];
+    const chatId = activeChatId;
+    const isNewChat = !chatId;
 
-    setMessages(messagesWithQuestion);
+    setMessages((current) => [...current, userMessage]);
     setPrompt("");
     setPendingItems([]);
     setAttachMenuOpen(false);
     setLoading(true);
     setError(null);
-
-    // Save the question right away so it survives closing the app or
-    // switching away on a phone before the answer arrives.
-    if (isNewChat) {
-      const nextChat: StoredChat = {
-        id: chatId,
-        title:
-          text.length > 0
-            ? text.length > 48
-              ? `${text.slice(0, 48)}…`
-              : text
-            : fullImages.length > 0
-              ? isBg
-                ? "Изображение"
-                : "Image"
-              : isBg
-                ? "Файл"
-                : "File",
-        updatedAt: Date.now(),
-        userEmail: scopeEmail,
-        messages: messagesWithQuestion,
-      };
-      setChats((current) => [nextChat, ...current]);
-      setActiveChatId(chatId);
-      navigate({ to: "/ai", search: { chat: chatId }, replace: true });
-    } else {
-      saveActiveMessages(chatId, messagesWithQuestion);
-    }
 
     try {
       const result = await serverAiChat({ data: { messages: history } });
@@ -1466,8 +1423,35 @@ function AiPage() {
         );
       }
 
-      if (replyMessage) {
-        saveActiveMessages(chatId, [...messagesWithQuestion, replyMessage]);
+      const finalMessages: ChatMessage[] = replyMessage
+        ? [...messages, userMessage, replyMessage]
+        : [...messages, userMessage];
+
+      if (isNewChat) {
+        const nextChatId = createChatId();
+        const nextChat: StoredChat = {
+          id: nextChatId,
+          title:
+            text.length > 0
+              ? text.length > 48
+                ? `${text.slice(0, 48)}…`
+                : text
+              : fullImages.length > 0
+                ? isBg
+                  ? "Изображение"
+                  : "Image"
+                : isBg
+                  ? "Файл"
+                  : "File",
+          updatedAt: Date.now(),
+          userEmail: scopeEmail,
+          messages: finalMessages,
+        };
+        setChats((current) => [nextChat, ...current]);
+        setActiveChatId(nextChatId);
+        navigate({ to: "/ai", search: { chat: nextChatId }, replace: true });
+      } else {
+        saveActiveMessages(chatId, finalMessages);
       }
     } catch (caughtError) {
       console.warn("AI chat request failed.", caughtError);
@@ -1517,7 +1501,6 @@ function AiPage() {
   };
 
   const startNewChat = () => {
-    storageRemove(LAST_CHAT_STORAGE_KEY);
     startTransition(() => {
       setActiveChatId(null);
       setMessages([]);
@@ -1544,7 +1527,6 @@ function AiPage() {
   };
 
   const deleteChat = (chatId: string) => {
-    if (storageGet(LAST_CHAT_STORAGE_KEY) === chatId) storageRemove(LAST_CHAT_STORAGE_KEY);
     startTransition(() => {
       setChats((current) => current.filter((chat) => chat.id !== chatId));
       if (activeChatId === chatId) {
@@ -1593,8 +1575,8 @@ function AiPage() {
 
     const textareaPlaceholder = isCenter
       ? isBg
-        ? "Попитай TK-Bot"
-        : "Ask TK-Bot"
+        ? "Попитай Gemini"
+        : "Ask Gemini"
       : isBg
         ? "Попитай нещо за канала или игрите…"
         : "Ask about the channel or games…";
@@ -1866,7 +1848,7 @@ function AiPage() {
                 {attachControl}
                 {microphoneControl}
                 <span className="pl-1 text-[0.65rem] font-mono uppercase tracking-[0.15em] text-[var(--tk-muted)]">
-                  {"Powered by Lovable AI"}
+                  {"Powered by Google"}
                 </span>
               </div>
               {sendControl}
