@@ -3,6 +3,9 @@
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { getChessSecret } from "./lib/chess-auth";
+import { handleStripeWebhookEvent } from "./lib/plan-webhook";
+import { readServerEnv } from "./lib/stripe";
+import { verifyStripeSignature } from "./lib/stripe-signature";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -160,6 +163,7 @@ function buildSitemapXml(): string {
     { loc: "/streamer", changefreq: "weekly", priority: "0.7" },
     { loc: "/beatbattle", changefreq: "weekly", priority: "0.7" },
     { loc: "/tetris", changefreq: "weekly", priority: "0.7" },
+    { loc: "/ai", changefreq: "weekly", priority: "0.8" },
     { loc: "/rules", changefreq: "monthly", priority: "0.5" },
     { loc: "/tutorial", changefreq: "monthly", priority: "0.5" },
     { loc: "/music", changefreq: "weekly", priority: "0.8" },
@@ -406,6 +410,40 @@ async function serveAirHockeyGameRequest(request: Request, env: unknown): Promis
   }
 }
 
+// Stripe sends plan entitlements through this endpoint: checkout.session.completed
+// grants the plan, subscription.deleted downgrades back to the free tier.
+async function serveStripeWebhook(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/stripe/webhook" || request.method !== "POST") return null;
+
+  const webhookSecret = readServerEnv("STRIPE_WEBHOOK_SECRET");
+  if (!webhookSecret) {
+    return jsonResponse({ error: "stripe-webhook-not-configured" }, 503);
+  }
+
+  const payload = await request.text();
+  const signature = request.headers.get("stripe-signature");
+  const isValid = await verifyStripeSignature(payload, signature, webhookSecret);
+  if (!isValid) {
+    return jsonResponse({ error: "invalid-signature" }, 400);
+  }
+
+  let event: unknown;
+  try {
+    event = JSON.parse(payload);
+  } catch {
+    return jsonResponse({ error: "invalid-payload" }, 400);
+  }
+
+  try {
+    const outcome = await handleStripeWebhookEvent(event);
+    return jsonResponse({ received: true, ...outcome }, 200);
+  } catch (error) {
+    console.error("Stripe webhook handling failed.", error);
+    return jsonResponse({ error: "webhook-handler-failed" }, 500);
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     // Initialize Cloudflare environment for server functions
@@ -419,6 +457,11 @@ export default {
     const sitemapResponse = serveSitemap(request);
     if (sitemapResponse) {
       return withHsts(sitemapResponse);
+    }
+
+    const stripeResponse = await serveStripeWebhook(request);
+    if (stripeResponse) {
+      return stripeResponse;
     }
 
     const chessResponse = await serveChessGameRequest(request, env);

@@ -89,8 +89,12 @@ function Profile() {
 
       const nextEmail =
         storageGet("userEmail") ?? activeUser?.email ?? currentEmail ?? userEmail ?? "";
-      let nextBirthday = activeUser?.birthday ?? storageGet("userBirthday") ?? "";
-      let nextGender = activeUser?.gender ?? storageGet("userGender") ?? "";
+      const localBirthday = storageGet("userBirthday");
+      const localGender = storageGet("userGender");
+      const hasLocalBirthday = localBirthday !== null;
+      const hasLocalGender = localGender !== null;
+      let nextBirthday = hasLocalBirthday ? (localBirthday ?? "") : (activeUser?.birthday ?? "");
+      let nextGender = hasLocalGender ? (localGender ?? "") : (activeUser?.gender ?? "");
       let nextName = storageGet("userName") ?? activeUser?.name ?? "";
       let nextAvatar = storageGet("userAvatar") ?? null;
 
@@ -102,17 +106,21 @@ function Profile() {
             { ttlMs: 60_000 },
           );
           if (result.success && result.data) {
+            const serverBirthday =
+              typeof result.data.birthday === "string" ? result.data.birthday.trim() : "";
+            const serverGender =
+              typeof result.data.gender === "string" ? result.data.gender.trim() : "";
+            if (!hasLocalBirthday && serverBirthday) nextBirthday = serverBirthday;
+            if (!hasLocalGender && serverGender) nextGender = serverGender;
             nextName = result.data.name || nextName;
-            nextBirthday = result.data.birthday || nextBirthday;
-            nextGender = result.data.gender || nextGender;
             if (result.data.avatar) nextAvatar = result.data.avatar;
             writePersistedUserProfile({
-              name: result.data.name,
-              email: result.data.email,
-              birthday: result.data.birthday,
-              gender: result.data.gender,
+              name: nextName,
+              email: result.data.email || nextEmail,
+              birthday: nextBirthday,
+              gender: nextGender,
               accentColor: result.data.accentColor,
-              ...(result.data.avatar ? { avatar: result.data.avatar } : {}),
+              ...(nextAvatar ? { avatar: nextAvatar } : {}),
             });
           }
         } catch (error) {
@@ -190,38 +198,45 @@ function Profile() {
     const users = readRegisteredUsers();
     const updatedUsers = users.map((user) =>
       (user.email ?? "").trim().toLowerCase() === (currentEmail ?? "").trim().toLowerCase()
-        ? { ...user, name: nextName, email: nextEmail }
+        ? { ...user, name: nextName, email: nextEmail, birthday, gender }
         : user,
     );
 
     const accentColor = readPersistedUserAccentColor(currentEmail ?? nextEmail);
+    const profileEmail = (currentEmail ?? nextEmail).trim().toLowerCase();
     const profileData = {
-      email: currentEmail ?? nextEmail,
+      email: profileEmail,
       name: nextName,
-      ...(birthday ? { birthday } : {}),
-      ...(gender ? { gender } : {}),
+      birthday,
+      gender,
       ...(accentColor ? { accentColor } : {}),
       ...(avatar ? { avatar } : {}),
     };
 
-    void serverSyncUserProfile({ data: profileData }).catch((error) => {
-      console.warn("Server profile sync failed.", error);
-    });
-
-    invalidateCachePrefix(`profile:${(currentEmail ?? nextEmail).toLowerCase()}`);
+    invalidateCachePrefix(`profile:${profileEmail}`);
+    storageSet("userBirthday", birthday);
+    storageSet("userGender", gender);
     writeRegisteredUsers(updatedUsers);
     writePersistedUserProfile({
       name: nextName,
       email: nextEmail,
-      birthday: birthday || "",
-      gender: gender || "",
+      birthday,
+      gender,
       avatar: storageGet("userAvatar"),
     });
-    window.dispatchEvent(new Event("userStateChanged"));
     setName(nextName);
     setEmail(nextEmail);
     setError("");
     setEditing(false);
+
+    void serverSyncUserProfile({ data: profileData })
+      .catch((error) => {
+        console.warn("Server profile sync failed.", error);
+      })
+      .finally(() => {
+        invalidateCachePrefix(`profile:${profileEmail}`);
+        window.dispatchEvent(new Event("userStateChanged"));
+      });
   };
 
   const handleLogout = () => {
@@ -533,34 +548,58 @@ function Profile() {
               <div className="font-medium text-foreground">
                 {isBg ? "Дата на раждане" : "Birthday"}
               </div>
-              <div className="text-sm text-muted-foreground">
-                {birthday
-                  ? new Date(`${birthday}T00:00:00`).toLocaleDateString(isBg ? "bg-BG" : "en-US", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                    })
-                  : isBg
-                    ? "Не е посочена"
-                    : "Not specified"}
-              </div>
+              {editing ? (
+                <input
+                  type="date"
+                  value={birthday}
+                  onChange={(event) => setBirthday(event.target.value)}
+                  className="w-full max-w-[320px] rounded-lg border border-border bg-background px-3 py-2 text-right outline-none focus:border-primary"
+                />
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  {birthday
+                    ? new Date(`${birthday}T00:00:00`).toLocaleDateString(
+                        isBg ? "bg-BG" : "en-US",
+                        {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        },
+                      )
+                    : isBg
+                      ? "Не е посочена"
+                      : "Not specified"}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between gap-4 p-4">
               <div className="font-medium text-foreground">{isBg ? "Пол" : "Gender"}</div>
-              <div className="text-sm text-muted-foreground">
-                {gender === "male"
-                  ? isBg
-                    ? "Мъж"
-                    : "Male"
-                  : gender === "female"
+              {editing ? (
+                <select
+                  value={gender}
+                  onChange={(event) => setGender(event.target.value)}
+                  className="w-full max-w-[320px] rounded-lg border border-border bg-background px-3 py-2 text-right outline-none focus:border-primary"
+                >
+                  <option value="">{isBg ? "Не е посочено" : "Not specified"}</option>
+                  <option value="male">{isBg ? "Мъж" : "Male"}</option>
+                  <option value="female">{isBg ? "Жена" : "Female"}</option>
+                </select>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  {gender === "male"
                     ? isBg
-                      ? "Жена"
-                      : "Female"
-                    : isBg
-                      ? "Не е посочено"
-                      : "Not specified"}
-              </div>
+                      ? "Мъж"
+                      : "Male"
+                    : gender === "female"
+                      ? isBg
+                        ? "Жена"
+                        : "Female"
+                      : isBg
+                        ? "Не е посочено"
+                        : "Not specified"}
+                </div>
+              )}
             </div>
           </div>
 

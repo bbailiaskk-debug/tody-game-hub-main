@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Home, Play, RotateCcw, Star, Trophy } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { withGameAccess } from "../components/site/GameAccess";
 import { useSiteSettings } from "../components/site/theme";
 import { seoHead } from "../lib/seo";
 
@@ -14,7 +15,10 @@ export const Route = createFileRoute("/beatbattle")({
     });
     return { meta: seo.meta, links: seo.links };
   },
-  component: BeatBattlePage,
+  component: withGameAccess(BeatBattlePage, {
+    gamePath: "/beatbattle",
+    gameTitle: "BEAT BATTLE",
+  }),
 });
 
 type Text = { bg: string; en: string; zh: string };

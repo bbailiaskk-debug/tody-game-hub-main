@@ -7,7 +7,24 @@ declare class WebSocketPair {
 declare module "cloudflare:workers" {
   export const env: {
     GOOGLE_CLIENT_ID?: string;
+    GOOGLE_CLIENT_SECRET?: string;
+    STRIPE_PRO_PAYMENT_LINK?: string;
+    STRIPE_ENTERPRISE_PAYMENT_LINK?: string;
+    STRIPE_PRO_PRICE_ID?: string;
+    STRIPE_ENTERPRISE_PRICE_ID?: string;
+    STRIPE_SECRET_KEY?: string;
+    STRIPE_WEBHOOK_SECRET?: string;
+    STRIPE_CURRENCY?: string;
+    STRIPE_PRO_PRODUCT_ID?: string;
+    STRIPE_ENTERPRISE_PRODUCT_ID?: string;
+    ANTHROPIC_API_KEY?: string;
+    ANTHROPIC_MODEL?: string;
+    ANTHROPIC_TIMEOUT_MS?: string;
     AUTH_USERS_KV?: {
+      get: (key: string) => Promise<string | null>;
+      put: (key: string, value: string) => Promise<void>;
+    };
+    GEMINI_CACHE_KV?: {
       get: (key: string) => Promise<string | null>;
       put: (key: string, value: string) => Promise<void>;
     };

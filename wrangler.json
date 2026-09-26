@@ -7,12 +7,23 @@
     "binding": "ASSETS"
   },
   "vars": {
-    "GOOGLE_CLIENT_ID": "replace-with-google-client-id"
+    "GOOGLE_CLIENT_ID": "854656836968-cvrr58sgldpa62sqicv8mn96jlamm7p7.apps.googleusercontent.com",
+    "STRIPE_CURRENCY": "eur",
+    "STRIPE_PRO_PAYMENT_LINK": "",
+    "STRIPE_ENTERPRISE_PAYMENT_LINK": "",
+    "STRIPE_PRO_PRICE_ID": "",
+    "STRIPE_ENTERPRISE_PRICE_ID": "",
+    "STRIPE_PRO_PRODUCT_ID": "prod_VKJJOcMwmT3JtF",
+    "STRIPE_ENTERPRISE_PRODUCT_ID": "prod_VKJK0S8L5jBg3y"
   },
   "kv_namespaces": [
     {
       "binding": "AUTH_USERS_KV",
       "id": "987d097bccb842538cf6af6ebafdbee5"
+    },
+    {
+      "binding": "GEMINI_CACHE_KV",
+      "id": "9c7d153cb68b46e1b07f0d9c61606999"
     }
   ],
   "durable_objects": {

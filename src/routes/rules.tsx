@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Baby,
+  CalendarClock,
   FileText,
   Gauge,
   HandHeart,
@@ -74,6 +75,16 @@ const bgRules: RuleItem[] = [
     title: "Деца и Styles / Регистрация",
     text: "Деца от 5 до 8 години нямат право да пипат Styles или да натискат клавиша F12. Преди да пипат каквито и да е Styles или да си направят регистрация сами, децата задължително трябва да попитат своите родители дали могат да го направят.",
   },
+  {
+    icon: MessageSquareWarning,
+    title: "Ученици и домашни",
+    text: "Учениците от 1-ви до 4-ти клас не трябва да използват чат бота за решаване на домашни. Не изпращай едно и също съобщение повтарящи се — системата ще покаже предупреждение и временно ще блокира изпращането.",
+  },
+  {
+    icon: CalendarClock,
+    title: "План за игрите",
+    text: "Децата трябва задължително да питат своите родители и да съгласуват план за игрите, преди да започнат гейминг сесиите си, за да се поддържа разумен баланс с другите задължения.",
+  },
 ];
 
 const enRules: RuleItem[] = [
@@ -108,6 +119,16 @@ const enRules: RuleItem[] = [
     title: "Children and Styles / Registration",
     text: "Children between 5 and 8 are not allowed to touch Styles or press the F12 key. Before touching any Styles or registering on their own, children must always ask their parents whether they may do so.",
   },
+  {
+    icon: MessageSquareWarning,
+    title: "Students and homework",
+    text: "Students in grades 1–4 should not use the chat bot to solve homework. Do not repeat the same message — the system will show a warning and temporarily block sending.",
+  },
+  {
+    icon: CalendarClock,
+    title: "Gaming plan",
+    text: "Children must always ask their parents and agree on a gaming plan before starting their gaming sessions, so a sensible balance with their other responsibilities is kept.",
+  },
 ];
 
 const zhRules: RuleItem[] = [
@@ -141,6 +162,16 @@ const zhRules: RuleItem[] = [
     icon: Baby,
     title: "儿童与 Styles / 注册",
     text: "5 至 8 岁的儿童不得触碰 Styles 或按 F12 键。在触碰任何 Styles 或自行注册之前，儿童必须征得父母同意后才能进行。",
+  },
+  {
+    icon: MessageSquareWarning,
+    title: "学生与家庭作业",
+    text: "1 至 4 年级的学生不应使用聊天机器人解决家庭作业。请勿重复发送相同消息——系统会显示警告并暂时阻止发送。",
+  },
+  {
+    icon: CalendarClock,
+    title: "游戏计划",
+    text: "儿童必须先询问父母并商定游戏计划，再开始游戏时段，以便与其他的责任保持合理平衡。",
   },
 ];
 

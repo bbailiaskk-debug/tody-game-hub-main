@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Heart, Home, RotateCcw, Sparkles, Star, Trophy } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { withGameAccess } from "../components/site/GameAccess";
 import { useSiteSettings } from "../components/site/theme";
 import { seoHead } from "../lib/seo";
 
@@ -14,7 +15,10 @@ export const Route = createFileRoute("/prismheart")({
     });
     return { meta: seo.meta, links: seo.links };
   },
-  component: PrismHeartPage,
+  component: withGameAccess(PrismHeartPage, {
+    gamePath: "/prismheart",
+    gameTitle: "PRISM HEART",
+  }),
 });
 
 type Lang = "bg" | "en" | "zh";

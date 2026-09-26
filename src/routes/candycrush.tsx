@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { withGameAccess } from "../components/site/GameAccess";
 import { useSiteSettings } from "../components/site/theme";
 import { seoHead } from "../lib/seo";
 
@@ -14,7 +15,7 @@ export const Route = createFileRoute("/candycrush")({
     });
     return { meta: seo.meta, links: seo.links };
   },
-  component: CandyCrushPage,
+  component: withGameAccess(CandyCrushPage, { gamePath: "/candycrush", gameTitle: "Candy Crush" }),
 });
 
 const SIZE = 8;

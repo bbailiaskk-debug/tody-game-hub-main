@@ -577,3 +577,39 @@
   content-visibility: auto;
   contain-intrinsic-size: auto 320px;
 }
+
+/* Pricing plan CTA buttons: every plan lights up in solid brand green on hover,
+   the Pro (already solid) card gets a brighter green plus a stronger glow so the
+   hover state is visible on all three cards. */
+.plan-cta {
+  transition:
+    transform 200ms ease,
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    filter 200ms ease;
+}
+
+.plan-cta:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background-color: color-mix(in oklab, var(--brand) 62%, white);
+  border-color: color-mix(in oklab, var(--brand) 62%, white);
+  color: var(--primary-foreground);
+  box-shadow:
+    0 0 0 2px color-mix(in oklab, var(--brand) 45%, transparent),
+    0 0 44px -4px color-mix(in oklab, var(--brand) 80%, transparent);
+}
+
+.plan-cta:hover:not(:disabled) .plan-cta-icon {
+  transform: translate(2px, -2px);
+}
+
+.plan-cta-icon {
+  transition: transform 200ms ease;
+}
+
+.plan-cta:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}

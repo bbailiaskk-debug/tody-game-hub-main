@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BookHeart, RotateCcw } from "lucide-react";
 import { useCallback, useState } from "react";
+import { withGameAccess } from "../components/site/GameAccess";
 import { useSiteSettings } from "../components/site/theme";
 import { seoHead } from "../lib/seo";
 
@@ -14,7 +15,7 @@ export const Route = createFileRoute("/ddlc")({
     });
     return { meta: seo.meta, links: seo.links };
   },
-  component: DdlcPage,
+  component: withGameAccess(DdlcPage, { gamePath: "/ddlc", gameTitle: "DDLC" }),
 });
 
 type Category = "happy" | "sweet" | "books" | "dark" | "nature" | "love";

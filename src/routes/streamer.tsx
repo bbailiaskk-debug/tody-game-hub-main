@@ -15,6 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { withGameAccess } from "../components/site/GameAccess";
 import { useSiteSettings } from "../components/site/theme";
 import { seoHead } from "../lib/seo";
 
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/streamer")({
     });
     return { meta: seo.meta, links: seo.links };
   },
-  component: StreamerPage,
+  component: withGameAccess(StreamerPage, { gamePath: "/streamer", gameTitle: "STREAM HEART" }),
 });
 
 type Text = { bg: string; en: string; zh: string };

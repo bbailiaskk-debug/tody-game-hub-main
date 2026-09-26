@@ -176,6 +176,21 @@ export function readPersistedUserProfile(): PersistedUserProfile | null {
   };
 }
 
+export function readPersistedProfileFields(email: string): { birthday: string; gender: string } {
+  const normalizedEmail = email.trim().toLowerCase();
+  const profile = readPersistedUserProfile();
+  const activeProfile =
+    profile && (!normalizedEmail || profile.email === normalizedEmail) ? profile : null;
+  const registeredUser = readRegisteredUsers().find(
+    (user) => (user.email ?? "").trim().toLowerCase() === normalizedEmail,
+  );
+
+  return {
+    birthday: activeProfile?.birthday ?? registeredUser?.birthday ?? "",
+    gender: activeProfile?.gender ?? registeredUser?.gender ?? "",
+  };
+}
+
 export function writePersistedUserProfile(profile: Partial<PersistedUserProfile>) {
   if (!isBrowser()) return;
 

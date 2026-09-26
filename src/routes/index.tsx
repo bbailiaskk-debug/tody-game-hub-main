@@ -1,7 +1,19 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUpRight, Gamepad2, Info } from "lucide-react";
+import {
+  ArrowUpRight,
+  Building2,
+  Check,
+  Gamepad2,
+  Info,
+  Loader2,
+  Lock,
+  Rocket,
+  Sparkles,
+} from "lucide-react";
 import { useSiteSettings } from "../components/site/theme";
+import { confirmCheckoutSession, useCheckout, useUserPlan } from "../lib/plan-access";
+import { planCovers, requiredPlanForGame } from "../lib/plans";
 import { seoHead } from "../lib/seo";
 
 export const Route = createFileRoute("/")({
@@ -48,11 +60,143 @@ const games = {
   ],
 } as const;
 
+const pricingPlans = [
+  {
+    id: "starter",
+    planKey: "free",
+    icon: Sparkles,
+    name: { bg: "Старт", en: "Starter", zh: "入门" },
+    price: "0,00 €",
+    priceBgn: "0,00 лв",
+    cadence: { bg: "месечно", en: "per month", zh: "每月" },
+    description: {
+      bg: "Три безплатни игри, личен профил и настройки — без карта.",
+      en: "Three free games, your own profile and settings — no card required.",
+      zh: "三款免费游戏、个人资料和设置 — 无需银行卡。",
+    },
+    includedGames: [
+      { label: "CHESS", to: "/chess" },
+      { label: "AIR HOCKEY", to: "/airhockey" },
+      { label: "TIC TAC TOE", to: "/tictactoe" },
+    ],
+    features: {
+      bg: ["3 безплатни игри", "Личен профил и настройки", "Community access"],
+      en: ["3 free games", "Personal profile and settings", "Community access"],
+      zh: ["3 款免费游戏", "个人资料和设置", "社区访问"],
+    },
+    cta: { bg: "Започни безплатно", en: "Start free", zh: "免费开始" },
+    ctaTo: "/games",
+    featured: false,
+  },
+  {
+    id: "pro",
+    planKey: "pro",
+    icon: Rocket,
+    name: { bg: "Про", en: "Pro", zh: "专业版" },
+    price: "50,00 €",
+    priceBgn: "97,79 лв",
+    cadence: { bg: "месечно", en: "per month", zh: "每月" },
+    description: {
+      bg: "Повече функции за по-ангажиращо гейминг изживяване.",
+      en: "More features for an immersive gaming experience.",
+      zh: "更多功能，带来更沉浸的游戏体验。",
+    },
+    includedGames: [
+      { label: "2048", to: "/game2048" },
+      { label: "WORDLE", to: "/wordle" },
+      { label: "SUDOKU", to: "/sudoku" },
+      { label: "DDLC", to: "/ddlc" },
+      { label: "PRISM HEART", to: "/prismheart" },
+      { label: "STREAM HEART", to: "/streamer" },
+    ],
+    features: {
+      bg: [
+        "Всичко от Старт",
+        "Разширени профилни настройки",
+        "Приоритетен достъп до нови заглавия",
+        "Подкрепа без реклама",
+      ],
+      en: [
+        "Everything in Starter",
+        "Advanced profile controls",
+        "Priority access to new titles",
+        "Ad-free experience",
+      ],
+      zh: ["入门版全部功能", "高级个人资料控制", "新游戏优先体验", "无广告体验"],
+    },
+    cta: { bg: "Избери Про", en: "Choose Pro", zh: "选择专业版" },
+    ctaTo: "/info",
+    featured: true,
+  },
+  {
+    id: "enterprise",
+    planKey: "enterprise",
+    icon: Building2,
+    name: { bg: "Enterprise", en: "Enterprise", zh: "企业版" },
+    price: "150,00 €",
+    priceBgn: "293,37 лв",
+    cadence: { bg: "месечно", en: "per month", zh: "每月" },
+    description: {
+      bg: "Персонализирано решение за екипи и общности.",
+      en: "A tailored solution for teams and communities.",
+      zh: "为团队和社区量身定制的解决方案。",
+    },
+    includedGames: [
+      { label: "TETRIS", to: "/tetris" },
+      { label: "BEAT BATTLE", to: "/beatbattle" },
+      { label: "CRYSTAL REALM", to: "/crystalrealm" },
+      { label: "CANDY CRUSH", to: "/candycrush" },
+      { label: "CHROME DINOSAUR", to: "/dino" },
+    ],
+    features: {
+      bg: [
+        "Всичко от Про",
+        "Персонализиран dashboard",
+        "Приоритетна поддръжка",
+        "Интеграции за екипи",
+      ],
+      en: ["Everything in Pro", "Custom dashboard", "Priority support", "Team integrations"],
+      zh: ["专业版全部功能", "自定义仪表板", "优先支持", "团队集成"],
+    },
+    cta: { bg: "Избери Enterprise", en: "Choose Enterprise", zh: "选择企业版" },
+    ctaTo: "/info",
+    featured: false,
+  },
+] as const;
+
 function Index() {
   const { lang } = useSiteSettings();
   const isBg = lang === "bg";
   const isZh = lang === "zh";
+  const { plan: activePlan, refresh: refreshPlan } = useUserPlan();
+  const { availability, busyPlan, error: checkoutError, startCheckout } = useCheckout();
+  const [checkoutState, setCheckoutState] = useState<"none" | "success" | "cancelled">("none");
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("checkout");
+    const sessionId = params.get("session_id") ?? "";
+
+    if (status !== "success" && status !== "cancelled") return;
+
+    setCheckoutState(status);
+
+    if (status !== "success" || !sessionId) {
+      void refreshPlan();
+      return;
+    }
+
+    void confirmCheckoutSession(sessionId)
+      .then((result) => {
+        if (result.success) {
+          window.history.replaceState({}, "", `${window.location.pathname}#pricing`);
+          return;
+        }
+        setCheckoutState("none");
+      })
+      .catch(() => setCheckoutState("none"));
+  }, [refreshPlan]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -151,6 +295,14 @@ function Index() {
               {isBg ? "ПРОФИЛ НА СЪЗДАТЕЛЯ" : isZh ? "了解频道背后" : "WHO IS BEHIND THE SIGNAL"}
               <ArrowUpRight className="size-4" />
             </Link>
+            <Link
+              to="/ai"
+              search={{ chat: "" }}
+              className="inline-flex items-center gap-2 rounded-full border border-brand/50 bg-brand/10 px-6 py-4 font-mono text-xs tracking-[0.15em] text-brand transition-transform hover:-translate-y-0.5"
+            >
+              <Sparkles className="size-4" />
+              {isBg ? "TK-BOT AI" : isZh ? "TK-BOT 人工智能" : "TK-BOT AI"}
+            </Link>
             <a
               href="https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ"
               target="_blank"
@@ -166,6 +318,14 @@ function Index() {
               className="inline-flex items-center gap-2 font-mono text-xs tracking-[0.15em] text-foreground transition-colors hover:text-brand"
             >
               {isBg ? "КЪМ ИГРИТЕ" : isZh ? "探索游戏" : "TO THE GAMES"}
+              <ArrowUpRight className="size-4" />
+            </Link>
+            <Link
+              to="/"
+              hash="pricing"
+              className="inline-flex items-center gap-2 font-mono text-xs tracking-[0.15em] text-foreground transition-colors hover:text-brand"
+            >
+              {isBg ? "ЦЕНОВИ ПАКЕТИ" : isZh ? "价格方案" : "PRICING"}
               <ArrowUpRight className="size-4" />
             </Link>
           </div>
@@ -233,6 +393,159 @@ function Index() {
               <p className="mt-2 text-sm text-muted-foreground">{g.note}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section id="pricing" className="lazy-section mx-auto max-w-7xl px-6 pb-28">
+        <div className="flex items-center gap-4">
+          <span className="label-mono text-brand">03 /</span>
+          <span className="label-mono">
+            {isBg ? "ЦЕНОВИ ПАКЕТИ" : isZh ? "价格方案" : "PRICING PLANS"}
+          </span>
+        </div>
+        <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
+          <h2 className="text-brand text-[clamp(2rem,5vw,3.6rem)] leading-none">
+            {isBg ? "ИЗБЕРИ СВОЯ ПЛАН" : isZh ? "选择你的方案" : "CHOOSE YOUR PLAN"}
+          </h2>
+          <p className="max-w-md text-sm text-muted-foreground">
+            {isBg
+              ? "Започни безплатно или избери по-голям план за повече възможности."
+              : isZh
+                ? "免费开始，或选择更大的方案获得更多功能。"
+                : "Start free or choose a larger plan for more ways to play."}
+          </p>
+        </div>
+
+        {checkoutState !== "none" ? (
+          <p
+            className={`mt-6 rounded-full border px-5 py-3 text-center text-xs ${
+              checkoutState === "success"
+                ? "border-brand/40 bg-brand/10 text-brand"
+                : "border-border bg-card text-muted-foreground"
+            }`}
+          >
+            {checkoutState === "success"
+              ? isBg
+                ? "Плащането мина — пакетът е активиран. Приятна игра!"
+                : isZh
+                  ? "支付成功，方案已激活。祝你玩得开心！"
+                  : "Payment went through — your plan is active. Enjoy!"
+              : isBg
+                ? "Плащането е отменено. Можеш да опиташ отново по-късно."
+                : isZh
+                  ? "支付已取消，你可以稍后再试。"
+                  : "Payment cancelled. You can try again later."}
+          </p>
+        ) : null}
+
+        <div className="mt-10 grid gap-5 lg:grid-cols-3">
+          {pricingPlans.map((plan) => {
+            const Icon = plan.icon;
+            const isActivePlan = activePlan === plan.planKey;
+            const isPaidPlan = plan.planKey !== "free";
+            const canPayDirectly = isPaidPlan && availability[plan.planKey];
+            const isPaying = busyPlan === plan.planKey;
+            return (
+              <article
+                key={plan.id}
+                className="relative flex h-full flex-col rounded-3xl border border-border bg-card p-7 transition-colors hover:border-foreground/20"
+              >
+                {plan.featured && !isActivePlan ? (
+                  <span className="label-mono absolute right-6 top-6 text-[0.58rem] text-muted-foreground">
+                    {isBg ? "ПОПУЛЯРЕН" : isZh ? "热门" : "POPULAR"}
+                  </span>
+                ) : null}
+                {isActivePlan ? (
+                  <span className="label-mono absolute right-6 top-6 text-[0.58rem] text-brand">
+                    {isBg ? "ТВОЯТ ПЛАН" : isZh ? "你的方案" : "YOUR PLAN"}
+                  </span>
+                ) : null}
+                <div className="flex items-center gap-3">
+                  <span className="grid size-11 place-items-center rounded-2xl border border-brand/30 bg-brand/10 text-brand">
+                    <Icon className="size-5" />
+                  </span>
+                  <h3 className="text-2xl">{plan.name[lang]}</h3>
+                </div>
+                <p className="mt-5 min-h-12 text-sm text-muted-foreground">
+                  {plan.description[lang]}
+                </p>
+                <div className="mt-8 flex min-h-14 flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span className="text-5xl font-bold tracking-tight text-foreground">
+                    {plan.price}
+                  </span>
+                  <span className="text-lg font-semibold text-muted-foreground">
+                    / {plan.priceBgn}
+                  </span>
+                  <span className="label-mono w-full text-[0.6rem] text-muted-foreground">
+                    {plan.cadence[lang]}
+                  </span>
+                </div>
+                {plan.includedGames.length > 0 ? (
+                  <div className="mt-8">
+                    <p className="label-mono text-[0.6rem] text-brand">
+                      {isBg ? "ВКЛЮЧЕНИ ИГРИ" : isZh ? "包含游戏" : "INCLUDED GAMES"}
+                    </p>
+                    <ul className="mt-3 flex min-h-[65px] content-start flex-wrap gap-2">
+                      {plan.includedGames.map((game) => {
+                        const gameLocked = !planCovers(activePlan, requiredPlanForGame(game.to));
+                        return (
+                          <li key={game.to}>
+                            <Link
+                              to={game.to}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-brand/10 px-3 py-1.5 font-mono text-[0.6rem] font-bold tracking-[0.1em] text-brand transition-colors hover:bg-brand hover:text-primary-foreground"
+                            >
+                              {gameLocked ? (
+                                <Lock className="size-3" />
+                              ) : (
+                                <Gamepad2 className="size-3" />
+                              )}
+                              {game.label}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
+                <ul className="mt-8 flex min-h-[7.5rem] content-start flex-col gap-3 text-sm text-muted-foreground">
+                  {plan.features[lang].map((feature) => (
+                    <li key={feature} className="flex items-start gap-3">
+                      <Check className="mt-0.5 size-4 shrink-0 text-brand" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-auto pt-8">
+                  {isPaidPlan ? (
+                    <button
+                      type="button"
+                      onClick={() => void startCheckout(plan.planKey as "pro" | "enterprise")}
+                      disabled={!canPayDirectly || isPaying}
+                      className="plan-cta inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface-2 px-5 py-3 font-mono text-[0.68rem] font-bold tracking-[0.14em] text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isPaying ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <ArrowUpRight className="plan-cta-icon size-4" />
+                      )}
+                      {plan.cta[lang]}
+                    </button>
+                  ) : (
+                    <Link
+                      to={plan.ctaTo}
+                      className="plan-cta inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface-2 px-5 py-3 font-mono text-[0.68rem] font-bold tracking-[0.14em] text-foreground"
+                    >
+                      {plan.cta[lang]}
+                      <ArrowUpRight className="plan-cta-icon size-4" />
+                    </Link>
+                  )}
+                  {checkoutError ? (
+                    <p className="mt-3 text-center text-xs text-[#f87171]">{checkoutError}</p>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
     </main>

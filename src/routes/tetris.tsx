@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Home, Play, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { withGameAccess } from "../components/site/GameAccess";
 import { useSiteSettings } from "../components/site/theme";
 import { seoHead } from "../lib/seo";
 
@@ -14,7 +15,7 @@ export const Route = createFileRoute("/tetris")({
     });
     return { meta: seo.meta, links: seo.links };
   },
-  component: TetrisPage,
+  component: withGameAccess(TetrisPage, { gamePath: "/tetris", gameTitle: "TETRIS" }),
 });
 
 const COLS = 10;

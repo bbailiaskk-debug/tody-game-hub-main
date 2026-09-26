@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AiRouteImport } from './routes/ai'
 import { Route as AirhockeyRouteImport } from './routes/airhockey'
 import { Route as BeatbattleRouteImport } from './routes/beatbattle'
 import { Route as CandycrushRouteImport } from './routes/candycrush'
@@ -24,6 +25,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MusicRouteImport } from './routes/music'
 import { Route as PrismheartRouteImport } from './routes/prismheart'
 import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as PromptLabRouteImport } from './routes/prompt-lab'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RulesRouteImport } from './routes/rules'
 import { Route as StreamerRouteImport } from './routes/streamer'
@@ -36,6 +38,11 @@ import { Route as WordleRouteImport } from './routes/wordle'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiRoute = AiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AirhockeyRoute = AirhockeyRouteImport.update({
@@ -108,6 +115,11 @@ const ProfileRoute = ProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PromptLabRoute = PromptLabRouteImport.update({
+  id: '/prompt-lab',
+  path: '/prompt-lab',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -151,6 +163,7 @@ const WordleRoute = WordleRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai': typeof AiRoute
   '/airhockey': typeof AirhockeyRoute
   '/beatbattle': typeof BeatbattleRoute
   '/candycrush': typeof CandycrushRoute
@@ -165,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/music': typeof MusicRoute
   '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
+  '/prompt-lab': typeof PromptLabRoute
   '/reset-password': typeof ResetPasswordRoute
   '/rules': typeof RulesRoute
   '/streamer': typeof StreamerRoute
@@ -176,6 +190,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai': typeof AiRoute
   '/airhockey': typeof AirhockeyRoute
   '/beatbattle': typeof BeatbattleRoute
   '/candycrush': typeof CandycrushRoute
@@ -190,6 +205,7 @@ export interface FileRoutesByTo {
   '/music': typeof MusicRoute
   '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
+  '/prompt-lab': typeof PromptLabRoute
   '/reset-password': typeof ResetPasswordRoute
   '/rules': typeof RulesRoute
   '/streamer': typeof StreamerRoute
@@ -202,6 +218,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ai': typeof AiRoute
   '/airhockey': typeof AirhockeyRoute
   '/beatbattle': typeof BeatbattleRoute
   '/candycrush': typeof CandycrushRoute
@@ -216,6 +233,7 @@ export interface FileRoutesById {
   '/music': typeof MusicRoute
   '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
+  '/prompt-lab': typeof PromptLabRoute
   '/reset-password': typeof ResetPasswordRoute
   '/rules': typeof RulesRoute
   '/streamer': typeof StreamerRoute
@@ -229,6 +247,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/ai'
     | '/airhockey'
     | '/beatbattle'
     | '/candycrush'
@@ -243,6 +262,7 @@ export interface FileRouteTypes {
     | '/music'
     | '/prismheart'
     | '/profile'
+    | '/prompt-lab'
     | '/reset-password'
     | '/rules'
     | '/streamer'
@@ -254,6 +274,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/ai'
     | '/airhockey'
     | '/beatbattle'
     | '/candycrush'
@@ -268,6 +289,7 @@ export interface FileRouteTypes {
     | '/music'
     | '/prismheart'
     | '/profile'
+    | '/prompt-lab'
     | '/reset-password'
     | '/rules'
     | '/streamer'
@@ -279,6 +301,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/ai'
     | '/airhockey'
     | '/beatbattle'
     | '/candycrush'
@@ -293,6 +316,7 @@ export interface FileRouteTypes {
     | '/music'
     | '/prismheart'
     | '/profile'
+    | '/prompt-lab'
     | '/reset-password'
     | '/rules'
     | '/streamer'
@@ -305,6 +329,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AiRoute: typeof AiRoute
   AirhockeyRoute: typeof AirhockeyRoute
   BeatbattleRoute: typeof BeatbattleRoute
   CandycrushRoute: typeof CandycrushRoute
@@ -319,6 +344,7 @@ export interface RootRouteChildren {
   MusicRoute: typeof MusicRoute
   PrismheartRoute: typeof PrismheartRoute
   ProfileRoute: typeof ProfileRoute
+  PromptLabRoute: typeof PromptLabRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   RulesRoute: typeof RulesRoute
   StreamerRoute: typeof StreamerRoute
@@ -336,6 +362,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai': {
+      id: '/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof AiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/airhockey': {
@@ -436,6 +469,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/prompt-lab': {
+      id: '/prompt-lab'
+      path: '/prompt-lab'
+      fullPath: '/prompt-lab'
+      preLoaderRoute: typeof PromptLabRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -497,6 +537,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AiRoute: AiRoute,
   AirhockeyRoute: AirhockeyRoute,
   BeatbattleRoute: BeatbattleRoute,
   CandycrushRoute: CandycrushRoute,
@@ -511,6 +552,7 @@ const rootRouteChildren: RootRouteChildren = {
   MusicRoute: MusicRoute,
   PrismheartRoute: PrismheartRoute,
   ProfileRoute: ProfileRoute,
+  PromptLabRoute: PromptLabRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   RulesRoute: RulesRoute,
   StreamerRoute: StreamerRoute,

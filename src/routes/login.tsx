@@ -17,6 +17,7 @@ import {
   readPersistedAuthSession,
   readPersistedUserAccentColor,
   readPersistedUserProfile,
+  readPersistedProfileFields,
   parseStoredJson,
   writePersistedUserProfile,
   writePersistedAuthSession,
@@ -24,7 +25,7 @@ import {
   storageGet,
   storageSet,
 } from "../lib/local-persistence";
-import { verifyGoogleToken } from "../lib/verify-google-token";
+import { exchangeGoogleCode, type GoogleProfile } from "../lib/verify-google-token";
 import {
   EMAILJS_PASSWORD_RESET_TEMPLATE_ID,
   EMAILJS_PUBLIC_KEY,
@@ -32,25 +33,129 @@ import {
 } from "../lib/emailjs-config";
 import { describeEmailJsError, sendEmailJsWithFallback } from "../lib/emailjs-send";
 
-type GoogleCredentialResponse = { credential: string };
-type GoogleIdentity = {
-  initialize: (options: {
-    client_id: string;
-    callback: (response: GoogleCredentialResponse) => void;
-  }) => void;
-  renderButton: (element: HTMLElement, options: Record<string, string>) => void;
-};
-
-declare global {
-  interface Window {
-    google?: { accounts: { id: GoogleIdentity } };
-  }
-}
-
 type StoredUser = {
   name: string;
   email: string;
+  birthday?: string;
+  gender?: string;
 };
+
+function GoogleMark() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 shrink-0">
+      <path
+        fill="#4285F4"
+        d="M21.6 12.23c0-.71-.06-1.4-.18-2.06H12v3.9h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.37Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 22c2.7 0 4.98-.9 6.64-2.4l-3.25-2.51c-.9.6-2.05.96-3.39.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.59A10 10 0 0 0 12 22Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M6.39 13.92A6.02 6.02 0 0 1 6.08 12c0-.67.12-1.32.31-1.92V7.49H3.04A10 10 0 0 0 3 12c0 1.61.39 3.14 1.04 4.51l3.35-2.59Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.95c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.98 2.9 14.7 2 12 2A10 10 0 0 0 3.04 7.49L6.39 10c.79-2.37 3-4.05 5.61-4.05Z"
+      />
+    </svg>
+  );
+}
+
+function createGoogleOAuthRandomHex(byteLength: number): string {
+  const randomBytes = new Uint8Array(byteLength);
+  window.crypto.getRandomValues(randomBytes);
+  return Array.from(randomBytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function createGoogleOAuthNonce(): string {
+  return createGoogleOAuthRandomHex(16);
+}
+
+function createGoogleOAuthCodeVerifier(): string {
+  return createGoogleOAuthRandomHex(32);
+}
+
+type GoogleOAuthTransaction = {
+  state: string;
+  codeVerifier: string;
+  nonce: string;
+  redirectUri: string;
+};
+
+const googleOAuthTransactionStorageKey = "google-oauth-transaction";
+
+function persistGoogleOAuthTransaction(transaction: GoogleOAuthTransaction): void {
+  try {
+    window.sessionStorage.setItem(googleOAuthTransactionStorageKey, JSON.stringify(transaction));
+  } catch {
+    return;
+  }
+}
+
+function consumeGoogleOAuthTransaction(
+  receivedState: string | null,
+): GoogleOAuthTransaction | null {
+  try {
+    const raw = window.sessionStorage.getItem(googleOAuthTransactionStorageKey);
+    window.sessionStorage.removeItem(googleOAuthTransactionStorageKey);
+    if (!raw) return null;
+    const transaction = JSON.parse(raw) as Partial<GoogleOAuthTransaction>;
+    if (
+      typeof transaction.state !== "string" ||
+      typeof transaction.codeVerifier !== "string" ||
+      typeof transaction.nonce !== "string" ||
+      typeof transaction.redirectUri !== "string" ||
+      transaction.state !== receivedState
+    ) {
+      return null;
+    }
+    return transaction as GoogleOAuthTransaction;
+  } catch {
+    return null;
+  }
+}
+
+function encodeGoogleBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function createGoogleCodeChallenge(codeVerifier: string): Promise<string> {
+  const digest = await window.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(codeVerifier),
+  );
+  return encodeGoogleBase64Url(new Uint8Array(digest));
+}
+
+const googleOAuthScopes = ["openid", "email", "profile"].join(" ");
+
+async function createGoogleAuthorizationUrl(clientId: string): Promise<string> {
+  const redirectPath = window.location.pathname.replace(/\/+$/, "") || "/";
+  const redirectUri = `${window.location.origin}${redirectPath}`;
+  const state = createGoogleOAuthRandomHex(24);
+  const nonce = createGoogleOAuthNonce();
+  const codeVerifier = createGoogleOAuthCodeVerifier();
+  const codeChallenge = await createGoogleCodeChallenge(codeVerifier);
+  persistGoogleOAuthTransaction({ state, codeVerifier, nonce, redirectUri });
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: googleOAuthScopes,
+    access_type: "offline",
+    include_granted_scopes: "true",
+    prompt: "select_account consent",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+    state,
+    nonce,
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+}
 
 const welcomeSlides = [
   "/undraw_ai-response_gaip.png",
@@ -90,7 +195,7 @@ function Login() {
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
-  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const googleHandledRef = useRef(false);
 
   useEffect(() => {
     const session = readPersistedAuthSession();
@@ -178,8 +283,9 @@ function Login() {
         document.cookie = `siteSession=${encodeURIComponent(safeToken)}; path=/; max-age=${60 * 60 * 24 * 365}${secureCookie}`;
       }
 
-      const nextBirthday = user.birthday ?? "";
-      const nextGender = user.gender ?? "";
+      const storedProfileFields = readPersistedProfileFields(user.email);
+      const nextBirthday = user.birthday ?? storedProfileFields.birthday;
+      const nextGender = user.gender ?? storedProfileFields.gender;
       const nextAccentColor =
         user.accentColor ?? readPersistedUserAccentColor(user.email) ?? "#40cc3c";
 
@@ -238,60 +344,133 @@ function Login() {
     [syncStoredUserProfile],
   );
 
-  useEffect(() => {
-    const clientId = import.meta.env["VITE_GOOGLE_CLIENT_ID"] as string | undefined;
-    if (!clientId || !googleButtonRef.current) return;
-    const renderGoogleButton = () => {
-      if (!window.google || !googleButtonRef.current) return;
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: async ({ credential }) => {
-          setSubmitting(true);
-          setError("");
-          const profile = await verifyGoogleToken({ data: { credential } });
-          if (!profile) {
-            setError(
-              isBg ? "Google входът не беше успешен." : "Google sign-in was not successful.",
-            );
-            setSubmitting(false);
-            return;
-          }
+  const completeGoogleLogin = useCallback(
+    async (profile: GoogleProfile) => {
+      setSubmitting(true);
+      setError("");
+      setNotice("");
+      try {
+        const storedUsers = storageGet("registeredUsers");
+        const parsedUsers = parseStoredJson<unknown>(storedUsers, []);
+        const users = Array.isArray(parsedUsers) ? (parsedUsers as StoredUser[]) : [];
+        if (!users.some((user) => user.email === profile.email)) {
+          writeRegisteredUsers([
+            ...users,
+            {
+              name: profile.name,
+              email: profile.email,
+              ...(profile.birthday ? { birthday: profile.birthday } : {}),
+              ...(profile.gender ? { gender: profile.gender } : {}),
+            },
+          ]);
+        }
+        signIn(profile);
+      } catch (caughtError) {
+        console.warn("Google sign-in verification failed.", caughtError);
+        setError(isBg ? "Google входът не беше успешен." : "Google sign-in was not successful.");
+        setSubmitting(false);
+      }
+    },
+    [isBg, signIn],
+  );
 
-          const storedUsers = storageGet("registeredUsers");
-          const parsedUsers = parseStoredJson<unknown>(storedUsers, []);
-          const users = Array.isArray(parsedUsers) ? (parsedUsers as StoredUser[]) : [];
-          if (!users.some((user) => user.email === profile.email)) {
-            writeRegisteredUsers([...users, { name: profile.name, email: profile.email }]);
-          }
-          signIn(profile);
-        },
-      });
-      const googleWidth = Math.round(
-        Math.max(240, Math.min(360, googleButtonRef.current.clientWidth || 360)),
+  const handleGoogleLogin = async () => {
+    const clientId = (import.meta.env["VITE_GOOGLE_CLIENT_ID"] as string | undefined)?.trim();
+    if (!clientId) {
+      setError(
+        isBg
+          ? "Google входът още не е конфигуриран. Добави VITE_GOOGLE_CLIENT_ID."
+          : "Google sign-in is not configured yet. Add VITE_GOOGLE_CLIENT_ID.",
       );
-      googleButtonRef.current.replaceChildren();
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: "outline",
-        size: "large",
-        width: String(googleWidth),
-        text: "signin_with",
-      });
-    };
-
-    const existingScript = document.getElementById("google-identity-services");
-    if (existingScript) {
-      renderGoogleButton();
       return;
     }
 
-    const script = document.createElement("script");
-    script.id = "google-identity-services";
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.onload = renderGoogleButton;
-    document.head.appendChild(script);
-  }, [isBg, signIn]);
+    setError("");
+    setNotice("");
+    setSubmitting(true);
+    try {
+      window.location.assign(await createGoogleAuthorizationUrl(clientId));
+    } catch (error) {
+      console.warn("Google authorization could not be started.", error);
+      setSubmitting(false);
+      setError(
+        isBg
+          ? "Google входът не може да започне. Опитайте отново."
+          : "Google sign-in could not start. Please try again.",
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (googleHandledRef.current) return;
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const queryParams = new URLSearchParams(window.location.search);
+    const oauthError = hashParams.get("error") ?? queryParams.get("error");
+    const oauthErrorDescription =
+      hashParams.get("error_description") ?? queryParams.get("error_description");
+    const returnedState = hashParams.get("state") ?? queryParams.get("state");
+    const code = hashParams.get("code") ?? queryParams.get("code");
+    if (!oauthError && !code) return;
+
+    googleHandledRef.current = true;
+    window.history.replaceState({}, document.title, window.location.pathname);
+    const transaction = consumeGoogleOAuthTransaction(returnedState);
+    if (!transaction) {
+      setError(
+        isBg
+          ? "Google входът не е валиден. Моля, опитайте отново."
+          : "Google sign-in could not be verified. Please try again.",
+      );
+      setSubmitting(false);
+      return;
+    }
+    if (oauthError) {
+      setError(
+        `${isBg ? "Google входът беше отказан." : "Google sign-in was cancelled."}${
+          oauthErrorDescription ? ` (${oauthErrorDescription})` : ""
+        }`,
+      );
+      setSubmitting(false);
+      return;
+    }
+    if (!code) {
+      setError(
+        isBg
+          ? "Google не върна код за авторизация."
+          : "Google did not return an authorization code.",
+      );
+      setSubmitting(false);
+      return;
+    }
+
+    setSubmitting(true);
+    void (async () => {
+      try {
+        const result = await exchangeGoogleCode({
+          data: {
+            code,
+            codeVerifier: transaction.codeVerifier,
+            redirectUri: transaction.redirectUri,
+            nonce: transaction.nonce,
+          },
+        });
+        if (!result.success) {
+          setError(
+            `${isBg ? "Google входът не беше успешен." : "Google sign-in was not successful."}${
+              result.error ? ` (${result.error})` : ""
+            }`,
+          );
+          setSubmitting(false);
+          return;
+        }
+        await completeGoogleLogin(result.profile);
+      } catch (error) {
+        console.warn("Google sign-in exchange failed.", error);
+        setError(isBg ? "Google входът не беше успешен." : "Google sign-in was not successful.");
+        setSubmitting(false);
+      }
+    })();
+  }, [completeGoogleLogin, isBg]);
 
   const requestPasswordReset = async () => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -614,16 +793,26 @@ function Login() {
             </button>
           </div>
 
-          {mode === "login" && import.meta.env["VITE_GOOGLE_CLIENT_ID"] && (
+          {mode === "login" ? (
             <>
-              <div ref={googleButtonRef} className="mb-5 flex min-h-10 justify-center" />
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={submitting}
+                className="mb-5 flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-surface/80 px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:border-primary/50 hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <GoogleMark />
+                <span>
+                  {isBg ? "Вход с Google" : isZh ? "使用 Google 登录" : "Login with Google"}
+                </span>
+              </button>
               <div className="mb-5 flex items-center gap-3 text-xs text-muted-foreground">
                 <span className="h-px flex-1 bg-border" />
                 <span>{isBg ? "или с email" : isZh ? "或使用邮箱" : "or use email"}</span>
                 <span className="h-px flex-1 bg-border" />
               </div>
             </>
-          )}
+          ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === "register" && (

@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 
 import {
+  Bot,
   BookHeart,
   Candy,
   ChessKnight,
@@ -425,6 +426,31 @@ export function SiteHeader() {
                       </Link>
                     ),
                   )}
+
+                  <Link
+                    to="/ai"
+                    search={{ chat: "" }}
+                    onClick={() => setMenuOpen(false)}
+                    aria-label="Gemini AI"
+                    className="group flex items-center justify-between gap-3 rounded-full border border-[#4285F4]/20 bg-[#161B26] px-4 py-3.5 transition-all duration-200 hover:border-[#4285F4]/50 hover:bg-[#4285F4]/10 hover:shadow-[0_0_18px_rgba(66,133,244,0.25)]"
+                  >
+                    <span className="flex flex-col">
+                      <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
+                        <span className="text-[#4285F4] transition-colors group-hover:text-[#60A5FA]">
+                          GEMINI
+                        </span>{" "}
+                        <span className="text-[#4285F4] transition-colors group-hover:text-[#60A5FA]">
+                          AI
+                        </span>
+                      </span>
+                      <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
+                        {lang === "bg" ? "изкуствен интелект" : "artificial intelligence"}
+                      </span>
+                    </span>
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#161B26] text-[#4285F4] transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[#60A5FA]">
+                      <Bot className="size-4" />
+                    </span>
+                  </Link>
                 </nav>
 
                 <div className="border-t border-border/70 p-3">

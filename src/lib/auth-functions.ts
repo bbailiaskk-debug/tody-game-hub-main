@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { env } from "cloudflare:workers";
 
 import { hashPassword, passwordMatches } from "./password";
 
@@ -60,14 +59,10 @@ const getInMemoryStore = (): AuthStore => {
 };
 
 const getKvStore = (): AuthKvNamespace | null => {
-  const workerEnv = env as unknown as { AUTH_USERS_KV?: AuthKvNamespace };
-  if (workerEnv.AUTH_USERS_KV) return workerEnv.AUTH_USERS_KV;
-
   const cloudflareEnv = (
     globalThis as typeof globalThis & { CF_ENV?: { AUTH_USERS_KV?: AuthKvNamespace } }
   ).CF_ENV;
-  if (!cloudflareEnv?.AUTH_USERS_KV) return null;
-  return cloudflareEnv.AUTH_USERS_KV;
+  return cloudflareEnv?.AUTH_USERS_KV ?? null;
 };
 
 const getStore = async (): Promise<AuthStore> => {

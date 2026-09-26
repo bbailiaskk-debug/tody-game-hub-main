@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Eraser, Pencil, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { withGameAccess } from "../components/site/GameAccess";
 import { useSiteSettings } from "../components/site/theme";
 import { seoHead } from "../lib/seo";
 
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/sudoku")({
     });
     return { meta: seo.meta, links: seo.links };
   },
-  component: SudokuPage,
+  component: withGameAccess(SudokuPage, { gamePath: "/sudoku", gameTitle: "Судоку" }),
 });
 
 type Difficulty = "easy" | "medium" | "hard";

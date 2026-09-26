@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { withGameAccess } from "../components/site/GameAccess";
 import { useSiteSettings } from "../components/site/theme";
 import { seoHead } from "../lib/seo";
 
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/dino")({
     });
     return { meta: seo.meta, links: seo.links };
   },
-  component: DinoGamePage,
+  component: withGameAccess(DinoGamePage, { gamePath: "/dino", gameTitle: "Chrome Dinosaur" }),
 });
 
 const GAME_W = 900;

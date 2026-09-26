@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearPersistedUserProfile,
   readPersistedAuthSession,
+  readPersistedProfileFields,
   readPersistedUserProfile,
   readRegisteredUsers,
   writePersistedAuthSession,
@@ -72,5 +73,32 @@ describe("auth session and profile persistence", () => {
     const profile = readPersistedUserProfile();
     expect(profile?.name).toBe("Alice Updated");
     expect(profile?.gender).toBe("female");
+  });
+
+  it("persists and clears birthday and gender values", () => {
+    writePersistedUserProfile({
+      name: "Alice",
+      email: "alice@example.com",
+      birthday: "2005-04-12",
+      gender: "female",
+    });
+
+    expect(readPersistedUserProfile()).toMatchObject({
+      birthday: "2005-04-12",
+      gender: "female",
+    });
+    expect(readPersistedProfileFields("alice@example.com")).toEqual({
+      birthday: "2005-04-12",
+      gender: "female",
+    });
+
+    writePersistedUserProfile({ birthday: "", gender: "" });
+
+    expect(readPersistedUserProfile()).toMatchObject({ birthday: "", gender: "" });
+    expect(readPersistedProfileFields("alice@example.com")).toEqual({
+      birthday: "",
+      gender: "",
+    });
+    expect(readRegisteredUsers()[0]).toMatchObject({ birthday: "", gender: "" });
   });
 });
