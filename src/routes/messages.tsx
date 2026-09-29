@@ -308,6 +308,8 @@ type MessagesCopy = {
   callVoiceWaiting: string;
   /** Reads out with the clock beside it, for a screen reader. */
   callElapsed: string;
+  /** The ringing clock, which is a different number from the call's own. */
+  callRingingFor: string;
   callPeople: string;
   callScreenLabel: string;
   callScreenLabelWindow: string;
@@ -531,6 +533,7 @@ const messagesCopy: Record<Lang, MessagesCopy> = {
     callVoiceConnected: "Свързано гласово устройство",
     callVoiceWaiting: "Гласа още не е свързан",
     callElapsed: "Продължителност:",
+    callRingingFor: "Звъни от:",
     callPeople: "В разговора: {count}",
     callScreenLabel: "Споделен екран",
     callScreenLabelWindow: "Споделен прозорец",
@@ -751,6 +754,7 @@ const messagesCopy: Record<Lang, MessagesCopy> = {
     callVoiceConnected: "Voice device connected",
     callVoiceWaiting: "Voice not connected yet",
     callElapsed: "Duration:",
+    callRingingFor: "Ringing for:",
     callPeople: "In call: {count}",
     callScreenLabel: "Shared screen",
     callScreenLabelWindow: "Shared window",
@@ -970,6 +974,7 @@ const messagesCopy: Record<Lang, MessagesCopy> = {
     callVoiceConnected: "语音设备已连接",
     callVoiceWaiting: "语音尚未连接",
     callElapsed: "时长：",
+    callRingingFor: "响铃时长：",
     callPeople: "通话中：{count}",
     callScreenLabel: "共享屏幕",
     callScreenLabelWindow: "共享窗口",
@@ -5092,6 +5097,17 @@ function CallScreen({
   // on screen afterwards so the number it ended on is the number that is read.
   const elapsed = useCallClock(call.answeredAt, !isIncoming && !connecting);
 
+  /**
+   * How long this phone has been ringing somebody, counted from the button.
+   *
+   * A separate number from the call's own clock, on purpose: the two are answers
+   * to two different questions, and running them into one figure is how a call
+   * gets reported as ten minutes long when it was nine and nobody picked up for
+   * the first one. It shows only while the call is unanswered, and is gone the
+   * moment it is answered, so the duration clock is the only one left on screen.
+   */
+  const ringing = useCallClock(call.startedAt, !isIncoming && connecting && call.answeredAt <= 0);
+
   return (
     <section
       className="absolute inset-0 z-40 flex flex-col bg-background/95 backdrop-blur-xl"
@@ -5118,6 +5134,15 @@ function CallScreen({
             className="shrink-0 font-mono text-sm tabular-nums text-muted-foreground"
           >
             {elapsed}
+          </time>
+        ) : null}
+        {ringing ? (
+          <time
+            dateTime={`PT${ringing}`}
+            aria-label={`${t.callRingingFor} ${ringing}`}
+            className="shrink-0 font-mono text-sm tabular-nums text-muted-foreground"
+          >
+            {ringing}
           </time>
         ) : null}
         {others > 0 ? (
