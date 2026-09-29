@@ -347,7 +347,11 @@ describe("answering a call", () => {
     await settle();
 
     expect(result.ok).toBe(true);
-    expect(messagesStore.getState().call.status).toBe("connecting");
+    // Picked up, so the call is on screen. The connection is a separate question
+    // the media layer answers on its own, and holding the screen on "connecting"
+    // until it does leaves a call that is being had showing as one that is not.
+    expect(messagesStore.getState().call.status).toBe("active");
+    expect(messagesStore.getState().call.answeredAt).toBeGreaterThan(0);
     expect(frames.map((frame) => frame.kind)).toEqual(["accept", "answer"]);
   });
 

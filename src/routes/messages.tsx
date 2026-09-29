@@ -9,6 +9,9 @@ import {
   CloudOff,
   Download,
   FileText,
+  Gamepad2,
+  Hash,
+  Headphones,
   ImageIcon,
   Info,
   Loader2,
@@ -39,6 +42,8 @@ import {
   Users,
   Video,
   VideoOff,
+  Volume2,
+  VolumeX,
   X,
   Link2Icon,
   ExternalLink,
@@ -56,7 +61,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { useSiteSettings } from "../components/site/theme";
+import { copy, useSiteSettings } from "../components/site/theme";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import {
@@ -265,6 +270,20 @@ type MessagesCopy = {
   callEndedFailed: string;
   callMute: string;
   callUnmute: string;
+  /** Muting the speakers, which is not the same switch as the microphone. */
+  callDeafen: string;
+  callUndeafen: string;
+  callLeave: string;
+  /** The channel column's two groups, and the stand-in for a call that is not up. */
+  navMessages: string;
+  channelText: string;
+  channelVoice: string;
+  channelVoiceIdle: string;
+  railInCall: string;
+  railFriends: string;
+  railOnline: string;
+  railPeople: string;
+  railEmpty: string;
   callCameraOff: string;
   callCameraOn: string;
   callShareScreen: string;
@@ -284,6 +303,11 @@ type MessagesCopy = {
   callUnknown: string;
   callMicOn: string;
   callMicMuted: string;
+  /** Their audio has arrived, which is not the same as their switch being on. */
+  callVoiceConnected: string;
+  callVoiceWaiting: string;
+  /** Reads out with the clock beside it, for a screen reader. */
+  callElapsed: string;
   callPeople: string;
   callScreenLabel: string;
   callScreenLabelWindow: string;
@@ -473,6 +497,18 @@ const messagesCopy: Record<Lang, MessagesCopy> = {
     callEndedFailed: "Връзката прекъсна",
     callMute: "Заглуши микрофона",
     callUnmute: "Включи микрофона",
+    callDeafen: "Заглуши слушалките",
+    callUndeafen: "Включи слушалките",
+    callLeave: "Напусни обаждането",
+    navMessages: "Съобщения",
+    channelText: "Текстови канали",
+    channelVoice: "Гласов канал",
+    channelVoiceIdle: "Свърже се",
+    railInCall: "В обаждането",
+    railFriends: "Приятели",
+    railOnline: "На лини",
+    railPeople: "Хора",
+    railEmpty: "Още никой няма тук.",
     callCameraOff: "Изключи камерата",
     callCameraOn: "Включи камерата",
     callShareScreen: "Сподели екран",
@@ -492,6 +528,9 @@ const messagesCopy: Record<Lang, MessagesCopy> = {
     callUnknown: "Непознат",
     callMicOn: "Микрофонът е включен",
     callMicMuted: "Микрофонът е заглушен",
+    callVoiceConnected: "Свързано гласово устройство",
+    callVoiceWaiting: "Гласа още не е свързан",
+    callElapsed: "Продължителност:",
     callPeople: "В разговора: {count}",
     callScreenLabel: "Споделен екран",
     callScreenLabelWindow: "Споделен прозорец",
@@ -678,6 +717,18 @@ const messagesCopy: Record<Lang, MessagesCopy> = {
     callEndedFailed: "The connection dropped",
     callMute: "Mute the microphone",
     callUnmute: "Unmute the microphone",
+    callDeafen: "Mute the speakers",
+    callUndeafen: "Unmute the speakers",
+    callLeave: "Leave the call",
+    navMessages: "Messages",
+    channelText: "Text channels",
+    channelVoice: "Voice channel",
+    channelVoiceIdle: "Not connected",
+    railInCall: "In the call",
+    railFriends: "Friends",
+    railOnline: "Online",
+    railPeople: "People",
+    railEmpty: "Nobody here yet.",
     callCameraOff: "Turn the camera off",
     callCameraOn: "Turn the camera on",
     callShareScreen: "Share the screen",
@@ -697,6 +748,9 @@ const messagesCopy: Record<Lang, MessagesCopy> = {
     callUnknown: "Unknown",
     callMicOn: "Microphone is on",
     callMicMuted: "Microphone is muted",
+    callVoiceConnected: "Voice device connected",
+    callVoiceWaiting: "Voice not connected yet",
+    callElapsed: "Duration:",
     callPeople: "In call: {count}",
     callScreenLabel: "Shared screen",
     callScreenLabelWindow: "Shared window",
@@ -882,6 +936,18 @@ const messagesCopy: Record<Lang, MessagesCopy> = {
     callEndedFailed: "连接已断开",
     callMute: "静音麦克风",
     callUnmute: "取消静音",
+    callDeafen: "静音扬声器",
+    callUndeafen: "取消静音扬声器",
+    callLeave: "离开通话",
+    navMessages: "消息",
+    channelText: "文字频道",
+    channelVoice: "语音频道",
+    channelVoiceIdle: "未连接",
+    railInCall: "通话中",
+    railFriends: "好友",
+    railOnline: "在线",
+    railPeople: "成员",
+    railEmpty: "这里还没有人。",
     callCameraOff: "关闭摄像头",
     callCameraOn: "打开摄像头",
     callShareScreen: "共享屏幕",
@@ -901,6 +967,9 @@ const messagesCopy: Record<Lang, MessagesCopy> = {
     callUnknown: "未知",
     callMicOn: "麦克风已开启",
     callMicMuted: "麦克风已静音",
+    callVoiceConnected: "语音设备已连接",
+    callVoiceWaiting: "语音尚未连接",
+    callElapsed: "时长：",
     callPeople: "通话中：{count}",
     callScreenLabel: "共享屏幕",
     callScreenLabelWindow: "共享窗口",
@@ -1507,6 +1576,33 @@ export function MessagesPage() {
   const callUp = call.status !== "idle" && call.status !== "incoming";
   const [localStream, setLocalStream] = useState<unknown>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, unknown>>({});
+  /** Deafening the speakers, which is a separate switch from the microphone. */
+  const [deafened, setDeafened] = useState(false);
+
+  // Deafen means hear nothing, and there is nothing to hear once the call is
+  // over, so the switch does not survive the call it was set for.
+  useEffect(() => {
+    if (!callUp) setDeafened(false);
+  }, [callUp]);
+
+  /** The call clock for the corner panel, and for the call screen's own header. */
+  const callElapsed = useCallClock(call.answeredAt, callUp);
+  useEffect(() => {
+    for (const node of document.querySelectorAll<HTMLMediaElement>("audio[data-call-remote]")) {
+      node.muted = deafened;
+    }
+  }, [deafened, remoteStreams]);
+
+  /** The left rail: the site's own sections, which is what a server is here. */
+  const guildSections = useMemo(
+    () => [
+      { key: "home", label: copy[lang].nav.home, to: "/", initials: "⌂" },
+      { key: "games", label: copy[lang].nav.games, to: "/games", initials: "G" },
+      { key: "music", label: copy[lang].nav.music, to: "/music", initials: "♪" },
+      { key: "messages", label: copy[lang].nav.messages, to: "/messages", initials: "✉" },
+    ],
+    [lang],
+  );
 
   // The media layer is built once and handed to the store, which owns the
   // handshake and the conversation around it.
@@ -1581,6 +1677,68 @@ export function MessagesPage() {
   );
   const activeContact = activeChat ? (contactsByEmail.get(activeChat.peerEmail) ?? null) : null;
   const peerTyping = activeChat ? messagesStore.isPeerTyping(activeChat.id) : false;
+
+  /** The channel column: every conversation, as a text channel is here. */
+  const channelList = useMemo(
+    () =>
+      visibleChats.slice(0, 40).map((item) => ({
+        id: item.id,
+        name: contactsByEmail.get(item.peerEmail)?.name || item.peerEmail,
+        unread: unreadIn(item),
+      })),
+    [visibleChats, contactsByEmail],
+  );
+
+  /**
+   * Who the right hand column lists, and how many of them are here.
+   *
+   * Accepted friends and online contacts are two different sets, and reading
+   * only the contacts is why a friend somebody had just added could be nowhere
+   * on the screen: a friendship is a row in the store's own list, and a contact
+   * is a row in the cloud snapshot, and accepting somebody writes to the first
+   * one. Both are listed, friends first, and an address is never in the column
+   * twice.
+   *
+   * A friend has no last-seen of their own, so the presence dot is answered
+   * from the contact row where there is one, and left off where there is not
+   * rather than guessed.
+   */
+  const railFriends = useMemo(() => {
+    const me = (store.email ?? "").trim().toLowerCase();
+    const seen = new Set<string>();
+    const people: Array<{ name: string; avatar: string | null; accent: string; online: boolean }> =
+      [];
+    for (const record of store.friends.friends) {
+      const iAsked = (record.fromEmail ?? "").trim().toLowerCase() === me;
+      const email = (iAsked ? record.toEmail : record.fromEmail) ?? "";
+      const key = email.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const contact = contactsByEmail.get(key);
+      people.push({
+        name: (iAsked ? record.toName : record.fromName) || contact?.name || key,
+        // The request only carries a face for the person who sent it, so the
+        // other side is taken from the contact row.
+        avatar: iAsked ? (contact?.avatar ?? null) : record.fromAvatar,
+        accent: contact?.accent ?? "#5865f2",
+        online: contact ? isOnlineAt(contact.lastSeenAt) : false,
+      });
+    }
+    return people;
+  }, [store.friends, store.email, contactsByEmail]);
+
+  const railOnline = useMemo(() => {
+    const already = new Set(railFriends.map((person) => person.name));
+    return visibleContacts
+      .filter((person) => isOnlineAt(person.lastSeenAt))
+      .filter((person) => !already.has(person.name || person.peerEmail))
+      .map((person) => ({
+        name: person.name || person.peerEmail,
+        avatar: person.avatar,
+        accent: person.accent,
+        online: true,
+      }));
+  }, [visibleContacts, railFriends]);
 
   // The call that is up, whether it belongs to this conversation or another one.
   const liveCall = store.call;
@@ -1864,7 +2022,47 @@ export function MessagesPage() {
           <OfflineBanner t={t} onTryCloud={() => void messagesStore.promoteToCloud()} />
         </div>
       ) : null}
-      <section className="mx-auto flex h-[calc(100dvh-68px-1rem)] max-w-[1500px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/80 shadow-glow backdrop-blur-xl sm:h-[calc(100dvh-68px-1.5rem)] sm:rounded-3xl lg:flex-row">
+      {/**
+       * The three columns, and only from a width that can hold them.
+       *
+       * Every column here is a fixed width that refuses to shrink, and the thread
+       * between them is the only one that flexes, so the columns hold their places
+       * while the conversation takes whatever is left. The reverse is what a
+       * squeezed screen does: everything is sized by `flex-basis`, the thread is
+       * squeezed to nothing, and the whole row shifts left as the browser makes
+       * room for it.
+       *
+       * The people on the right wait for `xl` rather than `lg`. At `lg` the rail,
+       * the channel list and the conversation list already want more width than a
+       * 1280 screen has to give, and a right column that squeezes the chat is
+       * worse than no right column.
+       */}
+      <section className="discord-shell relative mx-auto flex h-[calc(100dvh-68px-1rem)] max-w-[1500px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/80 shadow-glow backdrop-blur-xl sm:h-[calc(100dvh-68px-1.5rem)] sm:rounded-3xl lg:flex-row">
+        <GuildRail sections={guildSections} active="messages" label={t.navMessages} />
+        <ChannelSidebar
+          t={t}
+          channels={channelList}
+          activeChatId={activeChatId}
+          onSelect={openChat}
+          voice={
+            callUp
+              ? { name: call.peerName || t.channelVoiceIdle, live: true }
+              : { name: t.channelVoiceIdle, live: false }
+          }
+          onJoinVoice={() => {
+            // Joining from the channel column only means something when there is
+            // a conversation to call, so it opens the first one rather than
+            // reporting that there is nothing to call.
+            const first = visibleChats[0];
+            if (!first) {
+              void messagesStore.startCall({ chatId: "", starts: "audio" }).catch(() => undefined);
+              return;
+            }
+            void messagesStore
+              .startCall({ chatId: first.id, starts: "audio" })
+              .catch(() => undefined);
+          }}
+        />
         <ChatSidebar
           t={t}
           lang={lang}
@@ -1963,7 +2161,49 @@ export function MessagesPage() {
           className={showList ? "flex" : "hidden lg:flex"}
         />
 
+        {/* The three switches that belong in the corner rather than in a bar
+            that has to be found, laid over the channel column's foot. */}
+        {callUp ? (
+          <div className="pointer-events-none absolute bottom-4 left-4 z-30 hidden md:block">
+            <div className="pointer-events-auto">
+              <VoiceDock
+                t={t}
+                mic={call.mic}
+                deafened={deafened}
+                elapsed={callElapsed}
+                onMic={() => {
+                  const next = !call.mic;
+                  messagesStore.callMedia().setMic(next);
+                  void messagesStore.setCallMedia({ mic: next });
+                }}
+                onDeafen={() => setDeafened((current) => !current)}
+                onLeave={() => void messagesStore.endCall("hangup")}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        <MemberRail
+          t={t}
+          inCall={
+            callUp
+              ? call.participants
+                  .filter((person) => !person.isSelf)
+                  .map((person) => ({
+                    name: person.name || person.email,
+                    avatar: person.avatar,
+                    accent: person.isSelf ? "#1DB954" : "#22d3ee",
+                    muted: !person.mic,
+                    voice: carriesAudio(remoteStreams[person.email]),
+                  }))
+              : []
+          }
+          friends={railFriends.slice(0, 24)}
+          online={railOnline.slice(0, 24)}
+        />
+
         <div
+          data-pane="thread"
           className={`min-h-0 min-w-0 flex-1 flex-col border-border bg-background/40 lg:flex lg:border-l ${
             showList ? "hidden lg:flex" : "flex"
           }`}
@@ -2694,7 +2934,8 @@ function ChatSidebar({
 }: ChatSidebarProps) {
   return (
     <aside
-      className={`w-full shrink-0 flex-col border-border bg-surface/40 lg:w-[380px] lg:border-r lg:shadow-[1px_0_0_rgba(255,255,255,0.04)] ${className ?? "flex"}`}
+      data-pane="list"
+      className={`min-h-0 w-full shrink-0 flex-col overflow-y-auto border-border bg-surface/40 lg:w-[380px] lg:border-r lg:shadow-[1px_0_0_rgba(255,255,255,0.04)] ${className ?? "flex"}`}
     >
       {/* Account header: who is signed in, on which transport. */}
       <div className="shrink-0 border-b border-border/60 bg-background/40 px-3 pb-3 pt-4 sm:px-4">
@@ -3967,6 +4208,32 @@ function ContactAvatar({
  * there is a camera, and a face when there is not, which is the state most of a
  * voice call is in.
  */
+/**
+ * Whether a person's audio has actually arrived, as against their having said
+ * it will.
+ *
+ * Their own `mic` switch is what they asked for, not what is coming. The two come
+ * apart on a phone that is still waiting for permission, and on a connection that
+ * carried a description and no track behind it, and in both cases a tile that
+ * believes the switch is claiming a voice nobody can hear. The stream is the only
+ * thing here that is evidence, so it is what the mark is drawn from.
+ */
+const carriesAudio = (stream: unknown): boolean => {
+  const source = stream as {
+    getAudioTracks?: () => Array<{ readyState?: string } | null> | null;
+  } | null;
+  if (!source || typeof source.getAudioTracks !== "function") return false;
+  let tracks: Array<{ readyState?: string } | null> = [];
+  try {
+    tracks = source.getAudioTracks() ?? [];
+  } catch {
+    // A stream from a browser that has torn the connection down answers by
+    // throwing rather than by returning nothing.
+    return false;
+  }
+  return tracks.some((track) => track && track.readyState !== "ended");
+};
+
 function CallParticipant({
   name,
   avatar,
@@ -3977,6 +4244,8 @@ function CallParticipant({
   isSelf,
   /** True while this person is being connected, or has just arrived. */
   joining = false,
+  /** True when their audio has actually arrived, not merely been switched on. */
+  voice = false,
   /** True for the person whose screen is being shown to everybody. */
   sharing = false,
   /** What they chose to share, so the label can say which. */
@@ -3994,6 +4263,8 @@ function CallParticipant({
   isSelf: boolean;
   /** True while this person is being connected, or has just arrived. */
   joining?: boolean;
+  /** True when their audio has actually arrived, not merely been switched on. */
+  voice?: boolean;
   /** True for the person whose screen is being shown to everybody. */
   sharing?: boolean;
   surface?: ScreenSurface;
@@ -4085,7 +4356,11 @@ function CallParticipant({
           </>
         )}
 
-        {/* Two marks at most: a microphone, and a hand while they are dialling. */}
+        {/* Two marks at most: a microphone, and a hand while they are dialling.
+            The microphone says three things, not two: muted is a switch they set,
+            and a live mark is a device that is actually sending. Those come apart
+            on a phone still waiting for permission, and a tile that shows only
+            "unmuted" claims a voice that is not there. */}
         <span className="absolute right-1 bottom-1 flex items-center gap-1">
           {joining ? (
             <span
@@ -4096,10 +4371,13 @@ function CallParticipant({
             </span>
           ) : null}
           <span
-            className="grid size-6 place-items-center rounded-full border-2 border-card bg-background/80 text-foreground"
-            aria-label={muted ? t.callMicMuted : t.callMicOn}
+            className={`grid size-6 place-items-center rounded-full border-2 border-card ${
+              voice ? "bg-[#23a55a] text-white" : "bg-background/80 text-foreground"
+            }`}
+            aria-label={!voice ? t.callVoiceWaiting : muted ? t.callMicMuted : t.callVoiceConnected}
+            title={voice ? t.callVoiceConnected : t.callVoiceWaiting}
           >
-            {muted ? <MicOff className="size-3" /> : <Mic className="size-3" />}
+            {muted || !voice ? <MicOff className="size-3" /> : <Mic className="size-3" />}
           </span>
         </span>
 
@@ -4169,6 +4447,7 @@ function CallStage({
               stream={streams[sharer.email]}
               video
               muted={!sharer.mic}
+              voice={carriesAudio(streams[sharer.email])}
               isSelf={false}
               sharing
               surface={sharer.screenSurface}
@@ -4187,6 +4466,7 @@ function CallStage({
                 // camera is doing: the screen is the video now.
                 video={person.camera || person.screen}
                 muted={!person.mic}
+                voice={carriesAudio(streams[person.email])}
                 isSelf={person.isSelf}
                 sharing={person.screen}
                 surface={person.screenSurface}
@@ -4223,6 +4503,337 @@ function CallStage({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The strip of round icons down the far left.
+ *
+ * Discord calls these servers and they are one app each; here each icon is one
+ * of the site's own sections, which is the same idea made of what this app
+ * actually has. The messages one is held in its active state, so the strip
+ * always says where a person is even when the rest of the screen does not.
+ */
+function GuildRail({
+  sections,
+  active,
+  label,
+}: {
+  sections: Array<{ key: string; label: string; to: string; initials: string }>;
+  active: string;
+  label: string;
+}) {
+  return (
+    <nav
+      aria-label={label}
+      className="hidden shrink-0 flex-col items-center gap-2 overflow-y-auto bg-[var(--discord-rail)] py-3 lg:flex"
+    >
+      {sections.map((section) => {
+        const here = section.key === active;
+        return (
+          <a
+            key={section.key}
+            href={section.to}
+            aria-current={here ? "page" : undefined}
+            title={section.label}
+            className={`grid size-12 shrink-0 place-items-center rounded-[1.6rem] text-2xl transition-all ${
+              here
+                ? "rounded-2xl bg-[var(--primary)] text-white"
+                : "bg-[var(--surface-2)] text-[var(--muted-foreground)] hover:rounded-2xl hover:bg-[var(--accent)] hover:text-foreground"
+            }`}
+          >
+            <span className="sr-only">{section.label}</span>
+            <span aria-hidden="true">{section.initials}</span>
+          </a>
+        );
+      })}
+    </nav>
+  );
+}
+
+/**
+ * The channel column, in Discord's two groups.
+ *
+ * Text channels are the conversations this account has, because that is what a
+ * text channel is here: somewhere a conversation lives. The voice channel is the
+ * call that is actually up, so joining and leaving happen where the call is
+ * rather than in a bar that has to be found.
+ */
+function ChannelSidebar({
+  t,
+  channels,
+  activeChatId,
+  onSelect,
+  voice,
+  onJoinVoice,
+}: {
+  t: MessagesCopy;
+  channels: Array<{ id: string; name: string; unread: number }>;
+  activeChatId: string | null;
+  onSelect: (id: string) => void;
+  voice: { name: string; live: boolean } | null;
+  onJoinVoice: () => void;
+}) {
+  return (
+    <div className="hidden min-h-0 w-60 shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--surface)] lg:flex">
+      <div className="shrink-0 border-b border-[var(--border)] px-4 py-3">
+        <p className="truncate text-sm font-bold text-foreground">{t.navMessages}</p>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+        <p className="px-2 pb-1 font-mono text-[0.6rem] tracking-[0.14em] text-[var(--muted-foreground)] uppercase">
+          {t.channelText}
+        </p>
+        {channels.map((channel) => {
+          const here = channel.id === activeChatId;
+          return (
+            <button
+              key={channel.id}
+              type="button"
+              onClick={() => onSelect(channel.id)}
+              aria-current={here ? "true" : undefined}
+              className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition-colors ${
+                here
+                  ? "bg-[var(--accent)] text-foreground"
+                  : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]/60 hover:text-foreground"
+              }`}
+            >
+              <Hash className="size-4 shrink-0 opacity-60" />
+              <span className="min-w-0 flex-1 truncate">{channel.name}</span>
+              {channel.unread > 0 ? (
+                <span className="shrink-0 rounded-full bg-[var(--destructive)] px-1.5 text-[0.6rem] leading-4 font-bold text-white">
+                  {channel.unread}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+
+        <p className="mt-4 px-2 pb-1 font-mono text-[0.6rem] tracking-[0.14em] text-[var(--muted-foreground)] uppercase">
+          {t.channelVoice}
+        </p>
+        <button
+          type="button"
+          onClick={onJoinVoice}
+          className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition-colors ${
+            voice?.live
+              ? "bg-[var(--destructive)]/20 text-[var(--destructive)]"
+              : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]/60 hover:text-foreground"
+          }`}
+        >
+          <Volume2 className="size-4 shrink-0 opacity-60" />
+          <span className="min-w-0 flex-1 truncate">
+            {voice?.live ? voice.name : t.channelVoiceIdle}
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Who is around, down the right.
+ *
+ * The people in the call first, because during a call that is the only list
+ * anybody reads, then everyone else who is here. An offline contact is left
+ * out: a sidebar of grey names is a list of people who cannot answer.
+ */
+function MemberRail({
+  t,
+  inCall,
+  friends,
+  online,
+}: {
+  t: MessagesCopy;
+  inCall: Array<{
+    name: string;
+    avatar: string | null;
+    accent: string;
+    muted: boolean;
+    /** Their audio has arrived, as against their switch being on. */
+    voice: boolean;
+  }>;
+  /** Accepted friends, in the order they were accepted, newest first. */
+  friends: Array<{ name: string; avatar: string | null; accent: string; online: boolean }>;
+  /** Everybody else who is here, so an online stranger is not invisible. */
+  online: Array<{ name: string; avatar: string | null; accent: string; online: boolean }>;
+}) {
+  const line = (
+    person: { name: string; avatar: string | null; accent: string },
+    status?: "speaking" | "offline",
+  ) => (
+    <li
+      key={person.name}
+      className="flex items-center gap-2 rounded px-2 py-1 hover:bg-[var(--accent)]/60"
+    >
+      <span
+        className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-full font-display text-xs font-bold"
+        style={{ backgroundColor: `${person.accent}1f`, color: person.accent }}
+      >
+        {person.avatar ? (
+          <span
+            className="size-full bg-cover bg-center"
+            style={{ backgroundImage: `url("${person.avatar}")` }}
+          />
+        ) : (
+          initialsForName(person.name)
+        )}
+        {status ? (
+          <span
+            aria-hidden="true"
+            className="absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-[var(--surface)]"
+            style={{ backgroundColor: status === "speaking" ? "#23a55a" : "#80848e" }}
+          />
+        ) : null}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{person.name}</span>
+    </li>
+  );
+
+  const heading = (label: string, count: number) => (
+    <p className="mt-4 mb-1 px-2 font-mono text-[0.6rem] tracking-[0.14em] text-[var(--muted-foreground)] uppercase first:mt-0">
+      {label} — {count}
+    </p>
+  );
+
+  return (
+    <aside
+      aria-label={t.railPeople}
+      className="hidden min-h-0 w-60 shrink-0 flex-col overflow-y-auto bg-[var(--surface)] px-2 py-3 xl:flex"
+    >
+      {inCall.length ? (
+        <>
+          {heading(t.railInCall, inCall.length)}
+          <ul className="mb-2">
+            {inCall.map((person) => (
+              <li
+                key={person.name}
+                className="flex items-center gap-2 rounded px-2 py-1 hover:bg-[var(--accent)]/60"
+              >
+                {line(person, person.muted || !person.voice ? "offline" : "speaking")}
+                {/* The device itself, beside the name, because a person whose
+                    switch is on but whose audio has not arrived is the one thing
+                    a list of participants cannot show on its own. */}
+                <span
+                  title={person.voice ? t.callVoiceConnected : t.callVoiceWaiting}
+                  aria-label={person.voice ? t.callVoiceConnected : t.callVoiceWaiting}
+                  className={`grid size-5 shrink-0 place-items-center rounded-full ${
+                    person.voice
+                      ? "bg-[#23a55a] text-white"
+                      : "bg-[var(--surface-2)] text-[var(--muted-foreground)]"
+                  }`}
+                >
+                  {person.muted || !person.voice ? (
+                    <MicOff className="size-2.5" />
+                  ) : (
+                    <Mic className="size-2.5" />
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {friends.length ? (
+        <>
+          {heading(t.railFriends, friends.length)}
+          <ul className="mb-2">
+            {friends.map((person) => line(person, person.online ? "speaking" : "offline"))}
+          </ul>
+        </>
+      ) : null}
+      {online.length ? (
+        <>
+          {heading(t.railOnline, online.length)}
+          <ul>{online.map((person) => line(person, "speaking"))}</ul>
+        </>
+      ) : null}
+      {inCall.length || friends.length || online.length ? null : (
+        <p className="px-2 text-sm text-[var(--muted-foreground)]">{t.railEmpty}</p>
+      )}
+    </aside>
+  );
+}
+
+/**
+ * The panel in the bottom corner, where Discord keeps the three things a person
+ * needs during a call without looking for them.
+ *
+ * Muting the microphone and deafening the speakers are separate switches on
+ * purpose: a laptop picking up a room and a person unable to hear because their
+ * headset is on the desk are different problems, and a single switch makes the
+ * second one look like the first. Leaving is the red one and is the only
+ * destructive thing here, so it is the only one that is red.
+ */
+function VoiceDock({
+  t,
+  mic,
+  deafened,
+  elapsed,
+  onMic,
+  onDeafen,
+  onLeave,
+}: {
+  t: MessagesCopy;
+  mic: boolean;
+  deafened: boolean;
+  /** `mm:ss` from the moment the call connected, or empty before it has. */
+  elapsed: string;
+  onMic: () => void;
+  onDeafen: () => void;
+  onLeave: () => void;
+}) {
+  const sw = (
+    label: string,
+    on: boolean,
+    danger: string | null,
+    onClick: () => void,
+    mark: ReactNode,
+  ) => (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={on}
+      onClick={onClick}
+      className={`grid size-9 shrink-0 place-items-center rounded-full transition-colors ${
+        danger
+          ? "bg-[var(--discord-leave)] text-white hover:brightness-110"
+          : on
+            ? "bg-[var(--surface-2)] text-[var(--discord-deafen)] hover:brightness-125"
+            : "bg-[var(--discord-leave)] text-white hover:brightness-110"
+      }`}
+    >
+      {mark}
+    </button>
+  );
+
+  return (
+    <div className="flex items-center gap-2 rounded-2xl bg-[var(--surface)] px-3 py-2">
+      {elapsed ? (
+        <span
+          aria-label={`${t.callElapsed} ${elapsed}`}
+          className="mr-1 font-mono text-xs tabular-nums text-[var(--muted-foreground)]"
+        >
+          {elapsed}
+        </span>
+      ) : null}
+      {sw(
+        mic ? t.callMute : t.callUnmute,
+        mic,
+        null,
+        onMic,
+        mic ? <Mic className="size-4" /> : <MicOff className="size-4" />,
+      )}
+      {sw(
+        deafened ? t.callUndeafen : t.callDeafen,
+        !deafened,
+        null,
+        onDeafen,
+        deafened ? <VolumeX className="size-4" /> : <Headphones className="size-4" />,
+      )}
+      {sw(t.callLeave, false, "leave", onLeave, <PhoneOff className="size-4" />)}
     </div>
   );
 }
@@ -4376,7 +4987,7 @@ function RemoteAudio({ stream }: { stream: unknown }) {
     };
   }, []);
 
-  return <audio ref={ref} autoPlay />;
+  return <audio ref={ref} autoPlay data-call-remote />;
 }
 
 /**
@@ -4388,6 +4999,32 @@ function RemoteAudio({ stream }: { stream: unknown }) {
  * a voice channel is for: pulling somebody in, and picking what to play while
  * you talk.
  */
+/**
+ * The clock a call keeps, counted from the moment the two sides were connected.
+ *
+ * It starts at `answeredAt` and not at `startedAt`, because the time spent
+ * ringing is not time spent talking, and a clock that started when the button was
+ * pressed reads high by however long the other person took to pick up. It stops
+ * by the same token: a call that has ended, or one never answered, has no clock
+ * at all rather than one frozen at zero.
+ *
+ * Ticking from a second timer rather than from each render, so the whole call
+ * screen is not re-rendered sixty times a minute to move one number, and so a
+ * backgrounded tab catches up on its own when it comes back rather than
+ * counting the seconds it was not looking.
+ */
+function useCallClock(answeredAt: number, running: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running || answeredAt <= 0) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [answeredAt, running]);
+  if (!running || answeredAt <= 0) return "";
+  return callDuration(Math.max(0, now - answeredAt));
+}
+
 function CallScreen({
   t,
   call,
@@ -4451,6 +5088,10 @@ function CallScreen({
           : t.callConnecting
         : t.callActive;
 
+  // Only once the two sides are actually together, and still while the call is
+  // on screen afterwards so the number it ended on is the number that is read.
+  const elapsed = useCallClock(call.answeredAt, !isIncoming && !connecting);
+
   return (
     <section
       className="absolute inset-0 z-40 flex flex-col bg-background/95 backdrop-blur-xl"
@@ -4466,6 +5107,19 @@ function CallScreen({
           <span className="relative size-2.5 rounded-full bg-brand" />
         </span>
         <p className="min-w-0 flex-1 truncate font-display text-sm font-bold">{headline}</p>
+        {/* The clock sits beside the state rather than under it, where a person
+            looking for how long they have been talking finds it without reading
+            anything else. Tabular figures so it does not shuffle sideways once a
+            second. */}
+        {elapsed ? (
+          <time
+            dateTime={`PT${elapsed}`}
+            aria-label={`${t.callElapsed} ${elapsed}`}
+            className="shrink-0 font-mono text-sm tabular-nums text-muted-foreground"
+          >
+            {elapsed}
+          </time>
+        ) : null}
         {others > 0 ? (
           <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 font-mono text-[0.55rem] tracking-[0.12em] text-muted-foreground uppercase">
             {t.callPeople.replace("{count}", String(others + 1))}

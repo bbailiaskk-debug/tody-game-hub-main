@@ -385,10 +385,13 @@ describe("a voice call between two people", () => {
     await settle();
     await settle();
 
-    expect(bob.store.getState().call.status).toBe("connecting");
+    // Both sides show the call the moment it is picked up, on either phone, which
+    // is what puts the timer going and the waiting screen away. Neither waits for
+    // the connection, because the person on the other end is already there.
+    expect(bob.store.getState().call.status).toBe("active");
     // The caller was told the call was picked up, and offered the connection
     // that the answer will come back on.
-    expect(alice.store.getState().call.status).toBe("connecting");
+    expect(alice.store.getState().call.status).toBe("active");
     const kinds = link.relayed.map((frame) => frame.kind);
     expect(kinds).toContain("begin");
     expect(kinds).toContain("invite");

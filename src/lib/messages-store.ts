@@ -957,6 +957,11 @@ export class MessagesStore {
     const call = this.state.call;
     const self = normalize(this.state.email);
     if (call.callId !== roster.callId) return;
+    // A roster naming nobody is one that does not know yet, not one announcing an
+    // empty call. Taking it at its word replaces a list that is full with one that
+    // is not, and the screen falls back to "waiting for somebody to join" with
+    // everybody already in it.
+    if (roster.participants.length === 0 && call.participants.length > 0) return;
     const nameOf = (email: string) => {
       if (normalize(email) === self) return this.state.data?.profile.name ?? email;
       const contact = this.state.data?.contacts.find((item) => item.peerEmail === email);
@@ -1362,7 +1367,7 @@ export class MessagesStore {
     if (signal.kind === "answer") {
       // The other side answered, so this call was picked up even if the media
       // layer has not said the connection is up yet.
-      this.markAnswered(false);
+      this.markAnswered();
     }
     if (signal.kind === "renegotiate") {
       // The other device added something to the call, and it is the side that
@@ -1458,16 +1463,22 @@ export class MessagesStore {
    * network does next. `activate` is for the moment the connection is really
    * up, which is what puts the call on screen.
    */
-  private markAnswered = (activate = true) => {
+  /**
+   * The call was picked up: the clock starts and the call goes on screen.
+   *
+   * Both happen on the answer rather than on the connection being reported up.
+   * A person who picked up the phone is already in the call whether or not ICE
+   * ever gets there, and holding the screen on "Ringing" for the whole handshake
+   * is a screen that is wrong for every second of it — and on a network that
+   * needs a relay to meet at all, wrong for good. The connection still decides
+   * whether anybody is heard, which is what the media layer's own state is for;
+   * it does not decide whether the call is happening.
+   */
+  private markAnswered = () => {
     const call = this.state.call;
     if (call.status === "idle" || call.status === "ended") return;
-    if (call.answeredAt > 0 && !activate) return;
     this.emit({
-      call: {
-        ...call,
-        answeredAt: call.answeredAt || Date.now(),
-        ...(activate ? { status: "active" as const } : {}),
-      },
+      call: { ...call, answeredAt: call.answeredAt || Date.now(), status: "active" as const },
     });
   };
 
@@ -1630,7 +1641,7 @@ export class MessagesStore {
     const media = this.callMedia();
     const host = call.host || call.peerEmail;
     this.emit({ call: { ...call, status: "connecting" } });
-    this.markAnswered(false);
+    this.markAnswered();
     this.clearCallDeadlines();
     this.startConnectDeadline();
     await this.relayCall({
@@ -1691,7 +1702,7 @@ export class MessagesStore {
     const call = this.state.call;
     if (call.status !== "incoming") return { ok: false as const, reason: "no-call" as const };
     this.emit({ call: { ...call, status: "connecting" } });
-    this.markAnswered(false);
+    this.markAnswered();
     // Answered: the two sides are now trying to meet, and the clock for that is a
     // different one from the clock for somebody not picking up.
     this.clearCallDeadlines();

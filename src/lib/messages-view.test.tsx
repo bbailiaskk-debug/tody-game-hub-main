@@ -819,9 +819,18 @@ describe("the panes follow the viewport", () => {
     document.body.innerHTML = "";
   });
 
+  /**
+   * The two panes, found by what they are rather than by where they sit.
+   *
+   * There are more columns than two now: a rail, a channel list, the people on
+   * the right and the voice dock, some of which are only present during a call.
+   * Asking for "the element after the first aside" found the wrong one the day
+   * any of them was added, and a test that breaks on layout is a test that gets
+   * rewritten to fit the next layout instead of to catch the next bug.
+   */
   const panes = (host: HTMLElement) => ({
-    list: host.querySelector("aside"),
-    thread: host.querySelector("aside")?.nextElementSibling as HTMLElement | null,
+    list: host.querySelector<HTMLElement>('[data-pane="list"]'),
+    thread: host.querySelector<HTMLElement>('[data-pane="thread"]'),
   });
 
   it("leads with the list on a phone and swaps to the thread", async () => {

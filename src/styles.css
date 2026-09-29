@@ -115,6 +115,50 @@
   --discord: oklch(0.62 0.17 292);
 }
 
+/**
+ * Discord's own greys, scoped so the rest of the site keeps its accent.
+ *
+ * Discord builds a screen out of four near-identical greys and lets position
+ * alone say what a thing is, so the values are deliberately that close together
+ * and the separation is carried by the borders between the columns. Only the
+ * blurple, the green and the red are allowed to be loud, and they are the three
+ * a person acts on.
+ *
+ * Scoped rather than moved into `:root` because this is a look for the chat and
+ * calls, not for the games and music pages, and an accent a person picked for
+ * the rest of the site should not be thrown away by opening a conversation.
+ */
+.discord-shell {
+  --background: #1e1f22;
+  --foreground: #f2f3f5;
+  --card: #313338;
+  --card-foreground: #f2f3f5;
+  --popover: #313338;
+  --popover-foreground: #f2f3f5;
+  --surface: #2b2d31;
+  --surface-2: #383a40;
+  --muted: #2b2d31;
+  --muted-foreground: #949ba4;
+  --accent: #40444b;
+  --accent-foreground: #f2f3f5;
+  --border: #3f4147;
+  --input: #1e1f22;
+  --primary: #5865f2;
+  --primary-foreground: #ffffff;
+  --secondary: #2b2d31;
+  --secondary-foreground: #f2f3f5;
+  --brand: #5865f2;
+  --brand-bright: #5865f2;
+  --brand-dim: #4752c4;
+  --ring: #5865f2;
+  --destructive: #da373c;
+  --destructive-foreground: #ffffff;
+  --discord-rail: #1e1f22;
+  --discord-leave: #da373c;
+  --discord-deafen: #f0b232;
+  --discord-online: #23a55a;
+}
+
 .light {
   --background: oklch(0.98 0.006 150);
   --foreground: oklch(0.2 0.01 150);

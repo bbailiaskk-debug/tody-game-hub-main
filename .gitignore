@@ -23,6 +23,13 @@ release
 .wrangler/
 .dev.vars
 
+# Editor keys and local agent settings. `.continue/config.yaml` held a real
+# provider key, which is a password for a paid API and not a setting that
+# belongs in a repository; the file stays on disk and stays untracked.
+.continue/
+.continue
+
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

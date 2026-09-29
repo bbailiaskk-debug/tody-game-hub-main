@@ -94,7 +94,13 @@ function withHsts(response: Response): Response {
       );
     }
     if (!nextHeaders.has("permissions-policy")) {
-      nextHeaders.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+      // The microphone and the camera have to be allowed to this origin, or the
+      // browser refuses `getUserMedia` on policy grounds before the person is
+      // even asked: an empty allowlist denies the top level document too, not
+      // only framed ones, so `microphone=()` is a call nobody can be heard on
+      // rather than a protection. Geolocation is still off, because nothing here
+      // has any use for it.
+      nextHeaders.set("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()");
     }
 
     // HTML references hashed assets, so serving a stale document after a deploy
