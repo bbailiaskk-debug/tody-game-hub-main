@@ -1,0 +1,10 @@
+{
+  "name": "tody-game-hub-desktop",
+  "productName": "Tody Game Hub",
+  "version": "1.0.0",
+  "description": "Tody Game Hub as a program: chat, calls and games",
+  "author": "Todor Khristov",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "main.cjs"
+}

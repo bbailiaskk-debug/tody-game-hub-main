@@ -12,6 +12,7 @@ import {
   serverUserExists,
 } from "../lib/auth-functions";
 import { cachedRead, fnv1a, invalidateCachePrefix } from "../lib/remote-cache";
+import { messagesStore } from "../lib/messages-store";
 import {
   readRegisteredUsers,
   readPersistedAuthSession,
@@ -618,6 +619,8 @@ function Login() {
         };
         invalidateCachePrefix(`user-exists:${normalizedEmail}`);
         signIn(authenticatedUser, result.data.token);
+        // A brand new account can open its (empty) messages hub straight away.
+        void messagesStore.establishSession(result.data.email, password);
       } catch (caughtError) {
         console.warn("Registration failed.", caughtError);
         setError(
@@ -683,6 +686,9 @@ function Login() {
         accentColor: result.data.accentColor,
       };
       signIn(user, result.data.token);
+      // Mint the messages session in the same sign-in, so /messages does not
+      // ask for the password a second time on this device.
+      void messagesStore.establishSession(result.data.email, password);
       return;
     } catch (caughtError) {
       console.warn("Login failed on server.", caughtError);

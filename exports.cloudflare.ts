@@ -2,6 +2,49 @@ import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectNamespace, WebSocket } from "cloudflare:workers";
 
 import {
+  getMessagesSecret,
+  messagesDoName,
+  normalizeMessagesEmail,
+  parseCookieHeader,
+  verifySessionToken,
+  MESSAGES_COOKIE,
+  MIRROR_HEADER,
+  SESSION_EMAIL_HEADER,
+  SESSION_HEADER,
+} from "./src/lib/messages-auth";
+import {
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_ATTACHMENT_VALUE_CHARS,
+  MAX_CALLS_PER_CHAT,
+  MAX_CHATS,
+  MAX_FILE_BYTES,
+  MAX_IMAGE_BYTES,
+  MAX_MESSAGES_PER_CHAT,
+  MAX_TEXT_LENGTH,
+  initialsForName,
+  isOnlineAt,
+  normalizePresenceStatus,
+  splitFriendRequests,
+  type CallOutcome,
+  type CallRecord,
+  type CallRoster,
+  type CallSignal,
+  type ChatContact,
+  type ChatMessage,
+  type FriendRequest,
+  type FriendsSnapshot,
+  type FriendshipStatus,
+  type IncomingAttachment,
+  type MessageAttachment,
+  type MessageChat,
+  type MessagesProfile,
+  type MessagesSnapshot,
+  type MessagePush,
+  type TypingState,
+  liveTyping,
+} from "./src/lib/messages-protocol";
+
+import {
   gameStatus,
   initialState,
   legalMovesForSquare,
@@ -1129,8 +1172,7 @@ export class AirHockeyDO extends DurableObject<AirHockeyEnv> {
     const pathParts = url.pathname.split("/").filter(Boolean);
     const gameId = pathParts[3] ?? "";
     const upgrade = request.headers.get("Upgrade");
-    const isWebSocketUpgrade =
-      typeof upgrade === "string" && upgrade.toLowerCase() === "websocket";
+    const isWebSocketUpgrade = typeof upgrade === "string" && upgrade.toLowerCase() === "websocket";
 
     if (!isWebSocketUpgrade) {
       if (!gameId) return json({ error: "invalid-game" }, 400);
@@ -1612,6 +1654,1308 @@ export class AirHockeyDO extends DurableObject<AirHockeyEnv> {
       return parsed as AhClientToServerMessage;
     } catch {
       return null;
+    }
+  }
+}
+
+type MessagesEnv = {
+  AUTH_USERS_KV?: KvLike;
+  MESSAGES_DO?: DurableObjectNamespace;
+};
+
+const ATTACHMENT_PREFIX = "att:";
+const PROFILE_KEY = "profile";
+const CONTACTS_KEY = "contacts";
+const CHAT_PREFIX = "chat:";
+const CHAT_INDEX_KEY = "chatIndex";
+/** A call in progress, kept only as long as the call is. */
+const CALL_PREFIX = "call:";
+const REV_KEY = "rev";
+const ATTACHMENT_INDEX_KEY = "attachments";
+const FRIEND_PREFIX = "friend:";
+const FRIEND_INDEX_KEY = "friendIndex";
+const TYPING_KEY = "typing";
+const MAX_FRIEND_RECORDS = 500;
+
+type StoredAttachment = {
+  id: string;
+  mimeType: string;
+  name: string;
+  /** Base64 payload without the data-url prefix. */
+  data: string;
+};
+
+const jsonResponse = (data: unknown, status = 200) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+
+/** Only an inline data url is stored; anything else is dropped. */
+const readAvatarDataUrl = (value: unknown) =>
+  typeof value === "string" && value.startsWith("data:image/") ? value.slice(0, 200_000) : null;
+
+const sanitizeAttachmentMeta = (value: unknown): MessageAttachment | null => {
+  if (!value || typeof value !== "object") return null;
+  const entry = value as Record<string, unknown>;
+  const id = String(entry["id"] ?? "").trim();
+  if (!id || id.length > 80) return null;
+  const mimeType = String(entry["mimeType"] ?? "application/octet-stream")
+    .trim()
+    .slice(0, 80);
+  const rawKind = entry["kind"];
+  const kind = rawKind === "image" || mimeType.startsWith("image/") ? "image" : "file";
+  const size = Number(entry["size"]);
+  return {
+    id,
+    kind,
+    name:
+      String(entry["name"] ?? "file")
+        .trim()
+        .slice(0, 120) || "file",
+    mimeType: mimeType || "application/octet-stream",
+    size: Number.isFinite(size) && size > 0 ? Math.round(size) : 0,
+    stored: Boolean(entry["stored"]),
+  };
+};
+
+/**
+ * A finished call, taken apart and put back together from what a client claims.
+ *
+ * The record is written by a phone, so it is checked the same way an attachment
+ * is: bounded strings, bounded numbers, and a fixed set of outcomes. A row that
+ * cannot be understood is not written at all rather than half written.
+ */
+const sanitizeCallRecord = (
+  value: unknown,
+  fallbackCallId: string,
+  peerEmail: string,
+): CallRecord | null => {
+  if (!value || typeof value !== "object") return null;
+  const entry = value as Record<string, unknown>;
+  const callId = String(entry["callId"] ?? fallbackCallId)
+    .trim()
+    .slice(0, 80);
+  if (!callId) return null;
+  const outcomes: CallOutcome[] = [
+    "completed",
+    "missed",
+    "declined",
+    "cancelled",
+    "busy",
+    "failed",
+  ];
+  const outcome = outcomes.includes(entry["outcome"] as CallOutcome)
+    ? (entry["outcome"] as CallOutcome)
+    : "missed";
+  const at = Number(entry["at"]);
+  const endedAt = Number(entry["endedAt"]);
+  const started = Number.isFinite(at) && at > 0 ? Math.round(at) : Date.now();
+  const stopped = Number.isFinite(endedAt) && endedAt > 0 ? Math.round(endedAt) : started;
+  const duration = Number(entry["durationMs"]);
+  const caller = String(entry["caller"] ?? "")
+    .trim()
+    .toLowerCase()
+    .slice(0, 120);
+  return {
+    callId,
+    caller: caller || peerEmail,
+    starts: entry["starts"] === "video" ? "video" : "audio",
+    at: started,
+    endedAt: Math.max(started, stopped),
+    // A call that ran cannot have been shorter than a second, and one that was
+    // never answered is exactly zero.
+    durationMs: outcome === "completed" ? Math.max(0, Math.round(duration) || 0) : 0,
+    outcome,
+    endedBy:
+      String(entry["endedBy"] ?? "")
+        .trim()
+        .toLowerCase()
+        .slice(0, 120) || peerEmail,
+  };
+};
+
+/** The rows already in storage, checked again on the way out. */
+const sanitizeCallRecords = (value: unknown, peerEmail = ""): CallRecord[] => {
+  if (!Array.isArray(value)) return [];
+  const records: CallRecord[] = [];
+  for (const entry of value.slice(-MAX_CALLS_PER_CHAT)) {
+    const record = sanitizeCallRecord(entry, "", peerEmail);
+    if (record) records.push(record);
+  }
+  return records;
+};
+
+/** A call as this object holds it: who is in it, and in what order. */
+type CallSession = {
+  callId: string;
+  host: string;
+  chatId: string;
+  starts: "audio" | "video";
+  createdAt: number;
+  participants: Array<{
+    email: string;
+    order: number;
+    status: "invited" | "active" | "left";
+  }>;
+  endedAt?: number;
+  endedBy?: string;
+  reason?: string;
+};
+
+/**
+ * One object per account. Holds that account's profile, contact list and the
+ * mirrored copy of every conversation they take part in.
+ *
+ * Reads and writes are serialised through blockConcurrencyWhile so concurrent
+ * devices on the same account cannot interleave a read-modify-write.
+ */
+export class MessagesDO extends DurableObject<MessagesEnv> {
+  private readonly connsById = new Map<WebSocket, string>();
+
+  override async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/^\/api\/messages/, "") || "/";
+
+    const isUpgrade = (request.headers.get("Upgrade") ?? "").toLowerCase() === "websocket";
+    if (isUpgrade) {
+      return this.handleUpgrade(request, url);
+    }
+
+    const identity = await this.resolveIdentity(request);
+    if (!identity) return jsonResponse({ error: "unauthorized" }, 401);
+
+    if (path === "/attachment") {
+      return this.handleAttachment(request, url);
+    }
+
+    try {
+      if (request.method === "GET") {
+        // A cheap profile-only read used to refresh contact presence without
+        // pulling a whole conversation history.
+        if (path === "/profile") {
+          const profile = await this.ctx.blockConcurrencyWhile(() => this.readProfile());
+          return jsonResponse(profile);
+        }
+        if (path === "/friend/list") {
+          const friends = await this.ctx.blockConcurrencyWhile(() =>
+            this.readFriendsSnapshot(identity),
+          );
+          return jsonResponse({ ok: true, friends });
+        }
+        const snapshot = await this.ctx.blockConcurrencyWhile(() => this.readSnapshot());
+        return jsonResponse(snapshot);
+      }
+
+      const payload = (await request.json()) as Record<string, unknown>;
+      // Set by the gateway when it mirrors somebody else's change into this
+      // object, and stripped from anything a client sends. It travels as an
+      // argument rather than in the payload so a body field cannot stand in
+      // for it.
+      const mirrored = request.headers.get(MIRROR_HEADER) === "1";
+      const result = await this.ctx.blockConcurrencyWhile(() =>
+        this.applyWrite(path, payload, mirrored, identity),
+      );
+      // Typing pushes its own precise frame, so the generic notice would be a
+      // second broadcast for the same change and would drag a full snapshot
+      // re-sync in behind every typing signal.
+      if (!result.silent) this.broadcast({ type: "sync", rev: result.rev });
+      // Contact fan-out touches other objects, so it must not hold this one.
+      if (result.fanout) void this.mirrorPresenceToContacts(identity);
+      return jsonResponse(result);
+    } catch (error) {
+      console.warn("Messages DO write failed.", error);
+      return jsonResponse({ error: "write-failed" }, 500);
+    }
+  }
+
+  // ---------------------------------------------------------------- identity
+
+  /**
+   * The SSR service verifies the HttpOnly session cookie and forwards the
+   * resolved identity plus the signing secret as headers, so the object never
+   * needs its own KV binding to agree on the secret. Direct requests fall back
+   * to reading the cookie here.
+   */
+  private async resolveIdentity(request: Request): Promise<string | null> {
+    const injected = request.headers.get(SESSION_EMAIL_HEADER)?.trim();
+    const injectedSecret = request.headers.get(SESSION_HEADER)?.trim();
+    const secret = injectedSecret || (await getMessagesSecret(this.env.AUTH_USERS_KV));
+    if (!secret) return null;
+
+    if (injected) {
+      // A forwarded identity is only trustworthy when paired with the secret,
+      // which only the SSR can supply.
+      return injectedSecret ? normalizeMessagesEmail(injected) : null;
+    }
+
+    const cookies = parseCookieHeader(request.headers.get("cookie"));
+    const verified = await verifySessionToken(secret, cookies[MESSAGES_COOKIE] ?? null);
+    return verified.ok ? verified.email : null;
+  }
+
+  private async handleUpgrade(request: Request, url: URL): Promise<Response> {
+    const identity = await this.resolveIdentity(request);
+    const connId = (url.searchParams.get("cid") ?? "").trim();
+    if (!identity || !connId) return jsonResponse({ error: "unauthorized" }, 401);
+
+    const pair = new WebSocketPair();
+    const serverWs = pair[0];
+    this.connsById.set(serverWs, connId);
+    this.ctx.acceptWebSocket(serverWs, [connId]);
+
+    // The critical section must stay pure storage. Holding the concurrency gate
+    // across calls to other objects deadlocks this object when a peer is slow,
+    // which workerd resolves by resetting the whole instance.
+    const flipped = await this.ctx.blockConcurrencyWhile(async () => {
+      // Seed the owner identity on first use: the object is addressed by a hash
+      // of the email, so this is the only place the plaintext email is known.
+      const profile = await this.readProfile();
+      if (profile.email !== identity) {
+        await this.writeProfile({ ...profile, email: identity });
+      }
+      return this.touchPresence();
+    });
+
+    if (flipped) {
+      const rev = await this.bumpRev();
+      this.broadcast({ type: "sync", rev });
+      // Fan-out happens after the gate is released.
+      void this.mirrorPresenceToContacts(identity);
+    }
+
+    return new Response(null, { status: 101, webSocket: pair[1] } as ResponseInit);
+  }
+
+  override async webSocketClose(ws: WebSocket): Promise<void> {
+    await this.handleClosed(ws);
+  }
+
+  override async webSocketError(ws: WebSocket): Promise<void> {
+    await this.handleClosed(ws);
+  }
+
+  private async handleClosed(ws: WebSocket): Promise<void> {
+    this.connsById.delete(ws);
+    if (this.connsById.size > 0) return;
+
+    try {
+      // Read inside the gate, fan out outside it, for the same reason as
+      // handleUpgrade: never hold the lock across another object's I/O.
+      const email = await this.ctx.blockConcurrencyWhile(async () => {
+        const profile = await this.readProfile();
+        if (!profile.email) return "";
+        await this.touchPresence();
+        await this.writeProfile({ ...(await this.readProfile()), lastSeenAt: 0, online: false });
+        return profile.email;
+      });
+      if (email) void this.mirrorPresenceToContacts(email);
+    } catch (error) {
+      console.warn("Failed to record messages presence offline.", error);
+    }
+  }
+
+  // ----------------------------------------------------------------- storage
+
+  private async readProfile(): Promise<MessagesProfile> {
+    const stored = await this.ctx.storage.get<MessagesProfile>(PROFILE_KEY);
+    const now = Date.now();
+    if (!stored) {
+      return {
+        email: "",
+        name: "",
+        about: "",
+        accent: "#1DB954",
+        avatar: null,
+        online: true,
+        lastSeenAt: now,
+        status: "online",
+      };
+    }
+    return {
+      email: normalizeMessagesEmail(stored.email ?? ""),
+      name: String(stored.name ?? ""),
+      about: String(stored.about ?? ""),
+      accent: String(stored.accent ?? "#1DB954"),
+      status: normalizePresenceStatus(stored.status),
+      avatar: typeof stored.avatar === "string" && stored.avatar ? stored.avatar : null,
+      online: isOnlineAt(stored.lastSeenAt ?? 0, now),
+      lastSeenAt: Number(stored.lastSeenAt) || 0,
+    };
+  }
+
+  private async writeProfile(profile: MessagesProfile) {
+    await this.ctx.storage.put(PROFILE_KEY, profile);
+  }
+
+  /** Refreshes lastSeenAt; returns true when the online flag flipped. */
+  private async touchPresence(): Promise<boolean> {
+    const profile = await this.readProfile();
+    const wasOnline = profile.online;
+    profile.lastSeenAt = Date.now();
+    profile.online = true;
+    await this.writeProfile(profile);
+    return !wasOnline;
+  }
+
+  private async bumpRev(): Promise<number> {
+    const rev = (Number(await this.ctx.storage.get(REV_KEY)) || 0) + 1;
+    await this.ctx.storage.put(REV_KEY, rev);
+    return rev;
+  }
+
+  private async readContacts(): Promise<ChatContact[]> {
+    const stored = await this.ctx.storage.get<ChatContact[]>(CONTACTS_KEY);
+    return Array.isArray(stored) ? stored : [];
+  }
+
+  private async writeContacts(contacts: ChatContact[]) {
+    await this.ctx.storage.put(CONTACTS_KEY, contacts.slice(0, 500));
+  }
+
+  private async readChatIds(): Promise<string[]> {
+    const stored = await this.ctx.storage.get<string[]>(CHAT_INDEX_KEY);
+    return Array.isArray(stored) ? stored : [];
+  }
+
+  private async readChat(chatId: string): Promise<MessageChat | null> {
+    return (await this.ctx.storage.get<MessageChat>(`${CHAT_PREFIX}${chatId}`)) ?? null;
+  }
+
+  private async writeChat(chat: MessageChat) {
+    const trimmed: MessageChat = {
+      ...chat,
+      messages: chat.messages.slice(-MAX_MESSAGES_PER_CHAT),
+      ...(chat.calls?.length
+        ? { calls: sanitizeCallRecords(chat.calls).slice(-MAX_CALLS_PER_CHAT) }
+        : {}),
+    };
+    await this.ctx.storage.put(`${CHAT_PREFIX}${chat.id}`, trimmed);
+
+    const ids = await this.readChatIds();
+    const next = [trimmed.id, ...ids.filter((id) => id !== trimmed.id)].slice(0, MAX_CHATS);
+    await this.ctx.storage.put(CHAT_INDEX_KEY, next);
+  }
+
+  private async deleteChat(chatId: string) {
+    await this.ctx.storage.delete(`${CHAT_PREFIX}${chatId}`);
+    const ids = await this.readChatIds();
+    await this.ctx.storage.put(
+      CHAT_INDEX_KEY,
+      ids.filter((id) => id !== chatId),
+    );
+  }
+
+  private async readSnapshot(): Promise<MessagesSnapshot> {
+    const [profile, contacts, chatIds, rev] = await Promise.all([
+      this.readProfile(),
+      this.readContacts(),
+      this.readChatIds(),
+      this.ctx.storage.get(REV_KEY),
+    ]);
+
+    const chats: MessageChat[] = [];
+    for (const id of chatIds) {
+      const chat = await this.readChat(id);
+      if (chat) chats.push(chat);
+    }
+
+    const now = Date.now();
+    return {
+      profile: {
+        ...profile,
+        online: profile.lastSeenAt > 0 && isOnlineAt(profile.lastSeenAt, now),
+      },
+      contacts: contacts.map((contact) => ({
+        ...contact,
+        online: isOnlineAt(contact.lastSeenAt, now),
+      })),
+      chats,
+      rev: Number(rev) || 0,
+      serverTime: now,
+      typing: liveTyping(await this.readTyping(), now),
+    };
+  }
+
+  // -------------------------------------------------------------- typing
+
+  private async readTyping(): Promise<TypingState[]> {
+    const stored = await this.ctx.storage.get<TypingState[]>(TYPING_KEY);
+    return Array.isArray(stored) ? stored : [];
+  }
+
+  /**
+   * Records that a peer is composing in a conversation. Kept in the object
+   * rather than only on the socket so a device that joins mid-compose (a
+   * freshly opened laptop) still renders the indicator.
+   */
+  private async setTyping(payload: Record<string, unknown>) {
+    const chatId = String(payload["chatId"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const peerEmail = normalizeMessagesEmail(String(payload["peerEmail"] ?? ""));
+    if (!chatId || !peerEmail) {
+      return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+    }
+
+    const now = Date.now();
+    const next = liveTyping(await this.readTyping(), now).filter(
+      (entry) => !(entry.chatId === chatId && entry.peerEmail === peerEmail),
+    );
+    const stopped = payload["typing"] === false;
+    if (!stopped) next.push({ chatId, peerEmail, at: now });
+
+    await this.ctx.storage.put(TYPING_KEY, next.slice(-50));
+
+    if (!stopped) {
+      this.broadcast({ type: "typing", chatId, peerEmail, at: now });
+    } else {
+      // Let the other side clear its bubble right away.
+      this.broadcast({ type: "sync", rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 });
+    }
+
+    // The frame above is the whole notification for this path.
+    return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0, silent: true };
+  }
+
+  // ------------------------------------------------------------------ writes
+
+  private async applyWrite(
+    path: string,
+    payload: Record<string, unknown>,
+    mirrored = false,
+    /** Whose object this is, as the gateway resolved it rather than as claimed. */
+    sender = "",
+  ): Promise<{ ok: boolean; rev: number; silent?: boolean; fanout?: boolean }> {
+    switch (path) {
+      case "/message":
+        return this.writeMessage(payload);
+      case "/contact":
+        return this.writeContact(payload);
+      case "/contact/remove":
+        return this.removeContact(payload);
+      case "/profile":
+        return this.writeOwnProfile(payload);
+      /**
+       * Pushes the profile, including the chosen presence, out to every contact.
+       * The fan-out is cross-object I/O, so it runs after the write has left the
+       * concurrency gate rather than inside it.
+       */
+      case "/mirror":
+        return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0, fanout: true };
+      case "/read":
+        return this.markRead(payload);
+      case "/message/change":
+        return this.changeMessage(payload, mirrored);
+      case "/call":
+        return this.relayCallSignal(payload, mirrored, sender);
+      case "/chat/remove":
+        return this.removeChat(payload);
+      case "/chat/ensure":
+        return this.ensureChat(payload);
+      case "/typing":
+        return this.setTyping(payload);
+      case "/presence":
+        return this.setPresence(payload);
+      case "/peer-presence":
+        return this.applyPeerPresence(payload);
+      case "/friend/upsert":
+        return this.upsertFriend(payload);
+      case "/friend/list":
+        return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+      default:
+        return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+    }
+  }
+
+  // ------------------------------------------------------------------ calls
+
+  /**
+   * Passes one call frame to this account's open sockets, and tells the gateway
+   * whose objects it still has to reach.
+   *
+   * A call is a group now, so the object keeps a small session beside the chat:
+   * who is in it, in what order, and who is still there. The frames themselves
+   * are only routed, never read for anything else, because the people holding
+   * them are the ones who know what a session description means.
+   *
+   * `silent` keeps the generic notice off: the frame itself is the notification,
+   * and a full snapshot re-sync in behind every candidate would be waste.
+   */
+  private async relayCallSignal(payload: Record<string, unknown>, mirrored: boolean, sender = "") {
+    const rev = async () => Number(await this.ctx.storage.get(REV_KEY)) || 0;
+    const chatId = String(payload["chatId"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const callId = String(payload["callId"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const kind = String(payload["kind"] ?? "");
+    const allowed = new Set<CallSignal["kind"]>([
+      "begin",
+      "invite",
+      "accept",
+      "decline",
+      "leave",
+      "end",
+      "offer",
+      "answer",
+      "candidate",
+      "renegotiate",
+      "state",
+      "log",
+    ]);
+    if (!chatId || !callId || !allowed.has(kind as CallSignal["kind"])) {
+      return { ok: false, rev: await rev(), silent: true };
+    }
+
+    const chat = await this.readChat(chatId);
+    if (!chat) return { ok: false, rev: await rev(), silent: true };
+
+    /**
+     * A finished call is written into the history rather than passed on to
+     * whoever is ringing: nobody is ringing any more, and the record belongs in
+     * the conversation. It lands in both objects through the gateway, so both
+     * sides read the same row instead of each keeping its own.
+     */
+    if (kind === "log") {
+      const record = sanitizeCallRecord(payload["log"], callId, chat.peerEmail);
+      if (!record) return { ok: false, rev: await rev(), silent: true };
+      const kept = (chat.calls ?? []).filter((entry) => entry.callId !== record.callId);
+      chat.calls = [...kept, record].slice(-MAX_CALLS_PER_CHAT);
+      await this.writeChat(chat);
+      return {
+        ok: true,
+        rev: await this.bumpRev(),
+        silent: true,
+        peerEmail: chat.peerEmail,
+        mirrored,
+      };
+    }
+
+    const to = normalizeEmail(String(payload["to"] ?? ""));
+    const session = await this.applyCallFrame({ callId, chatId, kind, to, sender, payload });
+    if (!session) return { ok: false, rev: await rev(), silent: true };
+
+    const signal: CallSignal = {
+      kind: kind as CallSignal["kind"],
+      callId,
+      chatId,
+      // Stamped by the object, from the identity the gateway already resolved.
+      // Every frame comes back to the sender's own devices as well, and this is
+      // how a phone tells that echo from the other person speaking.
+      ...(sender ? { from: sender } : {}),
+      ...(to ? { to } : {}),
+      ...(kind === "invite" ? { starts: payload["starts"] === "video" ? "video" : "audio" } : {}),
+      ...(payload["description"] !== undefined ? { description: payload["description"] } : {}),
+      ...(payload["candidate"] !== undefined ? { candidate: payload["candidate"] } : {}),
+      ...(typeof payload["mic"] === "boolean" ? { mic: payload["mic"] } : {}),
+      ...(typeof payload["camera"] === "boolean" ? { camera: payload["camera"] } : {}),
+      ...(typeof payload["screen"] === "boolean" ? { screen: payload["screen"] } : {}),
+      ...(typeof payload["reason"] === "string" ? { reason: payload["reason"].slice(0, 40) } : {}),
+    };
+
+    // The caller's own devices get the frame too, so a second laptop joins the
+    // call it started instead of ringing the account again.
+    this.broadcast({ type: "call", signal });
+    // A membership change travels beside the frame, so a phone that was told
+    // "you are in a call" also learns who else is in it.
+    if (session.roster) this.broadcast({ type: "roster", roster: session.roster });
+    return {
+      ok: true,
+      rev: await rev(),
+      silent: true,
+      peerEmail: chat.peerEmail,
+      mirrored,
+      /** The other objects the gateway still has to write this frame into. */
+      peers: session.peers,
+      ...(session.roster ? { roster: session.roster } : {}),
+      ...(session.members ? { members: session.members } : {}),
+    };
+  }
+
+  // ------------------------------------------------------------------ calls
+
+  /** A call as this object holds it: who is in it, and in what order. */
+  private async readCallSession(callId: string) {
+    return (await this.ctx.storage.get<CallSession>(`${CALL_PREFIX}${callId}`)) ?? null;
+  }
+
+  /**
+   * Applies one frame to the call, and works out who else has to be told.
+   *
+   * The object is a post office, not a switchboard: it keeps the list of who is
+   * in the call, checks that the sender is one of them, and returns the other
+   * addresses. Who offers the connection to whom is decided by the two phones,
+   * from the order kept here, so they never both offer at once.
+   */
+  private async applyCallFrame(input: {
+    callId: string;
+    chatId: string;
+    kind: string;
+    to: string;
+    sender: string;
+    payload: Record<string, unknown>;
+  }): Promise<{ peers: string[]; roster?: CallRoster; members?: string[] } | null> {
+    const { callId, chatId, kind, to, sender } = input;
+    const now = Date.now();
+
+    /** The roster, as the clients read it. */
+    const rosterOf = (session: CallSession): CallRoster => ({
+      callId: session.callId,
+      host: session.host,
+      starts: session.starts,
+      createdAt: session.createdAt,
+      participants: session.participants.map((entry) => ({
+        email: entry.email,
+        order: entry.order,
+        status: entry.status,
+      })),
+    });
+
+    // A new call, placed by whoever pressed the button. The host is the first
+    // participant, which is what fixes the order everybody else follows.
+    if (kind === "begin") {
+      const starts = input.payload["starts"] === "video" ? "video" : "audio";
+      const session: CallSession = {
+        callId,
+        host: sender,
+        chatId,
+        starts,
+        createdAt: now,
+        participants: [{ email: sender, order: 0, status: "active" }],
+      };
+      await this.ctx.storage.put(`${CALL_PREFIX}${callId}`, session);
+      return { peers: to && to !== sender ? [to] : [], roster: rosterOf(session) };
+    }
+
+    const session = await this.readCallSession(callId);
+    if (!session) return null;
+    // A frame from someone who is not in this call is not relayed, which is also
+    // what keeps one account from driving another account's call.
+    const member = session.participants.find((entry) => entry.email === sender);
+    if (!member) return null;
+    if (session.endedAt && kind !== "end") {
+      // A late frame for a call that is over is answered once, so the phone that
+      // sent it stops ringing rather than waiting for a reply that never comes.
+      if (kind === "invite" || kind === "accept") return { peers: to && to !== sender ? [to] : [] };
+      return { peers: [] };
+    }
+
+    // Who to reach, worked out before the call is marked as over: an end that
+    // filters out everybody it just marked as gone would tell nobody.
+    const others = session.participants
+      .filter((entry) => entry.email !== sender && entry.status !== "left")
+      .map((entry) => entry.email);
+
+    let changed = false;
+    if (kind === "invite") {
+      if (to && to !== sender && !session.participants.some((entry) => entry.email === to)) {
+        const order = session.participants.reduce((most, entry) => Math.max(most, entry.order), 0);
+        session.participants.push({ email: to, order: order + 1, status: "invited" });
+        changed = true;
+      }
+    }
+    if (kind === "accept" && member.status !== "active") {
+      member.status = "active";
+      changed = true;
+    }
+    if (kind === "decline" || kind === "leave") {
+      member.status = "left";
+      changed = true;
+    }
+    if (kind === "end") {
+      session.endedAt = now;
+      session.endedBy = sender;
+      session.reason = String(input.payload["reason"] ?? "hangup").slice(0, 40);
+      // Everybody still in it is now gone from it.
+      for (const entry of session.participants) {
+        if (entry.status !== "left") entry.status = "left";
+      }
+      changed = true;
+    }
+
+    if (changed) await this.ctx.storage.put(`${CALL_PREFIX}${callId}`, session);
+
+    // A frame with a name on it goes to that person; anything else goes to
+    // everyone else who is still in the call. A renegotiation notice is a name
+    // on it too: only the pair of devices holding that link has to hear it.
+    const directed =
+      kind === "offer" || kind === "answer" || kind === "candidate" || kind === "renegotiate";
+    const peers = to ? others.filter((email) => email === to) : directed ? [] : others;
+
+    return {
+      peers,
+      ...(changed ? { roster: rosterOf(session) } : {}),
+      // The frame that ends a call answers with everybody who was in it, so the
+      // gateway can put the history in each of their own conversations.
+      ...(kind === "end"
+        ? {
+            members: [
+              ...new Set(
+                session.participants
+                  .map((entry) => entry.email)
+                  .filter((email) => email && email !== sender),
+              ),
+            ],
+          }
+        : {}),
+    };
+  }
+
+  // ---------------------------------------------------------------- friends
+
+  private async readFriendIds(): Promise<string[]> {
+    const stored = await this.ctx.storage.get<string[]>(FRIEND_INDEX_KEY);
+    return Array.isArray(stored) ? stored : [];
+  }
+
+  private async readFriends(): Promise<FriendRequest[]> {
+    const ids = await this.readFriendIds();
+    const records: FriendRequest[] = [];
+    for (const id of ids) {
+      const record = await this.ctx.storage.get<FriendRequest>(`${FRIEND_PREFIX}${id}`);
+      if (record) records.push(record);
+    }
+    return records;
+  }
+
+  /**
+   * Writes one friendship record. The identical id is used in both objects, so
+   * accept/reject from either side lands on the same row everywhere.
+   */
+  private async upsertFriend(payload: Record<string, unknown>) {
+    const id = String(payload["id"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const fromEmail = normalizeMessagesEmail(String(payload["fromEmail"] ?? ""));
+    const toEmail = normalizeMessagesEmail(String(payload["toEmail"] ?? ""));
+    const status = payload["status"];
+    if (!id || !fromEmail || !toEmail) {
+      return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+    }
+    if (status !== "pending" && status !== "accepted" && status !== "rejected") {
+      return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+    }
+
+    const now = Date.now();
+    const existing = await this.ctx.storage.get<FriendRequest>(`${FRIEND_PREFIX}${id}`);
+    const rawAvatar = payload["fromAvatar"];
+    const fromName = String(payload["fromName"] ?? existing?.fromName ?? "")
+      .trim()
+      .slice(0, 80);
+    const toName = String(payload["toName"] ?? existing?.toName ?? "")
+      .trim()
+      .slice(0, 80);
+
+    const record: FriendRequest = {
+      id,
+      fromEmail,
+      fromName,
+      fromAvatar: readAvatarDataUrl(rawAvatar) ?? existing?.fromAvatar ?? null,
+      toEmail,
+      toName,
+      status,
+      createdAt: Number(existing?.createdAt) || now,
+      updatedAt: now,
+    };
+
+    await this.ctx.storage.put(`${FRIEND_PREFIX}${id}`, record);
+    const ids = await this.readFriendIds();
+    if (!ids.includes(id)) {
+      await this.ctx.storage.put(FRIEND_INDEX_KEY, [id, ...ids].slice(0, MAX_FRIEND_RECORDS));
+    }
+    return { ok: true, rev: await this.bumpRev() };
+  }
+
+  private async readFriendsSnapshot(me: string): Promise<FriendsSnapshot> {
+    const records = await this.readFriends();
+    return splitFriendRequests(records, me);
+  }
+
+  /**
+   * Applies a presence/profile update pushed by a contact's object. Only the
+   * contact entry is touched, so one account can never write another account's
+   * profile or messages.
+   */
+  private async applyPeerPresence(payload: Record<string, unknown>) {
+    const peerEmail = normalizeMessagesEmail(String(payload["peerEmail"] ?? ""));
+    if (!peerEmail) return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+
+    const contacts = await this.readContacts();
+    const target = contacts.find((contact) => contact.peerEmail === peerEmail);
+    if (!target) return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+
+    const lastSeenAt = Number(payload["lastSeenAt"]) || 0;
+    const online = payload["online"] === true && isOnlineAt(lastSeenAt);
+    const name =
+      String(payload["name"] ?? target.name)
+        .trim()
+        .slice(0, 80) || target.name;
+    const rawAvatar = payload["avatar"];
+
+    const updated: ChatContact = {
+      ...target,
+      name,
+      initials: initialsForName(name),
+      about: String(payload["about"] ?? target.about).slice(0, 160),
+      accent: String(payload["accent"] ?? target.accent),
+      avatar:
+        typeof rawAvatar === "string" && rawAvatar.startsWith("data:image/")
+          ? rawAvatar.slice(0, 400_000)
+          : target.avatar,
+      online,
+      lastSeenAt,
+      status: normalizePresenceStatus(payload["status"] ?? target.status),
+    };
+
+    // Nothing actually changed, so skip the write. Bumping the revision here
+    // would push a sync frame to every device of this account for a no-op,
+    // which is what makes the list look like it is refreshing in a loop.
+    const unchanged =
+      target.name === updated.name &&
+      target.initials === updated.initials &&
+      target.about === updated.about &&
+      target.accent === updated.accent &&
+      target.avatar === updated.avatar &&
+      target.online === updated.online &&
+      target.lastSeenAt === updated.lastSeenAt &&
+      target.status === updated.status;
+    if (unchanged) {
+      return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+    }
+
+    await this.writeContacts(
+      contacts.map((contact) => (contact.id === target.id ? updated : contact)),
+    );
+    const rev = await this.bumpRev();
+    this.broadcast({
+      type: "presence",
+      profile: {
+        email: peerEmail,
+        name,
+        online,
+        lastSeenAt,
+        status: updated.status,
+      },
+    });
+    return { ok: true, rev };
+  }
+
+  private async writeMessage(payload: Record<string, unknown>) {
+    const chatId = String(payload["chatId"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const peerEmail = normalizeMessagesEmail(String(payload["peerEmail"] ?? ""));
+    const fromMe = payload["fromMe"] !== false;
+    const text = String(payload["text"] ?? "")
+      .trim()
+      .slice(0, MAX_TEXT_LENGTH);
+    const messageId = String(payload["id"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const at = Number(payload["at"]);
+
+    if (!chatId || !messageId) {
+      return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+    }
+
+    const rawAttachments = Array.isArray(payload["attachments"])
+      ? (payload["attachments"] as unknown[]).slice(0, MAX_ATTACHMENTS_PER_MESSAGE)
+      : [];
+    const storedIds: string[] = [];
+
+    for (const raw of rawAttachments) {
+      const meta = sanitizeAttachmentMeta(raw);
+      if (!meta) continue;
+      const dataUrl = String((raw as Record<string, unknown>)["dataUrl"] ?? "");
+      const comma = dataUrl.indexOf(",");
+      const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : "";
+      if (!base64) continue;
+      if (meta.kind === "image" && base64.length > MAX_ATTACHMENT_VALUE_CHARS) continue;
+      if (meta.kind === "file" && base64.length > MAX_ATTACHMENT_VALUE_CHARS) continue;
+      if (meta.size > MAX_IMAGE_BYTES || meta.size > MAX_FILE_BYTES) continue;
+
+      const record: StoredAttachment = {
+        id: meta.id,
+        mimeType: meta.mimeType,
+        name: meta.name,
+        data: base64,
+      };
+      await this.ctx.storage.put(`${ATTACHMENT_PREFIX}${meta.id}`, record);
+      storedIds.push(meta.id);
+
+      const index = await this.ctx.storage.get<string[]>(ATTACHMENT_INDEX_KEY);
+      await this.ctx.storage.put(
+        ATTACHMENT_INDEX_KEY,
+        [meta.id, ...(Array.isArray(index) ? index : []).filter((id) => id !== meta.id)].slice(
+          0,
+          2000,
+        ),
+      );
+    }
+
+    let chat = await this.readChat(chatId);
+    if (!chat) {
+      chat = {
+        id: chatId,
+        peerEmail,
+        pinned: false,
+        muted: false,
+        updatedAt: Number.isFinite(at) ? at : Date.now(),
+        messages: [],
+      };
+    }
+    if (peerEmail) chat.peerEmail = peerEmail;
+
+    // Idempotent: a retried send must not duplicate the message.
+    if (chat.messages.some((message) => message.id === messageId)) {
+      return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+    }
+
+    const attachments: MessageAttachment[] = rawAttachments
+      .map(sanitizeAttachmentMeta)
+      .filter((item): item is MessageAttachment => item !== null)
+      .map((item) => ({ ...item, stored: storedIds.includes(item.id) }));
+
+    const message: ChatMessage = {
+      id: messageId,
+      fromMe,
+      text,
+      at: Number.isFinite(at) ? at : Date.now(),
+      status: fromMe ? "sent" : "read",
+      ...(attachments.length ? { attachments } : {}),
+    };
+
+    chat.messages = [...chat.messages, message];
+    chat.updatedAt = message.at;
+    await this.writeChat(chat);
+    return { ok: true, rev: await this.bumpRev() };
+  }
+
+  /**
+   * Applies an edit or a deletion to one message.
+   *
+   * The row is a tombstone rather than a removal, and the gateway mirrors the
+   * same call into the peer's object, so an edit or a delete converges on every
+   * device of both participants through the next sync frame.
+   *
+   * `mirrored` is decided by the gateway from a request header it strips from
+   * client traffic, never from the body. It is what lets a change reach the copy
+   * the peer holds: there the author's message is stored with `fromMe: false`, so
+   * the author check below would otherwise refuse it.
+   */
+  private async changeMessage(payload: Record<string, unknown>, mirrored: boolean) {
+    const chatId = String(payload["chatId"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const messageId = String(payload["id"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const action = String(payload["action"] ?? "");
+    // A rejected or repeated change is silent: no revision, so no device is told
+    // to re-read a snapshot that would come back identical.
+    const quiet = async (peerEmail = "") => ({
+      ok: true,
+      rev: Number(await this.ctx.storage.get(REV_KEY)) || 0,
+      silent: true,
+      peerEmail,
+    });
+
+    if (!chatId || !messageId || (action !== "edit" && action !== "delete")) {
+      return quiet();
+    }
+
+    const chat = await this.readChat(chatId);
+    if (!chat) return quiet();
+
+    const index = chat.messages.findIndex((message) => message.id === messageId);
+    const target = index >= 0 ? chat.messages[index] : undefined;
+    if (!target) return quiet();
+    // A client may only change what it sent itself.
+    if (!target.fromMe && !mirrored) {
+      return {
+        ok: false,
+        rev: Number(await this.ctx.storage.get(REV_KEY)) || 0,
+        silent: true,
+      };
+    }
+
+    const now = Date.now();
+    const text = String(payload["text"] ?? "")
+      .trim()
+      .slice(0, MAX_TEXT_LENGTH);
+    // An edit that empties the message is not a message, so it is refused here
+    // as well as at the gateway rather than leaving a blank bubble behind.
+    if (action === "edit" && !text) return quiet();
+
+    const next: ChatMessage =
+      action === "edit" ? { ...target, text, editedAt: now } : { ...target, deletedAt: now };
+
+    // A retried change must not move the timestamp again. The peer is still
+    // named, so a mirror lost the first time is retried here.
+    const repeated =
+      (action === "edit" && target.editedAt && target.text === next.text) ||
+      (action === "delete" && target.deletedAt);
+    if (repeated) return quiet(chat.peerEmail);
+
+    chat.messages = chat.messages.map((message, position) => (position === index ? next : message));
+    // The conversation keeps its own time: reordering it on an edit would make
+    // the thread jump to the top of the list for a typo fix.
+    await this.writeChat(chat);
+    // The peer is answered from storage, not from the caller, so a client can
+    // never name a third object to write into.
+    return { ok: true, rev: await this.bumpRev(), peerEmail: chat.peerEmail };
+  }
+
+  private async writeContact(payload: Record<string, unknown>) {
+    const id = String(payload["id"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const peerEmail = normalizeMessagesEmail(String(payload["peerEmail"] ?? ""));
+    const name = String(payload["name"] ?? "")
+      .trim()
+      .slice(0, 80);
+    if (!id || !name) {
+      return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+    }
+
+    const rawAvatar = payload["avatar"];
+    const avatar =
+      typeof rawAvatar === "string" && rawAvatar.startsWith("data:image/")
+        ? rawAvatar.slice(0, 400_000)
+        : null;
+
+    const contacts = await this.readContacts();
+    const existing = contacts.find((contact) => contact.id === id);
+    const now = Date.now();
+
+    const contact: ChatContact = {
+      id,
+      peerEmail,
+      name,
+      initials: initialsForName(name),
+      about: String(payload["about"] ?? existing?.about ?? "").slice(0, 160),
+      accent: String(payload["accent"] ?? existing?.accent ?? "#1DB954"),
+      avatar: avatar ?? existing?.avatar ?? null,
+      online: existing?.online ?? false,
+      lastSeenAt: existing?.lastSeenAt ?? 0,
+      lastSeenLabel: existing?.lastSeenLabel ?? "",
+      linked: peerEmail.length > 0,
+      status: normalizePresenceStatus(existing?.status),
+    };
+
+    const next = existing
+      ? contacts.map((item) => (item.id === id ? contact : item))
+      : [contact, ...contacts];
+    await this.writeContacts(next);
+    return { ok: true, rev: await this.bumpRev() };
+  }
+
+  private async removeContact(payload: Record<string, unknown>) {
+    const id = String(payload["id"] ?? "").trim();
+    const contacts = await this.readContacts();
+    const target = contacts.find((contact) => contact.id === id);
+    await this.writeContacts(contacts.filter((contact) => contact.id !== id));
+    if (target?.peerEmail) {
+      const ids = await this.readChatIds();
+      for (const chatId of ids) {
+        const chat = await this.readChat(chatId);
+        if (chat && chat.peerEmail === target.peerEmail) await this.deleteChat(chatId);
+      }
+    }
+    return { ok: true, rev: await this.bumpRev() };
+  }
+
+  private async removeChat(payload: Record<string, unknown>) {
+    const chatId = String(payload["chatId"] ?? "").trim();
+    if (chatId) await this.deleteChat(chatId);
+    return { ok: true, rev: await this.bumpRev() };
+  }
+
+  /**
+   * Creates an empty conversation up front.
+   *
+   * A chat that only exists on the device would be wiped by the next sync,
+   * taking any message written into it with it, so opening a conversation from
+   * a friend list has to persist the row before anything is sent.
+   */
+  private async ensureChat(payload: Record<string, unknown>) {
+    const chatId = String(payload["chatId"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const peerEmail = normalizeMessagesEmail(String(payload["peerEmail"] ?? ""));
+    if (!chatId) return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+
+    const existing = await this.readChat(chatId);
+    if (!existing) {
+      const now = Date.now();
+      await this.writeChat({
+        id: chatId,
+        peerEmail,
+        pinned: false,
+        muted: false,
+        updatedAt: now,
+        messages: [],
+      });
+    }
+
+    if (peerEmail) {
+      const contacts = await this.readContacts();
+      if (!contacts.some((contact) => contact.peerEmail === peerEmail)) {
+        const name =
+          String(payload["peerName"] ?? peerEmail)
+            .trim()
+            .slice(0, 80) || peerEmail;
+        const avatar = payload["peerAvatar"];
+        await this.writeContacts([
+          {
+            id: `contact-${peerEmail}`.slice(0, 80),
+            peerEmail,
+            name,
+            initials: initialsForName(name),
+            about: "",
+            accent: "#1DB954",
+            avatar: readAvatarDataUrl(avatar),
+            online: false,
+            lastSeenAt: 0,
+            lastSeenLabel: "",
+            linked: true,
+            status: "online",
+          },
+          ...contacts,
+        ]);
+      }
+    }
+
+    return { ok: true, rev: await this.bumpRev() };
+  }
+
+  private async markRead(payload: Record<string, unknown>) {
+    const chatId = String(payload["chatId"] ?? "").trim();
+    const chat = chatId ? await this.readChat(chatId) : null;
+    if (!chat) return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+    let changed = false;
+    chat.messages = chat.messages.map((message) => {
+      if (message.fromMe || message.status === "read") return message;
+      changed = true;
+      return { ...message, status: "read" as const };
+    });
+    if (!changed) return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+    await this.writeChat(chat);
+    return { ok: true, rev: await this.bumpRev() };
+  }
+
+  private async writeOwnProfile(payload: Record<string, unknown>) {
+    const profile = await this.readProfile();
+    const rawAvatar = payload["avatar"];
+    const name = String(payload["name"] ?? profile.name)
+      .trim()
+      .slice(0, 80);
+    const next: MessagesProfile = {
+      ...profile,
+      email: profile.email || normalizeMessagesEmail(String(payload["email"] ?? "")),
+      name,
+      about: String(payload["about"] ?? profile.about).slice(0, 160),
+      accent: String(payload["accent"] ?? profile.accent),
+      status: normalizePresenceStatus(payload["status"] ?? profile.status),
+      avatar:
+        rawAvatar === null
+          ? null
+          : typeof rawAvatar === "string" && rawAvatar.startsWith("data:image/")
+            ? rawAvatar.slice(0, 400_000)
+            : profile.avatar,
+    };
+    await this.writeProfile(next);
+    return { ok: true, rev: await this.bumpRev() };
+  }
+
+  private async setPresence(payload: Record<string, unknown>) {
+    const profile = await this.readProfile();
+    profile.lastSeenAt = payload["online"] === false ? 0 : Date.now();
+    profile.online = payload["online"] !== false;
+    await this.writeProfile(profile);
+    return { ok: true, rev: await this.bumpRev() };
+  }
+
+  /**
+   * Pushes this account's presence into each contact's object so friends see a
+   * live status without polling everyone.
+   */
+  private async mirrorPresenceToContacts(ownerEmail: string): Promise<void> {
+    const owner = normalizeMessagesEmail(ownerEmail);
+    if (!owner || !this.env.MESSAGES_DO) return;
+
+    const profile = await this.readProfile();
+    if (!profile.email) profile.email = owner;
+    await this.writeProfile({ ...profile, email: profile.email || owner });
+    // Read from the profile rather than trusting a caller's argument, so the
+    // mirrored presence can never disagree with what was actually stored.
+    const online = profile.online && isOnlineAt(profile.lastSeenAt, Date.now());
+
+    const contacts = (await this.readContacts()).filter((contact) => contact.peerEmail);
+    await Promise.all(
+      contacts.map(async (contact) => {
+        try {
+          const id = this.env.MESSAGES_DO?.idFromName(await messagesDoName(contact.peerEmail));
+          if (!id || !this.env.MESSAGES_DO) return;
+          await this.env.MESSAGES_DO.get(id).fetch(
+            new Request("https://do/peer-presence", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                [SESSION_HEADER]: "1",
+                [SESSION_EMAIL_HEADER]: contact.peerEmail,
+              },
+              body: JSON.stringify({
+                peerEmail: owner,
+                name: profile.name,
+                avatar: profile.avatar,
+                about: profile.about,
+                accent: profile.accent,
+                online,
+                lastSeenAt: profile.lastSeenAt,
+                status: profile.status,
+              }),
+            }),
+          );
+        } catch (error) {
+          console.warn("Failed to mirror messages presence to a contact.", error);
+        }
+      }),
+    );
+  }
+
+  private async handleAttachment(request: Request, url: URL): Promise<Response> {
+    const id = (url.searchParams.get("id") ?? "").trim();
+    if (!id) return jsonResponse({ error: "invalid-attachment" }, 400);
+
+    const record = await this.ctx.storage.get<StoredAttachment>(`${ATTACHMENT_PREFIX}${id}`);
+    if (!record?.data) return jsonResponse({ error: "not-found" }, 404);
+
+    const bytes = Uint8Array.from(atob(record.data), (char) => char.charCodeAt(0));
+    return new Response(bytes, {
+      headers: {
+        "content-type": record.mimeType || "application/octet-stream",
+        "content-disposition": `inline; filename="${record.name.replace(/"/g, "")}"`,
+        "cache-control": "private, max-age=31536000, immutable",
+      },
+    });
+  }
+
+  // ------------------------------------------------------------- websockets
+
+  private broadcast(message: MessagePush): void {
+    const text = JSON.stringify(message);
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.send(text);
+      } catch (error) {
+        console.warn("Failed to push a messages websocket frame.", error);
+      }
     }
   }
 }

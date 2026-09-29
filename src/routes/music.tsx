@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import {
   Disc3,
+  Download,
   Home,
   Library,
   ListMusic,
@@ -44,6 +45,7 @@ const libraryTracks: Track[] = [
   "Всеки ден с приятелка mix.mp3",
   "Вторник и петък натискай play сега! MIX.mp3",
   "Джойстикът ми знае Mix.mp3",
+  "Катя и Нелка (1).mp3",
   "Кола и пиксели (Nightcore Mix).mp3",
   "Копая към края MIX.mp3",
   "саламът бяга Mix.mp3",
@@ -53,6 +55,7 @@ const libraryTracks: Track[] = [
   id: name,
   name: name.replace(/\.[^/.]+$/, ""),
   url: `/мойта музика/${encodeURIComponent(name)}`,
+  fileName: name,
 }));
 
 function MusicPage() {
@@ -343,24 +346,38 @@ function MusicPage() {
             </div>
             <div className="mt-2 space-y-1">
               {visibleTracks.map((track, index) => (
-                <button
-                  type="button"
+                <div
                   key={track.id}
-                  onPointerDown={(event) => {
-                    if (event.button === 0) void selectTrack(track);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") void selectTrack(track);
-                  }}
-                  className={`group flex w-full items-center gap-4 px-3 py-3 text-left transition-colors hover:bg-surface ${selectedTrack?.id === track.id ? "bg-surface text-brand" : "text-foreground"}`}
+                  className={`group flex w-full items-center transition-colors hover:bg-surface ${selectedTrack?.id === track.id ? "bg-surface text-brand" : "text-foreground"}`}
                 >
-                  <span className="w-5 font-mono text-xs text-muted-foreground group-hover:text-brand">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <Disc3 className="size-4 text-brand" />
-                  <span className="min-w-0 flex-1 truncate text-sm">{track.name}</span>
-                  {selectedTrack?.id === track.id && <Volume2 className="size-4 text-brand" />}
-                </button>
+                  <button
+                    type="button"
+                    onPointerDown={(event) => {
+                      if (event.button === 0) void selectTrack(track);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") void selectTrack(track);
+                    }}
+                    className="flex min-w-0 flex-1 items-center gap-4 px-3 py-3 text-left"
+                  >
+                    <span className="w-5 font-mono text-xs text-muted-foreground group-hover:text-brand">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <Disc3 className="size-4 text-brand" />
+                    <span className="min-w-0 flex-1 truncate text-sm">{track.name}</span>
+                    {selectedTrack?.id === track.id && <Volume2 className="size-4 text-brand" />}
+                  </button>
+                  <a
+                    href={track.url}
+                    download={track.fileName}
+                    aria-label={`${isBg ? "Изтегли" : isZh ? "下载" : "Download"}: ${track.name}`}
+                    title={isBg ? "Изтегли" : isZh ? "下载" : "Download"}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    className="mr-3 grid size-8 shrink-0 place-items-center rounded-md border border-border text-muted-foreground transition-colors hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:border-brand focus-visible:text-brand"
+                  >
+                    <Download className="size-4" />
+                  </a>
+                </div>
               ))}
             </div>
           </div>
@@ -490,7 +507,7 @@ function MusicPage() {
   );
 }
 
-type Track = { id: string; name: string; url: string };
+type Track = { id: string; name: string; url: string; fileName: string };
 
 function formatTime(value: number) {
   if (!Number.isFinite(value)) return "0:00";

@@ -12,7 +12,7 @@
   "navigationDividerColorDark": "#0d120d",
   "backgroundColor": "#0d120d",
   "enableNotifications": false,
-  "startUrl": "/",
+  "startUrl": "/messages",
   "iconUrl": "https://tody-game-hub.bbailiaskk.workers.dev/android-chrome-512x512.png",
   "maskableIconUrl": "https://tody-game-hub.bbailiaskk.workers.dev/android-chrome-512x512.png",
   "splashScreenFadeOutDuration": 300,
@@ -22,7 +22,13 @@
   },
   "appVersionCode": 1,
   "appVersion": "1.0.0",
-  "shortcuts": [],
+  "shortcuts": [
+    {
+      "name": "Чатове",
+      "shortName": "Чат",
+      "url": "/messages"
+    }
+  ],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://tody-game-hub.bbailiaskk.workers.dev/site.webmanifest",
   "fallbackType": "customtabs",

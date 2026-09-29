@@ -131,6 +131,41 @@ const preparePassword = async (password: string) => {
   };
 };
 
+/**
+ * Read-only access to the account store for server-side features that need the
+ * user directory (for example the friends search). Exposing the store here keeps
+ * a single source of truth instead of duplicating the KV access.
+ */
+export async function getAuthStore(): Promise<AuthStore> {
+  return getStore();
+}
+
+/**
+ * Server-side credential check used by the messages session handshake. Verifying
+ * the password here is what lets `/messages` mint a session that is actually
+ * bound to an identity, instead of trusting a client-supplied email.
+ */
+export async function verifyCredentials(
+  email: string,
+  password: string,
+): Promise<{ name: string; email: string; avatar: string; accentColor: string } | null> {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !password) return null;
+
+  const user = (await getStore()).users.find((storedUser) => storedUser.email === normalizedEmail);
+  if (!user) return null;
+
+  const ok = await passwordMatches(password, user.passwordHash, user.passwordSalt);
+  if (!ok) return null;
+
+  return {
+    name: user.name,
+    email: user.email,
+    avatar: user.avatar ?? "",
+    accentColor: user.accentColor ?? "#40cc3c",
+  };
+}
+
 const generateDeletionCode = () => {
   const randomValues = new Uint32Array(1);
   crypto.getRandomValues(randomValues);

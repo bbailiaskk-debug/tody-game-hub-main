@@ -22,6 +22,7 @@ import { Route as Game2048RouteImport } from './routes/game2048'
 import { Route as GamesRouteImport } from './routes/games'
 import { Route as InfoRouteImport } from './routes/info'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MessagesRouteImport } from './routes/messages'
 import { Route as MusicRouteImport } from './routes/music'
 import { Route as PrismheartRouteImport } from './routes/prismheart'
 import { Route as ProfileRouteImport } from './routes/profile'
@@ -100,6 +101,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MessagesRoute = MessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MusicRoute = MusicRouteImport.update({
   id: '/music',
   path: '/music',
@@ -175,6 +181,7 @@ export interface FileRoutesByFullPath {
   '/games': typeof GamesRoute
   '/info': typeof InfoRoute
   '/login': typeof LoginRoute
+  '/messages': typeof MessagesRoute
   '/music': typeof MusicRoute
   '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
@@ -202,6 +209,7 @@ export interface FileRoutesByTo {
   '/games': typeof GamesRoute
   '/info': typeof InfoRoute
   '/login': typeof LoginRoute
+  '/messages': typeof MessagesRoute
   '/music': typeof MusicRoute
   '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
@@ -230,6 +238,7 @@ export interface FileRoutesById {
   '/games': typeof GamesRoute
   '/info': typeof InfoRoute
   '/login': typeof LoginRoute
+  '/messages': typeof MessagesRoute
   '/music': typeof MusicRoute
   '/prismheart': typeof PrismheartRoute
   '/profile': typeof ProfileRoute
@@ -259,6 +268,7 @@ export interface FileRouteTypes {
     | '/games'
     | '/info'
     | '/login'
+    | '/messages'
     | '/music'
     | '/prismheart'
     | '/profile'
@@ -286,6 +296,7 @@ export interface FileRouteTypes {
     | '/games'
     | '/info'
     | '/login'
+    | '/messages'
     | '/music'
     | '/prismheart'
     | '/profile'
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | '/games'
     | '/info'
     | '/login'
+    | '/messages'
     | '/music'
     | '/prismheart'
     | '/profile'
@@ -341,6 +353,7 @@ export interface RootRouteChildren {
   GamesRoute: typeof GamesRoute
   InfoRoute: typeof InfoRoute
   LoginRoute: typeof LoginRoute
+  MessagesRoute: typeof MessagesRoute
   MusicRoute: typeof MusicRoute
   PrismheartRoute: typeof PrismheartRoute
   ProfileRoute: typeof ProfileRoute
@@ -448,6 +461,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/messages': {
+      id: '/messages'
+      path: '/messages'
+      fullPath: '/messages'
+      preLoaderRoute: typeof MessagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/music': {
       id: '/music'
       path: '/music'
@@ -549,6 +569,7 @@ const rootRouteChildren: RootRouteChildren = {
   GamesRoute: GamesRoute,
   InfoRoute: InfoRoute,
   LoginRoute: LoginRoute,
+  MessagesRoute: MessagesRoute,
   MusicRoute: MusicRoute,
   PrismheartRoute: PrismheartRoute,
   ProfileRoute: ProfileRoute,

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="bg">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tody Game Hub</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #0d120d;
+        color: #e8f0e6;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        text-align: center;
+        padding: 2rem;
+      }
+      .card {
+        max-width: 30rem;
+        display: grid;
+        gap: 1rem;
+        justify-items: center;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.4rem;
+        letter-spacing: 0.04em;
+      }
+      p {
+        margin: 0;
+        color: #9fb09b;
+        line-height: 1.6;
+        font-size: 0.9rem;
+      }
+      button {
+        margin-top: 0.5rem;
+        border: 0;
+        border-radius: 0.75rem;
+        padding: 0.7rem 1.4rem;
+        background: #1db954;
+        color: #06210f;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #22d06a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Няма връзка с интернет</h1>
+      <p>
+        Приложението не успя да достигне сървъра. Чатът и разговорите живеят там, затова без
+        връзка няма какво да покаже. Провери интернета и опитай пак.
+      </p>
+      <button type="button" id="retry">Опитай пак</button>
+    </div>
+    <script>
+      document.getElementById("retry").addEventListener("click", () => {
+        // The shell owns the address, so the page only asks to be sent there.
+        if (window.tody?.reopen) window.tody.reopen();
+        else location.reload();
+      });
+    </script>
+  </body>
+</html>

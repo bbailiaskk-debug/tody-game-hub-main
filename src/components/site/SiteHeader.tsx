@@ -203,6 +203,7 @@ export function SiteHeader() {
     { to: "/games", label: t.nav.games },
     { to: "/rules", label: t.nav.rules },
     { to: "/music", label: t.nav.music },
+    { to: "/messages", label: t.nav.messages },
     { to: "/info", label: t.nav.info },
   ] as const;
 

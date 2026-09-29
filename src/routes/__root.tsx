@@ -93,6 +93,12 @@ export const Route = createRootRoute({
       { property: "og:site_name", content: "Todor Khristov Gaming" },
       { property: "og:locale", content: "bg_BG" },
       { name: "theme-color", content: "#1DB954" },
+      // iOS ignores the manifest when a page is added to the home screen, so it
+      // is told here as well: full screen, with the site's own bar colour.
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "TK Gaming" },
     ],
     links: [
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
@@ -183,6 +189,9 @@ function RootShell({ children }: { children: ReactNode }) {
               </Link>
               <Link to="/music" className="label-mono text-[0.6rem] hover:text-foreground">
                 Музика
+              </Link>
+              <Link to="/messages" className="label-mono text-[0.6rem] hover:text-foreground">
+                Съобщения
               </Link>
               <Link to="/info" className="label-mono text-[0.6rem] hover:text-foreground">
                 Информация

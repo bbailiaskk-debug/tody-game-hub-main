@@ -30,6 +30,8 @@ declare module "cloudflare:workers" {
     };
     CHESS_GAME_DO?: DurableObjectNamespace;
     TTT_GAME_DO?: DurableObjectNamespace;
+    AIR_HOCKEY_DO?: DurableObjectNamespace;
+    MESSAGES_DO?: DurableObjectNamespace;
   };
 
   export type AlarmInfo = {

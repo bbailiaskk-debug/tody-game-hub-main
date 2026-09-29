@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="bg">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tody — тест на гласово обаждане</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; padding: 24px; min-height: 100vh;
+        background: #0b0b0f; color: #e8e8ef;
+        font: 15px/1.6 ui-monospace, "Cascadia Code", Consolas, monospace;
+      }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      p.lead { margin: 0 0 20px; color: #8b8b9c; font-size: 13px; }
+      fieldset { border: 1px solid #26262f; border-radius: 12px; padding: 14px 16px; margin: 0 0 16px; }
+      legend { color: #8b8b9c; font-size: 12px; padding: 0 6px; }
+      label { display: block; font-size: 12px; color: #8b8b9c; margin: 8px 0 3px; }
+      input { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid #2c2c38;
+              background: #12121a; color: #e8e8ef; font: inherit; }
+      button { padding: 10px 18px; border-radius: 9px; border: 0; background: #1db954;
+               color: #06130a; font: inherit; font-weight: 700; cursor: pointer; margin: 10px 8px 0 0; }
+      button.ghost { background: #1c1c26; color: #cfcfdc; border: 1px solid #2c2c38; }
+      button:disabled { opacity: .45; cursor: default; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .half { flex: 1; min-width: 220px; }
+      #out { margin-top: 18px; background: #0f0f16; border: 1px solid #26262f; border-radius: 10px;
+             padding: 12px 14px; white-space: pre-wrap; font-size: 12.5px; max-height: 46vh; overflow: auto; }
+      .ok { color: #4ade80; } .bad { color: #f87171; } .dim { color: #6b6b7d; }
+    </style>
+  </head>
+  <body>
+    <h1>Тест на гласово обаждане</h1>
+    <p class="lead">
+      Отвори тази страница в два таба или на два устройства, с по един профил на всеки.
+      Единият натиска „Обажда се“, другият „Отговаря“. Тук се мери истинският звук.
+    </p>
+
+    <fieldset>
+      <legend>Профил</legend>
+      <div class="row">
+        <div class="half">
+          <label>Имейл</label>
+          <input id="email" type="email" placeholder="имейл" autocomplete="username" />
+        </div>
+        <div class="half">
+          <label>Парола</label>
+          <input id="password" type="password" placeholder="парола" autocomplete="current-password" />
+        </div>
+      </div>
+      <label>Кой е другият (за покана)</label>
+      <input id="peer" type="email" placeholder="другия имейл" />
+      <div class="row">
+        <button id="signin">Вход</button>
+        <button id="call" disabled>Обажда се</button>
+        <button id="answer" disabled>Отговаря</button>
+        <button id="hangup" class="ghost" disabled>Затваря</button>
+      </div>
+    </fieldset>
+
+    <div id="out">Чакам…</div>
+
+    <script type="module">
+      // The same protocol the app speaks: sign in through its own endpoint, open
+      // its socket, and exchange call frames with its object. What differs from
+      // the app is only that everything said out loud is measured here, because
+      // the question this page answers is whether sound actually arrives.
+      const ORIGIN = location.origin;
+      const out = document.getElementById("out");
+      const $ = (id) => document.getElementById(id);
+
+      const say = (line, kind = "") => {
+        const time = new Date().toLocaleTimeString("bg-BG");
+        out.innerHTML += `<div class="${kind}">${time}  ${line}</div>`;
+        out.scrollTop = out.scrollHeight;
+      };
+      const fail = (line) => say(line, "bad");
+
+      const state = {
+        email: "", socket: null, peer: "",
+        callId: "", chatId: "",
+        peerConnection: null, remoteStream: null,
+      };
+
+      // The audio element the other side is heard through, created only after a
+      // click: a browser will not play sound nobody asked for.
+      const speaker = new Audio();
+      speaker.autoplay = true;
+
+      $("signin").onclick = async () => {
+        const email = $("email").value.trim();
+        const password = $("password").value;
+        const peer = $("peer").value.trim();
+        if (!email || !password || !peer) return fail("Името, паролата и другият профил са нужни.");
+        state.email = email.toLowerCase();
+        state.peer = peer.toLowerCase();
+
+        const session = await fetch(`${ORIGIN}/api/messages/session`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: state.email, password }),
+        }).catch((error) => ({ status: 0, text: async () => String(error) }));
+        if (session.status !== 200) return fail(`Входът не мина: ${session.status}`);
+
+        // A conversation with the other side, so there is somebody to call.
+        state.chatId = `chat-${[state.email, state.peer].sort().join("~")}`;
+        await fetch(`${ORIGIN}/api/messages/chat`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ chatId: state.chatId, peerEmail: state.peer }),
+        });
+
+        openSocket();
+        say(`влез като ${state.email}`, "ok");
+        $("call").disabled = false;
+        $("answer").disabled = false;
+      };
+
+      const relay = (frame) =>
+        fetch(`${ORIGIN}/api/messages/call`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(frame),
+        }).then((r) => r.status);
+
+      const openSocket = () => {
+        const socket = new WebSocket(
+          `${ORIGIN.replace(/^http/, "ws")}/api/messages/ws?cid=${crypto.randomUUID()}`,
+        );
+        state.socket = socket;
+        socket.onopen = () => say("сокетът е отворен", "ok");
+        socket.onmessage = (event) => onFrame(JSON.parse(event.data));
+        socket.onclose = () => say("сокетът се затвори", "dim");
+      };
+
+      /** One call frame, handled the way a phone would handle it. */
+      const onFrame = async (frame) => {
+        if (frame.type === "call") await onCall(frame.signal);
+        if (frame.type === "roster") say(`списък: ${frame.roster.participants.map((p) => p.email).join(", ")}`, "dim");
+      };
+
+      const onCall = async (signal) => {
+        if (!signal || signal.from === state.email) return;
+
+        if (signal.kind === "invite") {
+          say(`звъни: ${signal.from}`, "ok");
+          $("answer").dataset.callId = signal.callId;
+          return;
+        }
+        if (signal.kind === "accept") {
+          say("прието", "ok");
+          // Whoever the roster puts first offers, so the two never offer at once.
+          return offer(signal.callId);
+        }
+        if (signal.kind === "offer") {
+          await answer(signal.callId, signal.description);
+          return;
+        }
+        if (signal.kind === "candidate") {
+          // A candidate can arrive before the description it belongs to, and it
+          // is then held rather than dropped: dropping it loses the only route
+          // that works, and the call comes up connected and silent.
+          if (state.peerConnection?.remoteDescription) {
+            await state.peerConnection.addIceCandidate(signal.candidate).catch(() => {});
+          } else {
+            (state.pending ??= []).push(signal.candidate);
+          }
+          return;
+        }
+        if (signal.kind === "answer") {
+          await state.peerConnection?.setRemoteDescription(signal.description).catch(() => {});
+          say("получих отговор", "ok");
+          measure("свързване", 0);
+          return;
+        }
+        if (signal.kind === "decline") say("отхвърли разговора", "dim");
+        if (signal.kind === "end") say(`разговорът приключи (${signal.reason ?? "hangup"})`, "dim");
+      };
+
+      /** The connection, with the microphone as its only track. */
+      const connect = async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: { ideal: true },
+            noiseSuppression: { ideal: true },
+            autoGainControl: { ideal: true },
+            channelCount: { ideal: 1 },
+          },
+          video: false,
+        });
+        const track = stream.getAudioTracks()[0];
+        const settings = track.getSettings();
+        say(
+          `микрофон: ${settings.sampleRate} Hz, ${settings.channelCount ?? 1} канал, ехо ${settings.echoCancellation}, шум ${settings.noiseSuppression}`,
+        );
+
+        const peer = new RTCPeerConnection({
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+          ],
+          bundlePolicy: "max-bundle",
+          iceCandidatePoolSize: 4,
+        });
+        peer.addTrack(track, stream);
+        peer.onicecandidate = (event) => {
+          if (event.candidate) {
+            relay({ chatId: state.chatId, callId: state.callId, kind: "candidate", to: state.peer, candidate: event.candidate.toJSON() });
+          }
+        };
+        peer.ontrack = (event) => {
+          state.remoteStream = event.streams[0] ?? new MediaStream([event.track]);
+          speaker.srcObject = state.remoteStream;
+          speaker.play().catch(() => say("браузърът не пуска звука без натиск", "dim"));
+          say("получих входящ звук", "ok");
+        };
+        peer.onconnectionstatechange = () => {
+          say(`връзка: ${peer.connectionState} / ${peer.iceConnectionState}`);
+          if (peer.connectionState === "connected") measure("свързано", 0);
+        };
+        state.peerConnection = peer;
+        return peer;
+      };
+
+      const offer = async (callId) => {
+        state.callId = callId;
+        const peer = await connect();
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        const hasOpus = /a=rtpmap:\d+ opus\/48000/.test(offer.sdp);
+        say(`предложение: ${offer.sdp.length} байта, Opus ${hasOpus ? "да" : "не"}`);
+        await relay({ chatId: state.chatId, callId, kind: "offer", to: state.peer, description: { type: offer.type, sdp: offer.sdp } });
+      };
+
+      const answer = async (callId, description) => {
+        state.callId = callId;
+        const peer = state.peerConnection ?? (await connect());
+        await peer.setRemoteDescription(description);
+        for (const candidate of (state.pending ??= []).splice(0)) {
+          await peer.addIceCandidate(candidate).catch(() => {});
+        }
+        say("описанието е приложено, кандидатите пуснати");
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        await relay({ chatId: state.chatId, callId, kind: "answer", to: state.peer, description: { type: answer.type, sdp: answer.sdp } });
+      };
+
+      $("call").onclick = async () => {
+        state.callId = crypto.randomUUID();
+        say("звоня…");
+        await relay({ chatId: state.chatId, callId: state.callId, kind: "begin", starts: "audio" });
+        await relay({ chatId: state.chatId, callId: state.callId, kind: "invite", to: state.peer });
+        $("hangup").disabled = false;
+      };
+
+      $("answer").onclick = async () => {
+        const callId = $("answer").dataset.callId ?? state.callId;
+        say("отговарям…");
+        await relay({ chatId: state.chatId, callId, kind: "accept", to: state.peer });
+        $("hangup").disabled = false;
+      };
+
+      $("hangup").onclick = async () => {
+        if (!state.callId) return;
+        await relay({ chatId: state.chatId, callId: state.callId, kind: "end", reason: "hangup" });
+        say("затворих", "dim");
+        state.peerConnection?.close();
+        state.peerConnection = null;
+        state.callId = "";
+      };
+
+      /**
+       * What is really moving over the connection: packets, bytes, jitter, and
+       * how loud the other side actually is. A connection can be "connected" and
+       * carry nothing at all, and only this tells the two apart.
+       */
+      const measure = async (label, round = 0) => {
+        const peer = state.peerConnection;
+        if (!peer) return;
+        const report = await peer.getStats();
+        let packets = 0, bytes = 0, jitter = 0, lost = 0, level = 0, seconds = 0;
+        report.forEach((entry) => {
+          if (entry.type === "inbound-rtp" && entry.kind === "audio") {
+            packets += entry.packetsReceived ?? 0;
+            bytes += entry.bytesReceived ?? 0;
+            jitter = entry.jitter ?? 0;
+            lost = entry.packetsLost ?? 0;
+            seconds = entry.jitterBufferEmittedCount ? entry.jitterBufferDelay / entry.jitterBufferEmittedCount : 0;
+          }
+          if (entry.type === "inbound-rtp" && entry.kind === "audio" && entry.audioLevel !== undefined) {
+            level = Math.max(level, entry.audioLevel);
+          }
+        });
+        say(
+          `${label}: ${packets} пакета, ${bytes} байта, загуби ${lost}, трептене ${Math.round(jitter * 1000)} ms, ниво ${level === 0 ? "—" : level.toFixed(4)}${seconds ? `, буфер ${Math.round(seconds * 1000)} ms` : ""}`,
+          packets > 0 ? "ok" : "dim",
+        );
+        if (round < 20) setTimeout(() => measure("измерване", round + 1), 2000);
+      };
+    </script>
+  </body>
+</html>

@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 .output
+# The Windows program that npm run dist builds.
+release
 .vinxi
 .tanstack/**
 .nitro

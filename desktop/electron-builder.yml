@@ -1,0 +1,64 @@
+# The installer, described once and in a place both npm and the builder read.
+#
+# This is a project of its own on purpose. The program is a window, an icon and
+# a microphone permission; the app it shows is the site on the live origin, with
+# the chat, its object and the calls on the edge. Keeping the two apart means the
+# builder has nothing to copy here but four files, and a change to the site can
+# never turn into a change to the program.
+
+appId: com.todor.todygamehub
+productName: Tody Game Hub
+copyright: Copyright © 2026 Todor Khristov
+
+directories:
+  output: ../release
+  buildResources: build
+
+# The main process, its two files and the offline page. Nothing else.
+files:
+  - main.cjs
+  - preload.cjs
+  - shell.cjs
+  - offline.html
+  - package.json
+
+# There is no node runtime inside the app: it reaches the site over https and
+# uses only what Electron ships.
+asar: true
+npmRebuild: false
+buildDependenciesFromSource: false
+
+win:
+  icon: build/icon.ico
+  # A tray-less program: it lives on the desktop and in the start menu.
+  executableName: tody-game-hub
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  # Windows 10 is the floor, which is also what WebView2 and the media stack need.
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  # A real installer with a choice of folder, not a single click that hides it.
+  oneClick: false
+  perMachine: false
+  # Installed for the person using it, without asking for rights they did not
+  # come here to give. An app that writes nothing outside its own folder has no
+  # reason to ask for elevation.
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Tody Game Hub
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  deleteAppDataOnUninstall: false
+  artifactName: Tody-Game-Hub-${version}-setup-${arch}.${ext}
+
+portable:
+  artifactName: Tody-Game-Hub-${version}-portable-${arch}.${ext}

@@ -1,9 +1,28 @@
 {
+  "id": "/",
   "name": "Todor Khristov Gaming",
   "short_name": "TK Gaming",
-  "start_url": "/",
+  "start_url": "/messages",
   "scope": "/",
   "description": "Яки игри и забавление с Todor Khristov Gaming",
+  "categories": ["games", "social", "entertainment"],
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Чатове",
+      "short_name": "Чат",
+      "description": "Разговорите и гласовите обаждания",
+      "url": "/messages",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Игри",
+      "short_name": "Игри",
+      "description": "Всичките игри наведнъж",
+      "url": "/games",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ],
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
@@ -15,7 +34,13 @@
       "src": "/android-chrome-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "screenshots": [
@@ -36,5 +61,7 @@
   ],
   "theme_color": "#1DB954",
   "background_color": "#0d120d",
-  "display": "standalone"
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "orientation": "any"
 }

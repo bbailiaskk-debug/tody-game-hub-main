@@ -39,6 +39,10 @@
       {
         "name": "AIR_HOCKEY_DO",
         "class_name": "AirHockeyDO"
+      },
+      {
+        "name": "MESSAGES_DO",
+        "class_name": "MessagesDO"
       }
     ]
   },
@@ -54,6 +58,10 @@
     {
       "tag": "v3",
       "new_sqlite_classes": ["AirHockeyDO"]
+    },
+    {
+      "tag": "v4",
+      "new_sqlite_classes": ["MessagesDO"]
     }
   ],
   "compatibility_flags": ["nodejs_compat"]
