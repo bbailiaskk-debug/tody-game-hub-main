@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 //
 // A voice call, from both ends at once.
 //
@@ -41,7 +41,14 @@ const cloud = () => {
   const objects = new Map<string, { chats: Map<string, Chat> }>();
   const sockets = new Map<string, (frame: unknown) => void>();
   /** The socket each account's store is currently holding, as a browser's is. */
-  const opened = new Map<string, { onclose: (() => void) | null; onopen: (() => void) | null }>();
+  const opened = new Map<
+    string,
+    {
+      onclose: (() => void) | null;
+      onopen: (() => void) | null;
+      onmessage: ((event: { data: string }) => void) | null;
+    }
+  >();
   const relayed: Frame[] = [];
   /**
    * Who the next request belongs to.
@@ -214,6 +221,16 @@ const cloud = () => {
       vi.stubGlobal("WebSocket", LoopbackSocket as never);
     },
     /**
+     * Hands a device a frame the way the object does: as text down its socket.
+     *
+     * Not a direct call into the store. The name a frame arrives under is part of
+     * the contract with the object, and a test that reaches past the socket cannot
+     * see a frame that was sent under a name the store does not read.
+     */
+    deliver: (email: string, frame: unknown) => {
+      opened.get(email)?.onmessage?.({ data: JSON.stringify(frame) });
+    },
+    /**
      * Drops a device's socket, the way a phone that slept through part of a call
      * finds it when it wakes up. The store opens a new one by itself, after its
      * backoff, and that is the moment this file is really about.
@@ -296,13 +313,6 @@ const mediaFor = (onSignal: (signal: unknown) => void) => {
       return self;
     },
   });
-  media.listen({
-    onSignal,
-    onRemote: () => {},
-    onPeer: () => {},
-    onLocal: () => {},
-    onScreen: () => {},
-  });
   return { media, peers, realPc, track, stream };
 };
 
@@ -381,10 +391,25 @@ describe("a voice call between two people", () => {
     await as(link, BOB, () => bob.store.answerCall());
     // The accept reaches the caller, which is what makes it offer the connection;
     // that offer is the frame that starts the caller's half of the handshake.
+    // Four turns, because an offer now goes through the same per link lock as
+    // every other handshake on the link, and the chain through it is longer than
+    // the one it replaced.
+    await settle();
+    await settle();
+    await settle();
     await settle();
     await settle();
     await settle();
 
+    const kinds = link.relayed.map((frame) => frame.kind);
+    expect(kinds).toContain("begin");
+    expect(kinds).toContain("invite");
+    expect(kinds).toContain("accept");
+    expect(kinds).toContain("offer");
+    expect(link.relayed.every((frame) => frame.callId === callId)).toBe(true);
+
+    // Checked last, because the status follows the frames: a failure that only
+    // says "connecting" sends you looking at the wrong half of the handshake.
     // Both sides show the call the moment it is picked up, on either phone, which
     // is what puts the timer going and the waiting screen away. Neither waits for
     // the connection, because the person on the other end is already there.
@@ -392,12 +417,6 @@ describe("a voice call between two people", () => {
     // The caller was told the call was picked up, and offered the connection
     // that the answer will come back on.
     expect(alice.store.getState().call.status).toBe("active");
-    const kinds = link.relayed.map((frame) => frame.kind);
-    expect(kinds).toContain("begin");
-    expect(kinds).toContain("invite");
-    expect(kinds).toContain("accept");
-    expect(kinds).toContain("offer");
-    expect(link.relayed.every((frame) => frame.callId === callId)).toBe(true);
   });
 
   it("refuses a second call from the same person while one is ringing", async () => {

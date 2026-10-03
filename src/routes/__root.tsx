@@ -3,6 +3,7 @@ import {
   Link,
   createRootRoute,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -12,25 +13,58 @@ import appCssUrl from "../styles.css?url";
 import criticalCss from "../critical.css?inline";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SiteHeader } from "../components/site/SiteHeader";
-import { SiteSettingsProvider } from "../components/site/theme";
+import { SiteSettingsProvider, useSiteSettings } from "../components/site/theme";
 import { SplashScreen } from "../components/site/SplashScreen";
 import { SiteTutorial } from "../components/site/SiteTutorial";
 
+/**
+ * The page for a URL that is not here.
+ *
+ * Localised like everything else, because this is the one page somebody arrives at
+ * from outside — a link in a chat, a bookmark, a search result — and an English
+ * sentence on a Bulgarian site is the first thing they read.
+ *
+ * The heading is an `h1` rather than the second and third levels it used to be, for
+ * the same reason every other page has one: a page whose main heading is an `h2`
+ * has no heading as far as a reader — human or crawler — is concerned, and this is
+ * exactly the page a crawler reaches when it follows a stale link.
+ */
 function NotFoundComponent() {
+  const { lang } = useSiteSettings();
+  const copy =
+    lang === "bg"
+      ? {
+          code: "404",
+          title: "Страницата не е намерена",
+          body: "Страницата, която търсиш, не съществува или е преместена.",
+          home: "Към началото",
+        }
+      : lang === "zh"
+        ? {
+            code: "404",
+            title: "页面未找到",
+            body: "你找的页面不存在或已被移动。",
+            home: "回到首页",
+          }
+        : {
+            code: "404",
+            title: "Page not found",
+            body: "The page you're looking for doesn't exist or has been moved.",
+            home: "Go home",
+          };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h2 className="text-7xl font-bold text-foreground">404</h2>
-        <h3 className="mt-4 text-xl font-semibold text-foreground">Page not found</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
-        </p>
+        <p className="text-7xl font-bold text-foreground">{copy.code}</p>
+        <h1 className="mt-4 text-xl font-semibold text-foreground">{copy.title}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{copy.body}</p>
         <div className="mt-6">
           <Link
             to="/"
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Go home
+            {copy.home}
           </Link>
         </div>
       </div>
@@ -116,7 +150,39 @@ export const Route = createRootRoute({
   errorComponent: ErrorComponent,
 });
 
+/**
+ * A route that owns the whole window, with no site furniture around it.
+ *
+ * The header already respected this. The footer did not, and it is not a small
+ * thing on a full height page: the chat fills the viewport exactly, so a footer
+ * under it pushed the document past the screen and left a scrollbar with nowhere
+ * to scroll. That is what F11 exposed — a fullscreen window has no browser chrome
+ * left to hide the overflow behind.
+ *
+ * Checked here in the shell rather than in the document, because the footer lives
+ * in the shell and the header in the component: they were written as two separate
+ * decisions about the same idea, and only one of them knew.
+ */
+const FULL_BLEED_ROUTES = ["/messages"];
+
+const isFullBleed = (pathname: string) =>
+  FULL_BLEED_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+
+/**
+ * Whether the hint about where the rules are belongs on this page.
+ *
+ * Not on the chat. The hint is for somebody reading the site and wondering where the
+ * rules went; the chat is a window somebody opens to talk to somebody, and it is
+ * what the program opens on, so a panel across its corner is a panel in the way of
+ * the thing they opened it for. Everywhere else it stays, because there it is
+ * answering a question somebody actually has.
+ */
+export const showsRulesHint = (pathname: string) => !isFullBleed(pathname);
+
 function RootShell({ children }: { children: ReactNode }) {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const fullBleed = isFullBleed(pathname);
+
   return (
     <html lang="bg" className="dark" suppressHydrationWarning>
       <head>
@@ -171,35 +237,37 @@ function RootShell({ children }: { children: ReactNode }) {
       </head>
       <body className="bg-background text-foreground min-h-screen antialiased selection:bg-primary selection:text-primary-foreground">
         {children}
-        <footer className="border-t border-border/60 py-10">
-          <div className="mx-auto flex max-w-[1000px] flex-wrap items-center justify-between gap-3 px-6">
-            <span className="label-mono text-[0.6rem]">TODOR KHRISTOV GAMING</span>
-            <nav className="flex items-center gap-4" aria-label="Footer navigation">
-              <Link to="/" className="label-mono text-[0.6rem] hover:text-foreground">
-                Начало
-              </Link>
-              <Link to="/games" className="label-mono text-[0.6rem] hover:text-foreground">
-                Игри
-              </Link>
-              <Link to="/rules" className="label-mono text-[0.6rem] hover:text-foreground">
-                Правила
-              </Link>
-              <Link to="/tutorial" className="label-mono text-[0.6rem] hover:text-foreground">
-                Туториал
-              </Link>
-              <Link to="/music" className="label-mono text-[0.6rem] hover:text-foreground">
-                Музика
-              </Link>
-              <Link to="/messages" className="label-mono text-[0.6rem] hover:text-foreground">
-                Съобщения
-              </Link>
-              <Link to="/info" className="label-mono text-[0.6rem] hover:text-foreground">
-                Информация
-              </Link>
-              <span className="label-mono text-[0.6rem]">© {new Date().getFullYear()}</span>
-            </nav>
-          </div>
-        </footer>
+        {fullBleed ? null : (
+          <footer className="border-t border-border/60 py-10">
+            <div className="mx-auto flex max-w-[1000px] flex-wrap items-center justify-between gap-3 px-6">
+              <span className="label-mono text-[0.6rem]">TODOR KHRISTOV GAMING</span>
+              <nav className="flex items-center gap-4" aria-label="Footer navigation">
+                <Link to="/" className="label-mono text-[0.6rem] hover:text-foreground">
+                  Начало
+                </Link>
+                <Link to="/games" className="label-mono text-[0.6rem] hover:text-foreground">
+                  Игри
+                </Link>
+                <Link to="/rules" className="label-mono text-[0.6rem] hover:text-foreground">
+                  Правила
+                </Link>
+                <Link to="/tutorial" className="label-mono text-[0.6rem] hover:text-foreground">
+                  Туториал
+                </Link>
+                <Link to="/music" className="label-mono text-[0.6rem] hover:text-foreground">
+                  Музика
+                </Link>
+                <Link to="/messages" className="label-mono text-[0.6rem] hover:text-foreground">
+                  Съобщения
+                </Link>
+                <Link to="/info" className="label-mono text-[0.6rem] hover:text-foreground">
+                  Информация
+                </Link>
+                <span className="label-mono text-[0.6rem]">© {new Date().getFullYear()}</span>
+              </nav>
+            </div>
+          </footer>
+        )}
         <Scripts />
         <script
           dangerouslySetInnerHTML={{
@@ -222,12 +290,35 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Routes that own the whole window.
+ *
+ * The header is 68px, and on a chat that is a strip of the screen taken from the
+ * conversation for a row of links the person is not using while they are talking
+ * to somebody. On these routes it is not rendered at all, so what is left is the
+ * chat, edge to edge, and there is no height for it to be short of.
+ *
+ * `/` keeps it: it is the way back, and a page that is the way back does not hide
+ * the way back.
+ *
+ * The footer is held back by the same list, but only on these routes. Everywhere
+ * else the pages scroll, and a footer at the bottom of a long page is the one
+ * place its links sit at a size anybody reads.
+ */
 function RootComponent() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const fullBleed = isFullBleed(pathname);
+
   return (
     <SiteSettingsProvider>
       <SplashScreen />
-      <SiteHeader />
-      <SiteTutorial />
+      {fullBleed ? null : <SiteHeader />}
+      {/**
+       * The hint, everywhere but the chat. `showsRulesHint` is the whole of that
+       * decision, and it is a function rather than a condition in here so the test
+       * can pin it without a router around it.
+       */}
+      {showsRulesHint(pathname) ? <SiteTutorial /> : null}
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </SiteSettingsProvider>

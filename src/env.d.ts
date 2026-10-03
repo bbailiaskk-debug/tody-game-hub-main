@@ -32,6 +32,7 @@ declare module "cloudflare:workers" {
     TTT_GAME_DO?: DurableObjectNamespace;
     AIR_HOCKEY_DO?: DurableObjectNamespace;
     MESSAGES_DO?: DurableObjectNamespace;
+    MESSAGES_FILES?: R2Bucket;
   };
 
   export type AlarmInfo = {
@@ -102,4 +103,53 @@ declare module "cloudflare:workers" {
     ): void | Promise<void>;
     webSocketError?(ws: WebSocket, error: unknown): void | Promise<void>;
   }
+
+  export type R2Range = { offset: number; length: number };
+
+  export type R2ObjectBody = {
+    key: string;
+    size: number;
+    uploaded: Date;
+    httpEtag: string;
+    /** The bytes, as a stream: nothing here is ever read into memory whole. */
+    body: ReadableStream;
+    /** Present only when the read was ranged, and describes what was returned. */
+    range?: R2Range;
+    /** 200, or 206 when a range was asked for and honoured. */
+    httpStatus: number;
+    httpMetadata?: { contentType?: string; contentDisposition?: string };
+    writeHttpMetadata?(headers: Headers): void;
+  };
+
+  export type R2Object = Omit<R2ObjectBody, "body" | "range" | "httpStatus">;
+
+  export type R2MultipartUpload = {
+    uploadId: string;
+    key: string;
+    uploadPart(
+      partNumber: number,
+      value: ArrayBuffer | ArrayBufferView | Blob | ReadableStream | string,
+    ): Promise<{ partNumber: number; etag: string }>;
+    complete(parts: { partNumber: number; etag: string }[]): Promise<{ key: string } | null>;
+    abort(): Promise<void>;
+  };
+
+  export type R2Bucket = {
+    head(key: string): Promise<R2Object | null>;
+    get(
+      key: string,
+      options?: { range?: R2Range | { suffix: number } },
+    ): Promise<R2ObjectBody | null>;
+    put(
+      key: string,
+      value: ArrayBuffer | ArrayBufferView | Blob | ReadableStream | string,
+      options?: { httpMetadata?: { contentType?: string; contentDisposition?: string } },
+    ): Promise<R2Object>;
+    delete(key: string): Promise<void>;
+    createMultipartUpload(
+      key: string,
+      options?: { httpMetadata?: { contentType?: string; contentDisposition?: string } },
+    ): Promise<{ uploadId: string; key: string }>;
+    resumeMultipartUpload(key: string, uploadId: string): R2MultipartUpload;
+  };
 }

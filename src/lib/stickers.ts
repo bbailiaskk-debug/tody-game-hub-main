@@ -90,3 +90,40 @@ export const stickerFromText = (text: string) => {
   const id = stickerIdFromText(text);
   return id ? stickerById(id) : null;
 };
+
+/**
+ * A Giphy sticker is a remote file, so it cannot be resolved from a catalog the
+ * way the bundled pack is. It travels as a `[giphy:<url>]` token instead, which
+ * keeps the whole sticker feature on the existing message text path: no
+ * attachment upload, no storage in the Durable Object, and the receiver draws
+ * the same picture without ever having had the picker open.
+ */
+
+/** Giphy media urls are short, so a generous cap still rejects abuse. */
+const GIPHY_TOKEN_MAX = 400;
+const GIPHY_TOKEN_PATTERN = /^\[giphy:(https?:\/\/[^\s[\]"'<>]{1,380})\]$/;
+
+/** True when the text is any sticker message, bundled or Giphy. */
+export const isStickerMessageText = (text: string) => {
+  const trimmed = text.trim();
+  return stickerIdFromText(trimmed) !== null || giphyStickerUrlFromText(trimmed) !== null;
+};
+
+/** The token text for a Giphy sticker, or null when the url is not usable. */
+export const giphyStickerText = (url: string) => {
+  const trimmed = url.trim();
+  if (!/^https?:\/\/\S+$/.test(trimmed) || trimmed.length > 380) return null;
+  const token = `[giphy:${trimmed}]`;
+  return token.length <= GIPHY_TOKEN_MAX ? token : null;
+};
+
+/**
+ * The Giphy url inside a sticker token, even when it is not a Giphy host: the
+ * receiver draws whatever the token points at, so a hand written token is
+ * treated the same as a sent one.
+ */
+export const giphyStickerUrlFromText = (text: string) => {
+  const trimmed = text.trim();
+  if (trimmed.length > GIPHY_TOKEN_MAX) return null;
+  return GIPHY_TOKEN_PATTERN.exec(trimmed)?.[1] ?? null;
+};

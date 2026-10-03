@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The media half of a call: cameras, microphones, the screen and the peer
  * connection that carries them.
  *
@@ -78,6 +78,13 @@ type Link = {
   offerer: boolean | null;
   /** A handshake in flight, so two offers are never built on top of each other. */
   busy: Promise<unknown>;
+  /**
+   * True until this side's first offer has been sent.
+   *
+   * While it is, the browser's own `negotiationneeded` is answered by the offer
+   * about to go out, and a second one would only roll it back.
+   */
+  opening: boolean;
   /**
    * Adds one candidate, now if there is a description for it and held if there
    * is not.
@@ -258,6 +265,17 @@ export type PeerLike = {
     setCodecPreferences?: (list: unknown[]) => void;
     stopDirection?: string;
   }>;
+  /**
+   * Reserves a video slot with nothing in it.
+   *
+   * Present on a real `RTCPeerConnection`. This is the whole trick behind sharing
+   * a screen in a voice room: a slot that exists can be filled later with a track
+   * and a plain `replaceTrack`, with no second negotiation and nothing to wait for
+   * on the other side. Adding the track later instead is what makes a share either
+   * work a second late or not at all, depending on whether the renegotiation
+   * arrives.
+   */
+  addTransceiver?: (kind: string, options?: { direction?: string }) => unknown;
 };
 
 export type MediaLike = {
@@ -377,8 +395,50 @@ export type CallMediaEvents = {
    * Sharing started or stopped, including when the browser's own "stop sharing"
    * button is used, which is not something the app pressed.
    */
-  onScreen: (sharing: boolean, surface: ScreenSurface) => void;
+  onScreen: (sharing: boolean, surface: ScreenSurface, label?: string) => void;
+  /**
+   * What is being shared, as a stream, or null once nothing is.
+   *
+   * Separate from `onLocal` because the microphone stream does not change when a
+   * share begins and it carries no picture at all: a voice room joined without a
+   * camera would go on showing an empty tile, which reads as a share that started
+   * and never arrived — on the one screen whose owner can actually fix it.
+   */
+  onScreenStream?: (stream: MediaStreamLike | null) => void;
 };
+
+/**
+ * How much a shared screen is asked for, as the design's picker puts it.
+ *
+ * The browser's own screen picker offers a screen or a window and nothing else:
+ * no resolution, no frame rate, and no idea what it will cost the connection. So
+ * the two are chosen here, before that picker opens, and a person who has been
+ * shown 720p at 30 frames a second can change their mind before anybody sees a
+ * single frame of it.
+ *
+ * `720p 30` is the default because a screen is mostly text: the difference
+ * between 60 and 30 frames a second is invisible to somebody reading a document,
+ * and it is the difference between a call that holds and one that does not.
+ */
+export type ScreenQuality = {
+  width: number;
+  height: number;
+  frameRate: number;
+};
+
+/** Lowest first, so the picker reads as a list of what it costs, not of names. */
+export const SCREEN_QUALITIES: ScreenQuality[] = [
+  { width: 1280, height: 720, frameRate: 15 },
+  { width: 1280, height: 720, frameRate: 30 },
+  { width: 1920, height: 1080, frameRate: 30 },
+  { width: 1920, height: 1080, frameRate: 60 },
+];
+
+export const DEFAULT_SCREEN_QUALITY: ScreenQuality = SCREEN_QUALITIES[1] as ScreenQuality;
+
+/** `720p` or `1080p`, for the row of choices. */
+export const screenQualityLabel = (quality: ScreenQuality) =>
+  quality.height >= 1080 ? "1080p" : quality.height >= 720 ? "720p" : "480p";
 
 export class CallMedia {
   /**
@@ -538,6 +598,33 @@ export class CallMedia {
     return this.media !== null;
   }
 
+  /**
+   * What this device is putting into the room, right now.
+   *
+   * Not what the room believes, which is the distinction the whole thing turns on.
+   * A share that ended with the page, a browser that took the capture away, a
+   * reload: the room keeps saying "sharing" because nothing ever told it
+   * otherwise, and a device that reads its own switches back out of the room
+   * believes it too. Then the switch cannot be turned off — stopping asks for a
+   * capture that is not there, gets nothing, and reports nothing, so the room and
+   * the device agree on something that stopped happening.
+   */
+  get sendingMic() {
+    return this.micOn;
+  }
+
+  get sendingCamera() {
+    return this.cameraOn;
+  }
+
+  get sendingScreen() {
+    return this.screenStream !== null;
+  }
+
+  get sendingSurface() {
+    return this.shareSurface;
+  }
+
   listen(events: CallMediaEvents) {
     this.events = events;
     // A phone that comes back on a different network is still in the call as far
@@ -596,6 +683,23 @@ export class CallMedia {
     });
     // A microphone in hand means an offer can be answered from now on.
     this.ready = true;
+    /**
+     * Anything already connected gets the microphone now.
+     *
+     * A connection is made the moment a frame arrives for it, which can easily
+     * be before this device has been asked for its microphone: a phone that has
+     * not been granted permission yet is still connected, because refusing to
+     * connect would mean missing the call. `attachLocal` ran on that connection
+     * with nothing to attach, and without this it stays a connection that carries
+     * no voice — two people talking, and one of them unheard, with nothing on
+     * screen to say which.
+     */
+    for (const peer of this.peers.values()) this.attachLocal(peer);
+    // The event means "the local stream changed", and this is the first one.
+    // Firing it only for later device switches left a view that was listening for
+    // it waiting for ever: a room that joined never learned what its own picture
+    // was, so the sharer's tile played nothing.
+    this.events.onLocal(this.localStream);
     return this.localStream;
   };
 
@@ -641,12 +745,34 @@ export class CallMedia {
         // already been worked out, wins.
         offerer: this.roles.get(email) ?? true,
         busy: Promise.resolve(undefined),
+        opening: true,
         addCandidate: async () => {},
         remoteApplied: () => {},
       },
       email,
     );
     this.links.set(email, link);
+
+    /**
+     * The video slot, kept empty until something needs it.
+     *
+     * A voice room joins with audio alone, and a screen shared ten minutes later
+     * has nowhere to go: there is no video sender to put it in. Adding one then
+     * means renegotiating the whole link while somebody is mid-sentence, and the
+     * share arrives late or not at all depending on which side answers first.
+     *
+     * Reserving the slot now costs one line of the description and no camera
+     * permission — nothing is captured and nothing is sent, the slot simply
+     * exists — and turns every later share into a `replaceTrack` that takes
+     * effect on the next frame.
+     */
+    if (typeof peer.addTransceiver === "function") {
+      try {
+        peer.addTransceiver("video", { direction: "sendrecv" });
+      } catch {
+        // A browser without it still works, just by renegotiating later.
+      }
+    }
     peer.onicecandidate = (event) => {
       // A null candidate is the end of gathering, not something to send.
       if (!event.candidate) {
@@ -751,6 +877,7 @@ export class CallMedia {
   private tune = (peer: PeerLike) => {
     const senders = peer.getSenders?.() ?? [];
     void this.capVideo(senders);
+    void this.capAudio(senders);
     const transceivers = peer.getTransceivers?.();
     if (!transceivers?.length) return;
     for (const transceiver of transceivers) {
@@ -761,6 +888,55 @@ export class CallMedia {
         } catch {
           // A browser that does not let this be set sends what it sends.
         }
+      }
+    }
+  };
+
+  /**
+   * What the voice itself is allowed to cost, and how it is treated against
+   * everything else on the link.
+   *
+   * A call carries audio and video on one connection, and when the uplink
+   * tightens the browser spends what it has on whichever stream it thinks matters
+   * most. That judgement is made per connection rather than per sentence, and a
+   * voice carrying screen share is routinely starved by a webcam nobody is
+   * looking at. Saying the audio is the priority is the difference between a
+   * person being heard and a video being watchable.
+   *
+   * The bitrate is a ceiling and not a target. Opus needs about 24 kbit/s for a
+   * clean mono voice; the rest is headroom for the plosives and the quick rises
+   * that a talker produces, and a cap this far above what the codec would ask
+   * for costs nothing because the encoder never spends bits it does not have.
+   */
+  private capAudio = async (senders: ReturnType<PeerLike["getSenders"]>) => {
+    for (const sender of senders) {
+      if (sender.track?.kind !== "audio") continue;
+      if (!sender.setParameters) continue;
+      try {
+        const parameters = sender.getParameters?.();
+        const encodings = parameters?.encodings;
+        const encoding = (Array.isArray(encodings) ? encodings[0] : undefined) ?? {};
+        await sender.setParameters({
+          ...parameters,
+          // High on both, where the browser knows them: the network scheduler
+          // drops or holds the lowest priority first, and a voice is the last
+          // thing in a call that should ever be held.
+          priority: "high",
+          networkPriority: "high",
+          encodings: [
+            {
+              ...(encoding as Record<string, unknown>),
+              maxBitrate: 64_000,
+              // Voice is never worth an error, and the cost of not being wrong
+              // is paid whether or not a packet is lost, which is a trade worth
+              // making at this size.
+              networkPriority: "high",
+              priority: "high",
+            },
+          ],
+        });
+      } catch {
+        // A browser that refuses the parameters keeps sending what it wants.
       }
     }
   };
@@ -804,16 +980,47 @@ export class CallMedia {
    * chosen here and not taken from the local stream: the screen is not in it.
    */
   private attachLocal = (peer: PeerLike) => {
+    /**
+     * What is already on this connection, so nothing is added twice.
+     *
+     * `addTrack` is not idempotent: called again for a track that is already
+     * there it negotiates a second one, and a connection carrying two audio
+     * tracks sends the same voice twice at half the quality each.
+     */
+    const already = new Set(
+      peer
+        .getSenders()
+        .map((item) => item.track?.kind)
+        .filter((kind): kind is string => Boolean(kind)),
+    );
+
     for (const track of this.localStream?.getTracks() ?? []) {
       if (track.kind !== "audio") continue;
+      if (already.has("audio")) continue;
       // The audio may already be running through the gain node, in which case
       // the call carries that track and not the raw microphone.
       const outgoing = this.processed?.getAudioTracks()[0] ?? track;
+      /**
+       * Told it is speech, which is not the same as being left to guess.
+       *
+       * The encoder has to choose between spending bits on a steady tone and
+       * spending them on a voice: without this it hedges towards the first, and
+       * the first thing a person notices is that the other side sounds like they
+       * are speaking through a wall, because the plosives and the gaps between
+       * words are what got encoded. Saying `speech` also lets the connection
+       * shorten its jitter buffer, which is most of what "clear" means in a
+       * call.
+       */
+      this.setHint(outgoing, "speech");
       // The browser owns the track, the connection only carries it.
       peer.addTrack?.(outgoing, this.localStream);
+      already.add("audio");
     }
     const video = this.outgoingVideo();
-    if (video) peer.addTrack?.(video, this.localStream);
+    if (video && !already.has("video")) {
+      peer.addTrack?.(video, this.localStream);
+      already.add("video");
+    }
   };
 
   /** Puts the gain node's output on one more connection. */
@@ -827,6 +1034,19 @@ export class CallMedia {
   createOffer = async (to: string, options: { iceRestart?: boolean } = {}) => {
     const peer = this.peerFor(to);
     traceCall(to, "building offer", options.iceRestart ? "ice restart" : "");
+    /**
+     * The first offer carries whatever is on the connection, so whatever the
+     * browser asked to negotiate while it was being built is already in here.
+     *
+     * That automatic renegotiation is the thing that has to not happen. Two
+     * descriptions on one link roll each other back, and the connection is left
+     * in `new` carrying nothing — a call where nobody is heard and no screen can
+     * say why. It fires from the browser's own `negotiationneeded`, which is why
+     * it lands during setup, and it lands on whichever side the roster does not
+     * name as the offerer: half the calls, on a coin toss.
+     */
+    const link = this.links.get(to);
+    if (link) link.opening = false;
     const offer = await peer.createOffer(options.iceRestart ? { iceRestart: true } : undefined);
     await peer.setLocalDescription(offer);
     return offer;
@@ -967,6 +1187,12 @@ export class CallMedia {
    * other side has to hear about it or the share stays on this device.
    */
   private askForRenegotiation = (email: string) => {
+    const opening = this.links.get(email)?.opening;
+    if (opening) {
+      // The first offer has not gone out yet and it will carry these tracks.
+      // Answering now is how a link ends up with two descriptions on it.
+      return;
+    }
     this.cancelRenegotiation(email);
     // One offer, not one per track: a camera and a screen added together is one
     // description, and the browser asks more than once while it settles.
@@ -1032,31 +1258,43 @@ export class CallMedia {
   /**
    * Puts one video track on every connection at once.
    *
-   * A connection made in a voice call has no video sender at all, so a share
-   * that started halfway through one cannot be *replaced* onto it: there is
-   * nothing there to replace, and the person opposite would simply never see the
-   * screen. So the track is added when there is no sender and swapped when there
-   * is, which is the difference between sharing into a call and sharing nothing.
+   * Every connection keeps an empty video slot from the moment it is made, so a
+   * share that starts halfway through a voice room has somewhere to go: the track
+   * is swapped onto a slot that already exists in the description both sides
+   * agreed on. That is the whole difference between sharing into a room and
+   * renegotiating the link while somebody is mid-sentence.
+   *
+   * `addTrack` is the fallback for a browser with no `addTransceiver`, and it is
+   * a renegotiation like any other — which is why it is a fallback.
    */
   private pushVideo = async (track: ReturnType<CallMedia["outgoingVideo"]>) => {
     await Promise.all(
       [...this.peers.entries()].map(([email, peer]) => {
-        const sender = peer.getSenders().find((item) => item.track?.kind === "video");
-        if (!sender) {
-          // A voice call: the connection is opened for this, and every later
-          // frame takes its place like any other. The far side is told, because a
-          // track it has not been told about is a track it never shows.
-          if (track) {
-            peer.addTrack?.(track, this.localStream);
-            this.askForRenegotiation(email);
-          }
-          return Promise.resolve();
+        const senders = peer.getSenders();
+        // A sender carrying video, if there is one: the track is swapped in place
+        // and the description already says there is video.
+        const carrying = senders.find((item) => item.track?.kind === "video");
+        // A slot with nothing in it, which is what every connection here has
+        // until something is sent. This is the case a share lands in.
+        const empty = senders.find((item) => item.track === null);
+        const sender = carrying ?? empty;
+        if (sender) return sender.replaceTrack(track);
+        // No slot at all: this browser would not reserve one. The far side is told,
+        // because a track it has not been told about is a track it never shows.
+        if (track) {
+          peer.addTrack?.(track, this.localStream);
+          this.askForRenegotiation(email);
         }
-        return sender.replaceTrack(track);
+        return Promise.resolve();
       }),
     );
     await Promise.all(
-      [...this.peers.values()].map((peer) => this.capVideo(peer.getSenders?.() ?? [])),
+      [...this.peers.values()].map((peer) => {
+        const senders = peer.getSenders?.() ?? [];
+        // Re-applied after a device switch, because the new sender is a new
+        // sender and carries none of the settings the old one had.
+        return Promise.all([this.capVideo(senders), this.capAudio(senders)]);
+      }),
     );
   };
 
@@ -1066,30 +1304,61 @@ export class CallMedia {
    * It is sent and never played here, because it would come back out of the very
    * speakers being captured, and a tab that is playing a video would then be
    * heard twice by everyone else.
+   *
+   * It goes onto the microphone's own sender rather than a second one, because that
+   * slot is already negotiated and adding another means renegotiating mid-call for
+   * something most shares do not even carry. That makes the microphone the thing
+   * being replaced, and putting it back is the whole difficulty — which is why
+   * `stopScreen` calls this with the microphone explicitly rather than hoping the
+   * absence of screen audio is noticed.
    */
   private pushScreenAudio = async () => {
     const sound = this.screenStream?.getAudioTracks()[0] ?? null;
+    // The microphone is whatever the call is currently carrying: the processed
+    // track where a gain node exists, and the raw one where it does not. Guessing
+    // from the wrong one of the two restores a track nobody was sending — the gain
+    // node's output, which is silent on its own — and the person stays muted.
+    const mic =
+      this.processed?.getAudioTracks()[0] ?? this.localStream?.getAudioTracks()[0] ?? null;
     for (const peer of this.peers.values()) {
       const sender = peer.getSenders().find((item) => item.track?.kind === "audio");
-      if (!sender || !sound) continue;
-      if (sender.track?.label === sound.label) continue;
-      await sender.replaceTrack(sound);
+      if (!sender) continue;
+      const wanted = sound ?? mic;
+      if (!wanted) continue;
+      if (sender.track === wanted) continue;
+      await sender.replaceTrack(wanted);
     }
   };
 
+  /**
+   * Mutes or unmutes the microphone, everywhere.
+   *
+   * One track is shared by every connection, so a single flag is the whole mute:
+   * there is nothing per person to forget. Returns whether the switch was
+   * accepted, which is always true — see `setCamera`, and why this does not
+   * return the state that was asked for.
+   */
   setMic = (on: boolean) => {
     this.micOn = on;
     for (const track of this.localStream?.getAudioTracks() ?? []) track.enabled = on;
     // Once the microphone runs through the gain node, the track the call carries
     // is the one that has to fall silent, or the mute would only mute locally.
     for (const track of this.processed?.getAudioTracks() ?? []) track.enabled = on;
-    return on;
+    return true;
   };
 
   setCamera = (on: boolean) => {
     this.cameraOn = on;
     for (const track of this.localStream?.getVideoTracks() ?? []) track.enabled = on;
-    return on;
+    // Always `true`, including when switching it off.
+    //
+    // This returns whether the switch was accepted, and turning something off is
+    // always accepted — there is nothing that can fail. It used to return `on`, so
+    // switching the camera *off* reported failure, and both callers read that as a
+    // browser that cannot do calls. People turn the camera off right before sharing
+    // a screen, so this sat directly on the way to a share: the camera off, the
+    // share never started, and "This browser cannot do calls" on the screen.
+    return true;
   };
 
   /**
@@ -1169,18 +1438,42 @@ export class CallMedia {
    * to 15 frames a second is invisible to a reader of a document while it is the
    * difference between a call that holds together and one that does not.
    *
+   /**
+ * How much a shared screen is asked for, as the design's picker puts it.
+ *
+ * The browser's own screen picker offers a screen or a window and nothing else:
+ * no resolution, no frame rate, and no idea what it will cost the connection. So
+ * the two are chosen here, before the picker opens, and a person who has just
+ * been shown 720p at 30 frames a second can change their mind before anybody sees
+ * a single frame of it.
+ *
+ * `720p 30` is the default because a screen is mostly text: the difference
+ * between 60 and 30 frames a second is invisible to somebody reading a document,
+ * and it is the difference between a call that holds and one that does not.
+ */
+  /**
    * Nothing here throws: a cancelled picker is an ordinary thing for a person to
    * do, and it has to leave the call exactly as it was rather than half sharing.
    */
-  startScreen = async () => {
+  startScreen = async (quality: ScreenQuality = DEFAULT_SCREEN_QUALITY) => {
     if (!this.media) return false;
+    this.quality = quality;
     let picked: MediaStreamLike;
     try {
       picked = await this.media.getDisplayMedia({
         video: {
-          frameRate: { ideal: 15, max: 30 },
-          width: { ideal: 1920, max: 1920 },
-          height: { ideal: 1080, max: 1080 },
+          frameRate: { ideal: quality.frameRate, max: quality.frameRate },
+          width: { ideal: quality.width, max: quality.width },
+          height: { ideal: quality.height, max: quality.height },
+          /**
+           * The cursor travels with the capture.
+           *
+           * Without this the person watching cannot see where you are pointing,
+           * and "let me just show you" turns into describing where things are.
+           * It costs a pointer drawn on every frame, which on a shared screen is
+           * nothing next to the text being read.
+           */
+          cursor: "always",
         },
         // A tab can carry its own sound, which is how the people watching hear
         // the video being shown. A whole screen has none, and asking for it is
@@ -1191,8 +1484,22 @@ export class CallMedia {
         preferCurrentTab: false,
         selfBrowserSurface: "exclude",
       } as DisplayMediaStreamOptions);
-    } catch {
-      // Cancelled at the picker, or refused by a policy: no share, no change.
+    } catch (error) {
+      /**
+       * Said out loud rather than swallowed.
+       *
+       * `false` is the right answer for a person mid conversation — they get
+       * "could not share" and the call carries on. It is the wrong answer for
+       * whoever is fixing it, because a refusal at the picker, a browser without
+       * the API and a policy header blocking the whole thing are three different
+       * problems that all arrive here as `false`. The name is the difference
+       * between "they pressed cancel" and "this platform cannot do it".
+       */
+      traceCall(
+        "screen",
+        "share refused",
+        `${(error as { name?: string })?.name ?? "unknown"}: ${String(error)}`,
+      );
       return false;
     }
 
@@ -1200,14 +1507,29 @@ export class CallMedia {
     if (!screen) {
       // A picker that hands back audio alone is a browser that cannot do this.
       for (const track of picked.getTracks()) track.stop();
+      traceCall("screen", "share gave no video", `${picked.getTracks().length} track(s) back`);
       return false;
     }
     this.screenStream = picked;
     // Detail is what a screen needs: without it a browser is free to blur the
     // text, which is the one thing a shared screen is usually for.
+    //
+    // This used to be followed by a `setHint(screen, "motion", false)`, which read
+    // like switching back to the camera's hint. It was doing the opposite: the hint
+    // is set on the track named in the call, so it deleted the one line above it and
+    // left the capture with no hint at all. The camera never had a hint to restore —
+    // only the audio track carries one — so nothing was being reset and the shared
+    // screen went out at whatever the encoder felt like, which is the "blurry mess"
+    // that made this look like a resolution problem rather than a one-line one.
     this.setHint(screen, "detail");
-    this.setHint(screen, "motion", false);
     this.shareSurface = this.readSurface(screen);
+    // Which screen it is, as the browser names it: "Екран 2", a window title, or
+    // the tab. It is the one thing that says *what* is being shared rather than
+    // that something is, and a room showing "Екран 2" is not the same as one
+    // showing "На цял екран".
+    this.shareLabel = String(screen.label ?? "")
+      .trim()
+      .slice(0, 60);
 
     // The video goes out on every connection, and a tab's sound with it. The
     // sound is never played here: it would come straight back out of the same
@@ -1218,28 +1540,50 @@ export class CallMedia {
     // The browser puts its own "stop sharing" button on the track, and honouring
     // it is the only way the room hears that the share is over.
     screen.addEventListener?.("ended", () => void this.stopScreen());
-    this.events.onScreen(true, this.shareSurface);
+    // The sharer's own tile is bound to this, and nothing else knows about it: the
+    // microphone stream is untouched by a share and holds no picture.
+    this.events.onScreenStream?.(picked);
+    this.events.onScreen(true, this.shareSurface, this.shareLabel);
     return true;
   };
 
   /** Goes back to the camera, or to nothing at all if the call never had one. */
   stopScreen = async () => {
-    if (!this.screenStream) return false;
-    for (const track of this.screenStream.getTracks()) track.stop();
-    this.screenStream = null;
-    // The camera comes back only if there was one: a voice call goes back to
-    // being a voice call, and the other side is told that in the same breath.
-    await this.pushVideo(this.outgoingVideo());
-    await this.pushScreenAudio();
-    this.events.onScreen(false, this.shareSurface);
+    /**
+     * Always settles the share, even with no capture left to release.
+     *
+     * The caller is the switch, and the switch is on because the room says this
+     * account is sharing. Returning early for want of a stream is what makes that
+     * unrecoverable: the room is never told, so it keeps saying "sharing", so the
+     * switch stays on, so the next press finds no stream either. A person reloads
+     * the page and can never share anything again.
+     *
+     * Releasing what is there is still the work; the answer is simply no longer
+     * conditional on there being something to release.
+     */
+    const held = this.screenStream;
+    if (held) {
+      for (const track of held.getTracks()) track.stop();
+      this.screenStream = null;
+      // The camera comes back only if there was one: a voice call goes back to
+      // being a voice call, and the other side is told that in the same breath.
+      await this.pushVideo(this.outgoingVideo());
+      await this.pushScreenAudio();
+    }
+    this.events.onScreenStream?.(null);
+    this.events.onScreen(false, this.shareSurface, this.shareLabel);
+    this.shareLabel = "";
     this.shareSurface = "monitor";
     return true;
   };
 
   private shareSurface: ScreenSurface = "monitor";
+  private shareLabel = "";
+  /** What the last share was asked for, so a re-negotiation asks for it again. */
+  private quality: ScreenQuality = DEFAULT_SCREEN_QUALITY;
 
   /** Tells a track how it is going to be watched, where the browser listens. */
-  private setHint = (track: TrackLike, hint: "detail" | "motion", on = true) => {
+  private setHint = (track: TrackLike, hint: "speech" | "detail" | "motion", on = true) => {
     const target = track as unknown as { contentHint?: string };
     try {
       if (on) target.contentHint = hint;

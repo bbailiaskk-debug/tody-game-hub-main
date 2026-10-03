@@ -33,7 +33,7 @@ const {
   mayGrant,
   nextBounds,
   resolveEntry,
-  screenSourceFor,
+  shareCards,
 } = require("./shell.cjs");
 
 /** One window, one chat, one microphone light. */
@@ -72,62 +72,200 @@ const writeBounds = (bounds) => {
  * use its microphone.
  */
 const grantPermissions = () => {
+  const origin = appOrigin();
   const answer = (webContents, permission, callback) => {
     const requester = webContents?.getURL?.() ?? "";
-    callback(mayGrant(permission, requester));
+    callback(mayGrant(permission, requester, origin));
   };
   session.defaultSession.setPermissionRequestHandler(answer);
   session.defaultSession.setPermissionCheckHandler((webContents, permission) =>
-    mayGrant(permission, webContents?.getURL?.() ?? ""),
+    mayGrant(permission, webContents?.getURL?.() ?? "", origin),
   );
 };
 
+/** Which source a share landed on, said out loud, because the failure is silent. */
+const trace = (message, detail) => {
+  try {
+    console.log(`[tody] screen share: ${message}${detail ? ` (${detail})` : ""}`);
+  } catch {
+    // A console is not somewhere to fail over.
+  }
+};
+
+/** The page's own HTML for the picker, so it needs no bridge into the chat. */
+const PICKER_PAGE = path.join(__dirname, "share-picker.html");
+
+/** One share waiting for an answer. */
+let pendingShare = null;
+let pickerWin = null;
+
 /**
- * Sharing the screen from a call.
+ * Answer the waiting question, once.
  *
- * Windows 11 offers its own picker, which is the one people already know. Where
- * it is not there, the primary screen is offered, because a half finished share
- * is worse than an obvious choice.
+ * The callback is a one-shot handle and calling it twice throws inside Electron,
+ * so every path that ends a share goes through here: a choice, a cancel, the
+ * picker being closed, the window going away. `null` is how a refusal is spelled,
+ * and it arrives at the page as the `NotAllowedError` it should be.
  */
+const settleShare = (source) => {
+  const share = pendingShare;
+  pendingShare = null;
+  if (pickerWin && !pickerWin.isDestroyed()) pickerWin.destroy();
+  pickerWin = null;
+  if (!share) return;
+  try {
+    share.callback(source);
+  } catch (error) {
+    trace("answering the page failed", String(error?.message ?? error));
+  }
+};
+
 /**
- * Sharing the screen from a call.
+ * What the picker shows.
  *
- * Windows 11 22H2 and later put up the system's own picker, the same one
- * Windows uses everywhere else, and that is what is asked for: it is the picker
- * people already know, and it can show windows as well as screens.
+ * The list itself is `shareCards`, which is a decision about ordering and naming
+ * and is kept where it can be tested. This is only the part that needs Electron:
+ * asking the desktop what is there, and asking for pictures to go with it.
  *
- * Where the OS has no such picker, something still has to be shared, and the
- * screen the window is on is the one a person means by "my screen". The handler
- * is only called in that case, so the fallback never overrides a choice anybody
- * made.
+ * Thumbnails are fetched here and nowhere else — `toDataURL` turns each one into a
+ * bitmap the renderer has to hold, and a desktop with thirty windows open would
+ * carry all thirty across the bridge for a list most people scroll past.
  */
+const shareSources = async () => {
+  const display = displayForBounds(win?.getBounds(), screen.getAllDisplays());
+  const found = await desktopCapturer.getSources({
+    types: ["screen", "window"],
+    fetchWindowIcons: false,
+    thumbnailSize: { width: 320, height: 180 },
+  });
+  return shareCards(found, display);
+};
+
+/**
+ * The picker's own window, a moment.
+ *
+ * Modal to the chat so it cannot be left behind on another desktop, and closed by
+ * any of its three endings — a choice, the cancel button, or the window's own
+ * close — because a share nobody can finish is a share that hangs the page.
+ *
+ * Every failure here answers `null` rather than throwing into a `void`. A picker
+ * that failed to open would otherwise leave `getDisplayMedia` pending forever,
+ * which reads on the page as a button stuck on "sharing" with no error at all.
+ */
+const askWithPicker = async () => {
+  const share = pendingShare;
+  if (!share) return;
+  let cards = [];
+  try {
+    cards = await shareSources();
+  } catch (error) {
+    trace("listing sources failed", String(error?.message ?? error));
+    settleShare(null);
+    return;
+  }
+  if (cards.length === 0) {
+    trace("nothing to offer");
+    settleShare(null);
+    return;
+  }
+  // A newer request arrived while the list was being gathered.
+  if (pendingShare !== share) return;
+  share.sources = cards;
+
+  try {
+    pickerWin = new BrowserWindow({
+      width: 720,
+      height: 560,
+      parent: win && !win.isDestroyed() ? win : undefined,
+      modal: Boolean(win && !win.isDestroyed()),
+      title: "Share your screen",
+      backgroundColor: "#0b0d12",
+      show: false,
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: path.join(__dirname, "share-picker.cjs"),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+  } catch (error) {
+    trace("the picker would not open", String(error?.message ?? error));
+    settleShare(null);
+    return;
+  }
+
+  const picker = pickerWin;
+  picker.once("ready-to-show", () => picker.show());
+  picker.on("closed", () => {
+    if (pickerWin === picker) pickerWin = null;
+    // Closing is an answer in its own right. Electron keeps the page waiting
+    // until the callback runs, so this has to be the one that runs it.
+    if (pendingShare === share) settleShare(null);
+  });
+
+  /**
+   * A missing or unreadable page rejects here.
+   *
+   * Left alone it would reject the whole `askWithPicker`, which is called with
+   * `void`, and the `getDisplayMedia` in the chat would wait for a callback that
+   * nothing was ever going to make: the share button stuck on "starting", with
+   * no error and no way out but a reload.
+   */
+  try {
+    await picker.loadFile(PICKER_PAGE);
+  } catch (error) {
+    trace("the picker page would not load", String(error?.message ?? error));
+    if (pendingShare === share) settleShare(null);
+  }
+};
+
+/** Whether an IPC message came from our picker, and not from the chat. */
+const fromPicker = (event) => {
+  const sender = event?.sender;
+  if (!sender || !pickerWin || pickerWin.isDestroyed()) return false;
+  return sender.id === pickerWin.webContents.id;
+};
+
+/** What the picker draws. Empty rather than an error, so it shows its own empty state. */
+ipcMain.handle("tody:share-list", (event) => {
+  if (!fromPicker(event)) return [];
+  const share = pendingShare;
+  return share?.sources ?? [];
+});
+
+/** Sharing the screen from a call. */
 const grantScreenShare = () => {
-  session.defaultSession.setDisplayMediaRequestHandler(
-    (_request, callback) => {
-      // The screen this window is on, not blindly the first one: a two monitor
-      // desk otherwise shares the monitor nobody is looking at.
-      const display = displayForBounds(win?.getBounds(), screen.getAllDisplays());
-      desktopCapturer
-        .getSources({
-          // Windows as well as screens, so the fallback can offer a window too.
-          types: ["screen", "window"],
-          fetchWindowIcons: false,
-          thumbnailSize: { width: 0, height: 0 },
-        })
-        .then((sources) => {
-          const source = screenSourceFor(sources, display);
-          // Loopback is the sound the machine is playing, which is what somebody
-          // sharing a video wants and what a whole screen cannot do on its own.
-          callback(source ? { video: source, audio: "loopback" } : null);
-        })
-        .catch(() => callback(null));
-    },
-    { useSystemPicker: true },
-  );
+  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+    /**
+     * A second press while the first question is still on screen.
+     *
+     * There is one pending callback because there is one pending question, and
+     * leaving the older one unanswered would leave that earlier `getDisplayMedia`
+     * hanging for good — the page would sit on "starting" with no error and no
+     * stream, which is the worst of the three things that can happen here.
+     */
+    if (pendingShare) settleShare(null);
+
+    pendingShare = { callback, sources: [] };
+    trace("the app was asked for a source");
+    void askWithPicker();
+  });
 };
 
 /** Where the window points, and where it goes back to after a lost network. */
-const entryUrl = () => resolveEntry(process.env.TODY_APP_ORIGIN || DEFAULT_ORIGIN);
+const entryUrl = () => resolveEntry(appOrigin());
+
+/**
+ * The origin this window is talking to.
+ *
+ * Read from the environment every time rather than defaulted inside the helpers,
+ * because the helpers that check "is this my own page" take an origin and default
+ * it to production. Under `desktop:dev` the window points at localhost, so every
+ * one of those checks was comparing localhost against workers.dev, answering no,
+ * and refusing the microphone and the camera on a build that was working perfectly
+ * well. One place reads the environment; everything else is handed the answer.
+ */
+const appOrigin = () => process.env.TODY_APP_ORIGIN || DEFAULT_ORIGIN;
 
 /** A menu that keeps the keyboard shortcuts a text field needs, and little else. */
 const buildMenu = () => {
@@ -190,7 +328,11 @@ const createWindow = () => {
     backgroundColor: "#0d120d",
     show: false,
     title: "Tody Game Hub",
-    icon: path.join(__dirname, "icon.png"),
+    // The icon lives beside the build script that draws it, not beside this file.
+    // Pointed at the wrong directory it resolved to nothing, and a window with no
+    // icon is a program with the default one — which is the whole of what this
+    // window is not.
+    icon: path.join(__dirname, "build", "icon.png"),
     webPreferences: {
       // The page is a stranger with no business touching this machine.
       contextIsolation: true,
@@ -212,14 +354,16 @@ const createWindow = () => {
 
   // A link to another site is the user's business, opened where they expect it.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isExternal(url)) void shell.openExternal(url);
+    if (isExternal(url, appOrigin())) void shell.openExternal(url);
     return { action: "deny" };
   });
-  // The same for anything that tries to walk the window somewhere else.
+  // The same for anything that tries to walk the window somewhere else. Both of
+  // these default to the production origin, which under a dev run meant the app's
+  // own page counted as somebody else's and was bounced out to the browser.
   win.webContents.on("will-navigate", (event, url) => {
-    if (isInternal(url)) return;
+    if (isInternal(url, appOrigin())) return;
     event.preventDefault();
-    if (isExternal(url)) void shell.openExternal(url);
+    if (isExternal(url, appOrigin())) void shell.openExternal(url);
   });
   win.webContents.on("did-fail-load", (_event, errorCode, description, _url, isMainFrame) => {
     if (!isMainFrame || errorCode === -3) return;
@@ -262,3 +406,72 @@ ipcMain.handle("tody:reopen", () => {
 });
 
 ipcMain.handle("tody:version", () => app.getVersion());
+
+/**
+ * The picker picked something.
+ *
+ * The id is matched against the list the picker was actually sent, rather than
+ * looked up in a fresh `getSources`, so what was on screen is what is shared: the
+ * ids are stable within a request but not across one, and a window that closed
+ * while the question was open has to come back as "cannot share that" rather than
+ * as whatever took its place.
+ */
+ipcMain.handle("tody:share-pick", (event, id) => {
+  if (!fromPicker(event)) return false;
+  const share = pendingShare;
+  const source = share?.sources.find((card) => card.id === String(id));
+  if (!share || !source) {
+    trace("picked something that is no longer there", String(id));
+    settleShare(null);
+    return false;
+  }
+  trace("sharing", source.name);
+  /**
+   * Video only, and not as a preference.
+   *
+   * `audio: "loopback"` used to be asked for here, and it was the whole reason
+   * screen sharing never started: the capture itself was fine, the screen was
+   * found and handed over, and the share then died on `NotReadableError: Could
+   * not start audio source`. Measured end to end, not inferred — the request
+   * object does not report what the page asked for (`audio` comes back
+   * `undefined`), so the earlier attempt to answer it conditionally allowed the
+   * loopback every single time and quietly protected nothing.
+   *
+   * It is not worth being cleverer about. The runs where loopback did start
+   * produced a stream with no audio track in it anyway, so it bought a share that
+   * works without sound for a share that mostly did not work at all — and on the
+   * way it displaced the microphone's sender, which is how a person ended up
+   * muted for the rest of the call.
+   *
+   * The page asks for sound because a browser gives it, and gets what it can:
+   * here that is a video track and nothing else, which is what the call already
+   * handles.
+   */
+  void desktopCapturer
+    .getSources({
+      types: ["screen", "window"],
+      fetchWindowIcons: false,
+      thumbnailSize: { width: 0, height: 0 },
+    })
+    .then((found) => {
+      const video = found.find((item) => String(item.id) === source.id);
+      if (!video) {
+        trace("it closed while the question was open", source.name);
+        settleShare(null);
+        return;
+      }
+      settleShare({ video });
+    })
+    .catch((error) => {
+      trace("re-reading the source failed", String(error?.message ?? error));
+      settleShare(null);
+    });
+  return true;
+});
+
+ipcMain.handle("tody:share-cancel", (event) => {
+  if (!fromPicker(event)) return false;
+  trace("the picker was dismissed");
+  settleShare(null);
+  return true;
+});

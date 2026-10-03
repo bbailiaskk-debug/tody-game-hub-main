@@ -233,9 +233,15 @@ describe("clicking a friend opens the conversation", () => {
     // The placeholder for "no conversation" is gone.
     expect(host.textContent).not.toContain("Избери разговор");
 
-    // The list is on the chats tab, so the way back lands on the new row.
-    const chatTab = buttonWith("Чатове");
-    expect(chatTab?.className).toContain("bg-brand");
+    // The list is on the chats shortcut, so the way back lands on the new row.
+    // Asked of `aria-current` rather than of a colour class: which shortcut is
+    // open is a question about state, and a test that reads it out of a
+    // Tailwind token keeps passing after the styling is repainted and stops
+    // telling you anything about which control is live.
+    const chatShortcut = buttonWith("Чатове");
+    expect(chatShortcut?.getAttribute("aria-current")).toBe("page");
+    // And the other two are not, or "which one is open" has no answer.
+    expect(buttonWith("Приятели")?.getAttribute("aria-current")).toBeNull();
 
     // And the cloud was told about the row, so the next snapshot keeps it.
     expect(state.snap.chats[0]?.peerEmail).toBe(FRIEND_EMAIL);

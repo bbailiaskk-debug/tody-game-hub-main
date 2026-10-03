@@ -28,7 +28,7 @@ const debouncedSyncAccent = createDebouncedWriter(
 );
 
 type Theme = "dark" | "light";
-type Lang = "bg" | "en" | "zh";
+export type Lang = "bg" | "en" | "zh";
 type GraphicsSize = "small" | "large";
 
 export function normalizeLang(value: string | null | undefined): Lang {

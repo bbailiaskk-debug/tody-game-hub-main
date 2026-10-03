@@ -8,6 +8,7 @@ import {
   initialsForName,
   isOnlineAt,
   normalizePresenceStatus,
+  toggleReaction,
   type CallOutcome,
   type CallRecord,
   type ChatContact,
@@ -502,7 +503,7 @@ export const messagesLocal = {
               mimeType: item.mimeType,
               size: item.size,
               stored: true,
-              dataUrl: item.dataUrl,
+              ...(item.dataUrl ? { dataUrl: item.dataUrl } : {}),
             })),
           }
         : {}),
@@ -568,6 +569,35 @@ export const messagesLocal = {
       };
     });
     if (!found) return { ok: false as const };
+    write(data);
+    return { ok: true as const };
+  },
+
+  /**
+   * Adds or takes off a reaction in the device-local fallback.
+   *
+   * No author check here, unlike the change beside it: a reaction is the one thing
+   * a person may do to somebody else's message, and refusing it because it is not
+   * theirs would make a chat with two devices in it a place where only your own
+   * words can be acknowledged.
+   */
+  toggleReaction(chatId: string, messageId: string, emoji: string) {
+    const data = read();
+    let changed = false;
+    data.chats = data.chats.map((chat) => {
+      if (chat.id !== chatId) return chat;
+      return {
+        ...chat,
+        messages: chat.messages.map((message) => {
+          if (message.id !== messageId || message.deletedAt) return message;
+          const next = toggleReaction(message, emoji, data.profile.email);
+          if (!next) return message;
+          changed = true;
+          return { ...message, reactions: next };
+        }),
+      };
+    });
+    if (!changed) return { ok: false as const };
     write(data);
     return { ok: true as const };
   },

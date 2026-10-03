@@ -20,6 +20,12 @@ files:
   - preload.cjs
   - shell.cjs
   - offline.html
+  - share-picker.html
+  - share-picker.cjs
+  # The window's own icon, which is not the installer's. The .ico beside it is
+  # only read by the builder and never ships inside the app, so without this line
+  # the program runs from the start menu with the shell's default icon on it.
+  - build/icon.png
   - package.json
 
 # There is no node runtime inside the app: it reaches the site over https and

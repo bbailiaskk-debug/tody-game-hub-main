@@ -81,7 +81,7 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://tody-game-hub.bbailiaskk.workers.dev/ai</loc>
+    <loc>https://tody-game-hub.bbailiaskk.workers.dev/ai?chat=</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>

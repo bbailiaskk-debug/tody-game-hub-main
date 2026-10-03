@@ -453,6 +453,24 @@
     border-color: var(--color-border);
   }
 
+  /**
+   * The page's canvas and the page's box are painted the same colour.
+   *
+   * `html` paints the whole canvas, `body` paints only its own box, and the body
+   * rule below tints its colour towards the brand. Left on the plain token, `html`
+   * kept a second, flatter colour, so any pixel the body did not cover — a strip
+   * under the footer, a hairline at the end of a short page — showed as a band
+   * that did not belong to the page. Matching the two makes such a pixel
+   * invisible at any height, instead of hiding a gap whose size depends on the
+   * viewport.
+   *
+   * Written with the variables rather than the resolved colours so the light
+   * theme follows `--background` on its own.
+   */
+  html {
+    background-color: color-mix(in oklab, var(--color-background) 94%, var(--brand) 6%);
+  }
+
   body {
     background-color: color-mix(in oklab, var(--color-background) 94%, var(--brand) 6%);
     background-image: var(--site-background-overlay), var(--site-background-image);
@@ -477,6 +495,50 @@
     font-family: var(--font-display);
     font-weight: 700;
     letter-spacing: -0.02em;
+  }
+}
+
+@layer base {
+  /**
+   * The scrollbar every panel in the app inherits.
+   *
+   * Left to the browser, a scrolling panel on Windows grows the classic bar with
+   * a button at each end, and a chat column on a narrow screen then spends a
+   * sixth of its width on two arrow buttons that scroll nothing. It also appears
+   * and disappears with the content, which moves a list sideways as a message
+   * arrives. This makes the bar thin, quiet, and the same everywhere, so a panel
+   * is the only thing that has to be looked at.
+   *
+   * Applied through `*` rather than per component on purpose: a container that
+   * somebody adds later is styled correctly by default, and the utilities below
+   * still win where they are asked for.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--tk-text, var(--color-foreground)) 32%, transparent)
+      transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--tk-text, var(--color-foreground)) 32%, transparent);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--tk-text, var(--color-foreground)) 55%, transparent);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }
 
@@ -568,6 +630,26 @@
     --font-display: system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  /**
+   * A phone has no scrollbar to aim at.
+   *
+   * A finger drags the content, so a bar is a strip of the width given back for
+   * nothing, and the arrow buttons Windows insists on are the thing that pushed
+   * the chat list off a small screen. The content still scrolls; only the bar
+   * goes. Touch devices are matched by pointer, not by width, so a tablet held
+   * in a hand gets the same treatment as a phone in the same class.
+   */
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 }
 

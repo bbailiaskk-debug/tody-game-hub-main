@@ -619,15 +619,21 @@ describe("what each device can actually send", () => {
     ]);
   });
 
-  it("leaves the microphone uncapped", async () => {
+  it("leaves the microphone with room to spare, rather than capped", async () => {
     const audio = harness();
     await audio.media.start({ video: false });
     const link = audio.media.peerFor("a@example.com") as unknown as FakeConnection;
     const sender = link.senders.find((entry) => entry.track?.kind === "audio");
+    const encoding = sender?.parameters?.encodings?.[0] as
+      { maxBitrate?: number; priority?: string } | undefined;
 
-    // A voice codec is already small, and a cap on it is a cap on somebody
-    // being heard at all.
-    expect(sender?.parameters?.encodings).toEqual([{}]);
+    // Opus needs roughly 24 kbit/s for a clean mono voice. The figure set here is
+    // a ceiling well above that, not a target, so it is never what a talker costs
+    // and it never costs a word — the point of putting a number on it at all is
+    // the priority beside it, which is what stops a webcam from starving a voice
+    // when the uplink tightens.
+    expect(encoding?.maxBitrate).toBeGreaterThan(32_000);
+    expect(encoding?.priority).toBe("high");
   });
 });
 

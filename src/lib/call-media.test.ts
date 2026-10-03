@@ -214,6 +214,41 @@ describe("starting a call", () => {
     expect(media.connectedTo()).toEqual(["peer@example.com"]);
   });
 
+  it("gives the microphone to a connection that was made before it opened", async () => {
+    /**
+     * A connection is made the moment a frame arrives for it, and on a phone
+     * that has not been granted permission yet that is earlier than the
+     * microphone exists. `attachLocal` runs on that connection with nothing to
+     * attach, and unless the tracks are put on it afterwards it stays a
+     * connection that carries no voice: two people talking, one of them unheard,
+     * and nothing on screen saying which.
+     */
+    const { media, forPeer } = harness();
+    // The far side sends a frame first, so the connection exists before any
+    // microphone has been opened on this device.
+    await media.accept("a@example.com", { kind: "candidate", candidate: { c: 1 } } as never);
+    expect(forPeer("a@example.com").senders).toHaveLength(0);
+
+    await media.start({ video: false });
+
+    // The connection that was already there now carries the voice.
+    const audio = forPeer("a@example.com").senders.filter((item) => item.track?.kind === "audio");
+    expect(audio).toHaveLength(1);
+  });
+
+  it("does not add the microphone twice to a connection that already has it", async () => {
+    const { media, forPeer } = harness();
+    await media.start({ video: false });
+    await media.createOffer("a@example.com");
+    const before = forPeer("a@example.com").senders.length;
+
+    // Opening the microphone again must not negotiate a second audio track: two
+    // of them send the same voice twice, at half the quality each.
+    await media.start({ video: false });
+
+    expect(forPeer("a@example.com").senders).toHaveLength(before);
+  });
+
   it("holds one connection per person, and no more", async () => {
     const { media } = harness();
     await media.start({ video: true });
@@ -302,11 +337,19 @@ describe("starting a call", () => {
 });
 
 describe("the switches on the bar", () => {
+  /**
+   * Both of these return "was the switch accepted", not the state that was asked
+   * for. They used to return the state, so switching something *off* read as a
+   * failure — and a caller that asks whether it worked is exactly what a voice
+   * channel does before telling the room. Turning the camera off therefore
+   * reported "no camera" and never relayed the change, and people turn the camera
+   * off right before sharing a screen.
+   */
   it("mutes the microphone, and everybody is on the same track", async () => {
     const { media, mic } = harness();
     await media.start({ video: false });
 
-    expect(media.setMic(false)).toBe(false);
+    expect(media.setMic(false)).toBe(true);
     // One track is shared by every connection, so a single flag is the whole
     // mute: there is nothing per person to forget.
     expect(mic.enabled).toBe(false);
@@ -316,7 +359,7 @@ describe("the switches on the bar", () => {
     const { media, camera } = harness();
     await media.start({ video: true });
 
-    expect(media.setCamera(false)).toBe(false);
+    expect(media.setCamera(false)).toBe(true);
     expect(camera.enabled).toBe(false);
   });
 

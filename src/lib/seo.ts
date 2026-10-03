@@ -11,18 +11,36 @@ type HeadMeta = {
 type HeadLink = {
   rel: string;
   href?: string;
-  hrefLang?: string;
   type?: string;
   sizes?: string;
 };
 
 /**
- * Builds the canonical + Open Graph + Twitter + hreflang head block for a page.
+ * Builds the canonical + Open Graph + Twitter head block for a page.
  *
  * Every public page gets exactly ONE canonical pointing at the clean URL, the
- * shared OG/Twitter image, and a consistent hreflang set (bg / en / zh /
- * x-default). Private pages can set `noindex` to keep search engines out while
- * still declaring their own canonical (no inherited duplicates).
+ * shared OG/Twitter image, and a consistent title and description.
+ *
+ * There are deliberately no `alternate hreflang` links, and there were some once.
+ * They pointed at `?lang=en` and `?lang=zh`, on the reasoning that the site has a
+ * language switcher. But the switcher is a client preference — it lives in
+ * localStorage — so the server answers every one of those URLs with the same
+ * Bulgarian document: `/games?lang=en` is byte-for-byte `/games`, down to
+ * `<html lang="bg">`. Declaring a page as the English version of itself when it is
+ * not is worse than saying nothing: the audit reports it, and a crawler that
+ * believes it discards the annotation and the canonical with it.
+ *
+ * So the honest head for this site is one language and one URL. Should the
+ * language ever become part of the URL, the alternates come back with the change
+ * that makes them true — a server that reads the parameter and renders it — not
+ * before.
+ *
+ * Private pages can set `noindex` to keep search engines out while still
+ * declaring their own canonical (no inherited duplicates).
+ *
+ * `path` must be a URL that answers 200 as written, query string and all. A
+ * canonical or a sitemap entry that points at a redirect is a page the audit
+ * reports and a crawler follows one hop for nothing.
  */
 export function seoHead(opts: {
   path: string;
@@ -56,13 +74,7 @@ export function seoHead(opts: {
     meta.push({ name: "robots", content: "noindex, nofollow" });
   }
 
-  const links: HeadLink[] = [
-    { rel: "canonical", href: url },
-    { rel: "alternate", hrefLang: "bg", href: url },
-    { rel: "alternate", hrefLang: "en", href: `${url}?lang=en` },
-    { rel: "alternate", hrefLang: "zh", href: `${url}?lang=zh` },
-    { rel: "alternate", hrefLang: "x-default", href: url },
-  ];
+  const links: HeadLink[] = [{ rel: "canonical", href: url }];
 
   return { meta, links };
 }

@@ -7,6 +7,7 @@ import {
   ChessKnight,
   ChevronDown,
   Disc3,
+  Download,
   Gamepad2,
   Grid3x3,
   Keyboard,
@@ -40,6 +41,7 @@ import {
   readPersistedUserProfile,
   storageGet,
 } from "../../lib/local-persistence";
+import { ANDROID_DOWNLOAD, PROGRAM_DOWNLOAD } from "../../lib/program-download";
 
 import { copy, useSiteSettings } from "./theme";
 
@@ -231,7 +233,7 @@ export function SiteHeader() {
 
   return (
     <header className="site-header sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl max-sm:bg-background max-sm:backdrop-blur-none">
-      <div className="mx-auto flex h-[68px] max-w-[1600px] items-center justify-between gap-3 px-4 sm:gap-4 sm:px-5">
+      <div className="mx-auto flex h-[68px] w-full max-w-none items-center justify-between gap-3 px-4 sm:gap-4 sm:px-5">
         <Link to="/" className="site-header-brand flex items-center gap-2 flex-shrink-0">
           <span className="site-header-logo relative grid size-12 place-items-center rounded-full bg-surface-2 font-display text-base font-bold">
             TK
@@ -452,6 +454,75 @@ export function SiteHeader() {
                       <Bot className="size-4" />
                     </span>
                   </Link>
+
+                  {/**
+                   * The program, in both the builds it comes in.
+                   *
+                   * One element for both rather than two written out side by side.
+                   * They differ in nothing but the file they hand over, and two copies
+                   * of the same styling drift the moment one of them is edited: the
+                   * second row ends up a little smaller, or a shade off, and the menu
+                   * looks like it was assembled rather than designed.
+                   *
+                   * The same glyph on both rows, which says "this is a download" once
+                   * and lets the line of text say which one. A phone on the second row
+                   * would be the only icon in this menu that names a platform, and the
+                   * one next to it names one too, so the pair reads as two different
+                   * kinds of thing rather than as the same thing twice.
+                   *
+                   * A new tab, because Drive answers with its own page before the file
+                   * and this menu is over a page somebody is reading. `noopener` keeps
+                   * that page from reaching back into this window, and there is no
+                   * `download` attribute: it is ignored cross-origin, so it would only
+                   * look like it works.
+                   */}
+                  {[
+                    {
+                      key: "windows",
+                      href: PROGRAM_DOWNLOAD,
+                      label: lang === "bg" ? "изтегли за windows" : "download for windows",
+                    },
+                    {
+                      key: "android",
+                      href: ANDROID_DOWNLOAD,
+                      label: lang === "bg" ? "изтегли за android" : "download for android",
+                    },
+                  ].map(({ key, href, label }) => (
+                    <a
+                      key={key}
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setMenuOpen(false)}
+                      className="group flex items-center justify-between gap-3 rounded-full border border-border/60 bg-surface px-4 py-3.5 transition-colors hover:border-primary/50 hover:bg-surface-2"
+                    >
+                      <span className="flex flex-col">
+                        <span className="font-mono text-[1.05rem] font-bold tracking-[0.2em] text-foreground">
+                          {lang === "bg" ? "ПРОГРАМА" : "APP"}
+                        </span>
+                        <span className="text-[0.7rem] font-mono tracking-[0.16em] text-muted-foreground uppercase">
+                          {label}
+                        </span>
+                      </span>
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-2 text-foreground transition-transform duration-200 group-hover:translate-x-0.5">
+                        <Download className="size-4" />
+                      </span>
+                      {/**
+                       * The same arrow every other row in this menu ends on, and the
+                       * games were the ones that started it: it says the row goes
+                       * somewhere, which the icon alone does not, since the icon only
+                       * says what it is.
+                       *
+                       * A character rather than a drawn glyph, like the ones below it,
+                       * because a chevron drawn at this size and weight sits half a
+                       * pixel off the ones already in the menu and the row reads as a
+                       * paste.
+                       */}
+                      <span className="text-[1rem] leading-none text-muted-foreground transition-transform duration-200 group-hover:translate-x-1">
+                        ›
+                      </span>
+                    </a>
+                  ))}
                 </nav>
 
                 <div className="border-t border-border/70 p-3">

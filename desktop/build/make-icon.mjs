@@ -1,10 +1,10 @@
 // The program's icon, as Windows wants it.
 //
 // A .ico is a container of images, and a Windows shell wants several sizes in
-// one file: 256 for a large icon view, 16 for the corner of a window. The site
-// has one 512 pixel PNG, so this reads it, resamples it down and writes a
-// multi size .ico. The result is checked into desktop/build, and this runs again
-// only when the artwork changes.
+// one file: 256 for a large icon view, 16 for the corner of a window. The artwork
+// beside this script is one 512 pixel PNG, so this reads it, resamples it down and
+// writes a multi size .ico. Run make-artwork.mjs first when the artwork changes,
+// then this; both results are checked in, so a normal build needs neither.
 //
 // Why not hand the PNG to the installer? Because NSIS loads icons through the
 // shell's own loader, which wants a real .ico and refuses a PNG with a message
@@ -16,7 +16,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SOURCE = join(here, "..", "..", "public", "android-chrome-512x512.png");
+// The program's own artwork, not the site's web icon. They were the same file once,
+// which meant drawing a new program icon also changed the favicon — and the two are
+// looked at in very different places: one at sixteen pixels on a title bar, the
+// other at any size in a browser tab.
+const SOURCE = join(here, "icon.png");
 const TARGET = join(here, "icon.ico");
 const SIZES = [256, 128, 64, 48, 32, 16];
 

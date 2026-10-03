@@ -30,6 +30,20 @@ const SESSION_EMAIL_HEADER = "x-messages-email";
  * it can only ever be set by the server.
  */
 const MIRROR_HEADER = "x-messages-mirror";
+/**
+ * Who a mirrored voice frame is really about, when it is not the account whose
+ * object is receiving it.
+ *
+ * A relayed frame arrives at somebody else's object, so the session on the request
+ * names the recipient and not the speaker. Read as the speaker, the recipient
+ * records its own presence as whatever the frame says and never learns there was
+ * anybody else in the room — and the frame it is handed back says it came from
+ * itself, which the client drops as its own echo.
+ *
+ * A header rather than a body field, and stripped from client requests for the
+ * same reason `MIRROR_HEADER` is: nobody may claim to be another person.
+ */
+const VOICE_FROM_HEADER = "x-messages-voice-from";
 
 export const normalizeMessagesEmail = (email: string) => email.trim().toLowerCase();
 
@@ -168,4 +182,4 @@ export function parseCookieHeader(header: string | null): Record<string, string>
   return out;
 }
 
-export { SESSION_HEADER, SESSION_EMAIL_HEADER, MIRROR_HEADER };
+export { SESSION_HEADER, SESSION_EMAIL_HEADER, MIRROR_HEADER, VOICE_FROM_HEADER };

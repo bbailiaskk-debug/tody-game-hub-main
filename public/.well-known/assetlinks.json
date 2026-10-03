@@ -3,6 +3,6 @@
   "target": {
     "namespace": "android_app",
     "package_name": "com.todorkhristov.gaming",
-    "sha256_cert_fingerprints": ["ED:39:E3:62:DA:4A:7C:D9:D0:15:7F:4D:F0:19:2F:4B:99:4E:1F:8D:70:0D:DF:A3:2A:59:62:F6:C5:C8:0B:48"]
+    "sha256_cert_fingerprints": ["85:25:EB:88:BA:E1:F3:6C:B2:C4:B1:3D:E1:50:A6:28:11:6A:38:48:B2:68:AA:8E:7F:CF:BC:FF:CF:2E:D9:B2"]
   }
 }]

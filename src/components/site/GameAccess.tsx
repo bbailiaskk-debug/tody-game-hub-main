@@ -2,8 +2,9 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Building2, Loader2, Lock, LogIn, Rocket, Sparkles } from "lucide-react";
 import { type ComponentType, type FunctionComponent, type ReactNode } from "react";
 
-import { useCheckout, useGameAccess } from "../../lib/plan-access";
+import { useGameAccess, useCheckout } from "../../lib/plan-access";
 import { PLAN_DETAILS, type PaidPlanId, type PlanId } from "../../lib/plans";
+import { gameNote, gameTag } from "./game-catalog";
 import { useSiteSettings } from "./theme";
 
 const PLAN_ICONS: Record<PaidPlanId, typeof Sparkles> = {
@@ -114,13 +115,39 @@ type GameAccessBoundaryProps = {
 };
 
 export function GameAccessBoundary({ gamePath, gameTitle, children }: GameAccessBoundaryProps) {
+  const { lang } = useSiteSettings();
   const { locked, loading } = useGameAccess(gamePath);
 
   if (loading) {
+    /**
+     * The game, described — rather than a grey bar.
+     *
+     * Whether the plan can be seen is asked on the client, so this is what the
+     * server sends and therefore the whole of what a crawler reads: a page with no
+     * heading on it and a handful of words on it, which is why the audit reported a
+     * missing `h1` and a low word count on every game.
+     *
+     * The sentences are the index's own, not new ones written for a crawler. They
+     * are what the game is, they are already on screen two clicks away, and a person
+     * waiting the second or two before a game opens reads something true rather than
+     * a spinner. The line under the title says what is happening, which is the one
+     * thing the description cannot say.
+     */
+    const copy = lang === "bg" ? "Отваря се…" : lang === "zh" ? "正在打开…" : "Opening…";
+    const note = gameNote(gamePath, lang);
+    const tag = gameTag(gamePath, lang);
     return (
       <main className="grid-bg min-h-screen">
         <section className="mx-auto max-w-3xl px-6 pb-28 pt-24">
-          <div className="h-8 w-48 animate-pulse rounded-full bg-card" />
+          {tag ? <p className="label-mono text-brand">{tag}</p> : null}
+          <h1 className="mt-2 text-brand text-[clamp(2.2rem,7vw,4rem)] leading-none">
+            {gameTitle}
+          </h1>
+          {note ? (
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">{note}</p>
+          ) : null}
+          <p className="mt-4 text-xs text-muted-foreground/80">{copy}</p>
+          <div className="mt-8 h-8 w-48 animate-pulse rounded-full bg-card" />
         </section>
       </main>
     );

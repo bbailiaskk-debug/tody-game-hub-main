@@ -36,6 +36,73 @@ describe("messages api client", () => {
     await expect(messagesApi.session()).rejects.toBeInstanceOf(MessagesApiError);
   });
 
+  /**
+   * The last edge of the press, at the only place it can be checked without standing
+   * up the gateway: the request itself.
+   *
+   * `on` is the field the whole chain rests on. It is not a toggle, so the value in
+   * the body is what the reader pressed, and the far end has to be handed it rather
+   * than left to work it out from what it happens to be holding. A client that
+   * dropped the field would not fail loudly anywhere in the product: it would send
+   * the same request for putting a reaction on and taking one off, and the object
+   * would answer both with whatever the first one said.
+   */
+  it("says which way a reaction went, rather than asking for it to be toggled", async () => {
+    const calls: FetchCall[] = [];
+    installFetch(async (url, init) => {
+      calls.push({ url, init });
+      return json({ ok: true });
+    });
+
+    await messagesApi.react({ id: "m1", chatId: "chat-1", emoji: "👍", on: true });
+    await messagesApi.react({ id: "m1", chatId: "chat-1", emoji: "👍", on: false });
+
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      expect(call.url).toContain("/api/messages/message/react");
+      // True and false are both sent as themselves, never as the same word twice.
+      expect(typeof JSON.parse(String(call.init?.body)).on).toBe("boolean");
+    }
+    expect(JSON.parse(String(calls[0]?.init?.body)).on).toBe(true);
+    expect(JSON.parse(String(calls[1]?.init?.body)).on).toBe(false);
+  });
+
+  /**
+   * The whole friendship list goes in one request.
+   *
+   * Named rather than repeated because this is the difference between a new server
+   * and fifty of them: the addresses are not in the body, so there is nothing to
+   * repeat. A test that only checked "it posts" would pass just as happily on a
+   * client that posted once per friend, which is the thing that must not happen.
+   */
+  it("asks for the friends to be walked in with one call, naming nobody", async () => {
+    const calls: FetchCall[] = [];
+    installFetch(async (url, init) => {
+      calls.push({ url, init });
+      return json({ ok: true, added: 50, wanted: 50 });
+    });
+
+    const result = await messagesApi.guildMembers({ guildId: "g-hub" });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toContain("/guild/members");
+    // The body names the server and nothing else. Who walks in is the server's
+    // reading of this account's friendship list, so a client cannot point it at a
+    // stranger.
+    expect(JSON.parse(String(calls[0]?.init?.body ?? "{}"))).toEqual({ guildId: "g-hub" });
+    expect(result).toEqual({ ok: true, added: 50, wanted: 50 });
+  });
+
+  it("reports a failed walk-in rather than throwing at the person who made the server", async () => {
+    installFetch(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    await expect(messagesApi.guildMembers({ guildId: "g-hub" })).resolves.toEqual({
+      ok: false,
+      reason: "network",
+    });
+  });
+
   it("flags 401 as unauthorized", async () => {
     installFetch(async () => json({ error: "unauthorized" }, 401));
     const error = await messagesApi.session().catch((e: unknown) => e);

@@ -150,6 +150,34 @@ describe("the length of a call", () => {
   });
 });
 
+describe("what a call in progress says about who it is on", () => {
+  it("carries the person it is dialling, not just that it is dialling", () => {
+    const entry = liveCallEntry(
+      live({ status: "outgoing", peerName: "Todor", previousPeerName: "" }),
+      ME,
+    );
+    // A line reading "Outgoing call" leaves a person reading the conversation
+    // unable to tell whether it is about the person they are looking at.
+    expect(entry?.live?.peerName).toBe("Todor");
+    expect(entry?.live?.previousPeerName).toBe("");
+  });
+
+  it("remembers the first name when the call is moved to the next one", () => {
+    const entry = liveCallEntry(
+      live({ status: "outgoing", peerName: "Carol", previousPeerName: "Todor" }),
+      ME,
+    );
+    // So the line can say the first one did not answer, rather than changing
+    // its subject without saying why.
+    expect(entry?.live?.previousPeerName).toBe("Todor");
+    expect(entry?.live?.peerName).toBe("Carol");
+  });
+
+  it("has nobody before it on a call that was never moved", () => {
+    expect(liveCallEntry(live({ status: "outgoing" }), ME)?.live?.previousPeerName).toBe("");
+  });
+});
+
 describe("the thread", () => {
   it("puts a call between the messages it happened between", () => {
     const entries = timelineFor(

@@ -1,8 +1,9 @@
-import {
+﻿import {
   IDLE_CALL,
   MAX_ATTACHMENTS_PER_MESSAGE,
   MAX_CALLS_PER_CHAT,
   MAX_TEXT_LENGTH,
+  callCandidates,
   callOutcomeFor,
   canManageMessage,
   createMessageId,
@@ -10,8 +11,11 @@ import {
   initialsForName,
   isOnlineAt,
   normalizePresenceStatus,
+  isMineOn,
+  setReaction,
   shouldOffer,
   type CallMedia as CallMediaKind,
+  type CallCandidate,
   type CallParticipant,
   type CallRecord,
   type CallRoster,
@@ -22,18 +26,29 @@ import {
   type ChatMessage,
   type DirectoryEntry,
   type FriendsSnapshot,
+  type GuildSnapshot,
+  type GuildView,
   type IncomingAttachment,
+  type MessageAttachment,
   type MessageChat,
   type MessagesProfile,
   type PresenceStatus,
   type MessagesSnapshot,
   type MessageStatus,
   type TypingState,
+  type VoicePresence,
+  type VoiceRoster,
+  type VoiceSignal,
+  channelIdFor,
+  emptyGuildSnapshot,
+  guildView,
+  liveVoicePresences,
   liveTyping,
   TYPING_TTL_MS,
 } from "./messages-protocol";
 import { MessagesApiError, messagesApi } from "./messages-api";
-import { CallMedia } from "./call-media";
+import { AttachmentUploadError, uploadAttachment } from "./messages-upload";
+import { CallMedia, type ScreenQuality } from "./call-media";
 import { messagesLocal } from "./messages-local";
 import { parseStoredJson, storageGet, storageRemove, storageSet } from "./local-persistence";
 
@@ -64,6 +79,21 @@ const emptyFriends = (): FriendsSnapshot => ({
   declined: [],
 });
 
+/**
+ * The one voice room this device is in.
+ *
+ * A call and a channel are the same room to a person and two different rooms to
+ * the signalling. The view is handed this and draws one thing for both.
+ */
+export type VoiceRoom = {
+  kind: "call" | "channel";
+  /** The call id, or the channel id. What the signalling frames are addressed by. */
+  id: string;
+  /** What the header calls it. */
+  label: string;
+  presences: VoicePresence[];
+};
+
 export type MessagesStoreState = {
   status: MessagesStatus;
   /** `local` means the offline fallback is driving the UI. */
@@ -82,6 +112,15 @@ export type MessagesStoreState = {
   searching: boolean;
   /** Peers currently composing, per conversation. */
   typing: TypingState[];
+  /**
+   * Files on their way up, keyed by the message they belong to.
+   *
+   * Four gigabytes is not a moment, and a send button that does nothing visible
+   * for ten minutes reads as a broken app rather than a long wait. The bubble
+   * this is keyed by is already on screen, so the progress belongs on it rather
+   * than in a toast that would be about something else by the time it appeared.
+   */
+  uploads: Record<string, UploadProgressRow>;
   /** The call in progress, or idle. */
   call: CallState;
   /**
@@ -94,6 +133,26 @@ export type MessagesStoreState = {
   remoteStreams: Record<string, unknown>;
   /** What the local camera is sending, for the self view in the call screen. */
   localStream: unknown;
+  /**
+   * The desktop being shared, as a stream, or null.
+   *
+   * Kept apart from `localStream` because the microphone stream is unchanged by a
+   * share and carries no picture: this is what the sharer's own tile is bound to.
+   */
+  screenStream: unknown;
+  /** The servers this account is in, as mirrored rows. */
+  guilds: GuildSnapshot;
+  /**
+   * The voice channel this account is sitting in, or null.
+   *
+   * A channel and not a call: it has no status to move between and nobody is
+   * rung, because everybody in it is already in it.
+   */
+  voiceChannelId: string | null;
+  /** The voice channel being joined, before its roster arrives. */
+  voiceConnectingId: string | null;
+  /** Who is in each voice channel, by channel id. */
+  voiceRosters: Record<string, VoiceRoster>;
 };
 
 const CACHE_PREFIX = "tk-messages-cache:";
@@ -105,8 +164,21 @@ const POLL_MS = 30_000;
 const RETRY_MS = 60_000;
 const BACKOFF_START_MS = 1_000;
 const BACKOFF_MAX_MS = 30_000;
-/** How long a call rings before the app gives up on it. */
-const RING_TIMEOUT_MS = 45_000;
+/**
+ * How long a call rings before the app gives up on it.
+ *
+ * `0` means it does not give up on its own, and the call rings until somebody
+ * picks it up or the person dialling hangs up. The number it used to carry was
+ * chosen so that a call is never left ringing by nobody's decision but the
+ * app's; a person asking for a call that rings indefinitely is asking for that
+ * to be theirs instead, which is a reasonable thing to ask for.
+ *
+ * It is not written as a very large number on purpose. `setTimeout` takes a
+ * signed 32 bit millisecond count, so anything past 2^31-1 (about 24 days)
+ * overflows and fires immediately — a timer set to 100000000000000 ends the call
+ * the instant it is armed, which is the opposite of what a large number means.
+ */
+const RING_TIMEOUT_MS = 0;
 /**
  * How long an answered call has to actually connect.
  *
@@ -139,9 +211,15 @@ const emptyState: MessagesStoreState = {
   people: [],
   searching: false,
   typing: [],
+  uploads: {},
   call: IDLE_CALL,
   remoteStreams: {},
   localStream: null,
+  screenStream: null,
+  guilds: emptyGuildSnapshot(),
+  voiceChannelId: null,
+  voiceConnectingId: null,
+  voiceRosters: {},
 };
 
 const normalize = (email: string) => email.trim().toLowerCase();
@@ -181,6 +259,48 @@ export type OutboxEntry = {
   at: number;
   attachments: IncomingAttachment[];
 };
+
+/**
+ * How far one file has got, as the bubble shows it.
+ *
+ * Carries the whole of the file's size rather than a fraction because a fraction
+ * of four gigabytes is a number nobody can picture, and `1.2 GB of 3.8 GB` is.
+ */
+export type UploadProgressRow = { name: string; sent: number; total: number };
+
+/** The optimistic row's copy of an attachment: what the bubble can draw right now. */
+function previewAttachment(item: IncomingAttachment): MessageAttachment {
+  return {
+    id: item.id,
+    kind: item.kind,
+    name: item.name,
+    mimeType: item.mimeType,
+    size: item.size,
+    stored: false,
+    // Only ever set on the device that composed the message, and only for the
+    // small compressed copy of a picture. The server strips it.
+    ...(item.dataUrl ? { dataUrl: item.dataUrl } : {}),
+  };
+}
+
+/**
+ * An attachment with its payload taken off.
+ *
+ * What goes into the outbox and into the message body is this: a name, a size and
+ * an id. The outbox is written to localStorage, so a queue entry holding a file
+ * handle would be a queue entry that is empty after a reload and claims not to
+ * be, which is worse than one that never accepted the file in the first place.
+ */
+function uploadedAttachment(item: IncomingAttachment): IncomingAttachment {
+  return {
+    id: item.id,
+    kind: item.kind,
+    name: item.name,
+    mimeType: item.mimeType,
+    size: item.size,
+    ...(item.dataUrl ? { dataUrl: item.dataUrl } : {}),
+  };
+}
 
 const sanitizeCachedSnapshot = (value: unknown): MessagesData | null => {
   if (!value || typeof value !== "object") return null;
@@ -674,6 +794,10 @@ export class MessagesStore {
     this.cache(next);
     // Converged typing state, so a device that just joined also renders it.
     this.emit({ typing: liveTyping(snapshot.typing ?? [], now) });
+    // Servers are mirrored rows rather than part of the conversation cache, so
+    // they are read straight off the snapshot. An older object has none, which
+    // reads as "in no servers" rather than as a crash.
+    this.emit({ guilds: snapshot.guilds ?? emptyGuildSnapshot() });
     return true;
   }
 
@@ -749,15 +873,29 @@ export class MessagesStore {
           chatId?: string;
           peerEmail?: string;
           at?: number;
-          signal?: CallSignal;
+          signal?: CallSignal | VoiceSignal;
           roster?: CallRoster;
         };
-        if (frame.type === "sync" || frame.type === "presence") {
+        if (frame.type === "sync" || frame.type === "presence" || frame.type === "guild") {
           void this.sync();
           return;
         }
+        if (frame.type === "voice") {
+          /**
+           * Under the name the frame is actually sent with.
+           *
+           * Read under any other name and every change pushed to this device is
+           * dropped on the way in, silently — the frame arrives, nothing happens,
+           * and the room goes on knowing only about the person in front of the
+           * screen. It looks like the object is not telling anybody: the tiles for
+           * everybody else never arrive, and only the person who joined last, whose
+           * own request brought the room's answer back, can see who is there.
+           */
+          if (frame.signal) this.handleVoiceSignal(frame.signal as VoiceSignal);
+          return;
+        }
         if (frame.type === "call") {
-          if (frame.signal) this.handleCallSignal(frame.signal);
+          if (frame.signal) this.handleCallSignal(frame.signal as CallSignal);
           return;
         }
         if (frame.type === "roster") {
@@ -846,6 +984,8 @@ export class MessagesStore {
   private media: CallMedia | null = null;
   /** One stream per participant, so a call with four people plays all four. */
   private remoteStreams: Record<string, unknown> = {};
+  /** What this device is sharing, as a stream. Not data, so not persisted. */
+  private screenStream: unknown = null;
   /**
    * The offers waiting for an answer, one per person.
    *
@@ -862,7 +1002,25 @@ export class MessagesStore {
         // Frames the handshake produces go straight back out, already addressed
         // to the one person they belong to.
         const call = this.state.call;
-        if (call.status === "idle" || call.status === "ended") return;
+        if (call.status === "idle" || call.status === "ended") {
+          // No call up, but a voice channel may be. The connection belongs to the
+          // channel, and dropping its frames here is how two people sit in the
+          // same room connected to nobody.
+          const channelId = this.state.voiceChannelId;
+          if (channelId) {
+            void messagesApi
+              .voiceSignal({
+                kind: signal.kind as "offer" | "answer" | "candidate" | "renegotiate",
+                channelId,
+                to: signal.to ?? "",
+                ...(signal.description !== undefined ? { description: signal.description } : {}),
+                ...(signal.candidate !== undefined ? { candidate: signal.candidate } : {}),
+                ...this.voiceSwitches(),
+              })
+              .catch(() => undefined);
+          }
+          return;
+        }
         void this.relayCall({ ...signal, callId: call.callId, chatId: call.chatId } as CallSignal);
       },
       onRemote: (email, stream) => {
@@ -903,25 +1061,79 @@ export class MessagesStore {
         this.localStream = stream;
         this.emit({ localStream: stream });
       },
-      onScreen: (sharing, surface) => {
+      onScreenStream: (stream) => {
+        // The desktop, kept apart from the microphone stream. A voice room has no
+        // picture in its own stream, so binding the sharer's tile to that is how
+        // the one person who can fix it is shown an empty tile while everybody
+        // else is watching their desktop perfectly well.
+        this.screenStream = stream;
+        this.emit({ screenStream: stream });
+      },
+      onScreen: (sharing, surface, label) => {
         // The browser's own "stop sharing" button ends up here, and the room has
         // to hear about it: without this the other side keeps looking at a frozen
         // picture of somebody's desktop.
+        //
+        // The call first. It used to be the channel that won, which meant that
+        // sharing a screen while a call was up wrote the change to the channel and
+        // the person on the call was shown a camera that was not being sent.
         const call = this.state.call;
-        if (call.status === "idle" || call.status === "ended") return;
-        if (call.screen === sharing) return;
-        this.emit({
-          call: { ...call, screen: sharing, screenSurface: sharing ? surface : "monitor" },
-        });
-        void this.relayCall({
-          kind: "state",
-          callId: call.callId,
-          chatId: call.chatId,
-          mic: call.mic,
-          camera: call.camera,
-          screen: sharing,
-          ...(sharing ? { surface } : {}),
-        });
+        if (call.status !== "idle" && call.status !== "ended") {
+          if (call.screen === sharing) return;
+          // Both places the call screen is drawn from, not just the one the share
+          // switch reads. The room is built from `participants`, so updating only
+          // `call.screen` left the stage in its sharing layout with a black tile
+          // and the button still lit after somebody used the browser's own "stop
+          // sharing" — which is the one way to stop that does not go through this
+          // store's own switch.
+          this.emit({
+            call: {
+              ...call,
+              screen: sharing,
+              screenSurface: sharing ? surface : "monitor",
+              participants: call.participants.map((person) =>
+                person.isSelf
+                  ? {
+                      ...person,
+                      screen: sharing,
+                      screenSurface: sharing ? surface : person.screenSurface,
+                    }
+                  : person,
+              ),
+            },
+          });
+          void this.relayCall({
+            kind: "state",
+            callId: call.callId,
+            chatId: call.chatId,
+            mic: call.mic,
+            camera: call.camera,
+            screen: sharing,
+            ...(sharing ? { surface } : {}),
+          });
+          return;
+        }
+
+        const channelId = this.state.voiceChannelId;
+        if (channelId) {
+          // No call up, so the share belongs to the channel. Dropping this frame
+          // is how a room ends up showing a desktop that stopped moving.
+          const mine = this.selfVoicePresence(channelId);
+          if (mine?.screen === sharing) return;
+          this.patchVoicePresence(channelId, this.state.email, (entry) => ({
+            ...entry,
+            screen: sharing,
+            screenSurface: sharing ? surface : "monitor",
+            // Which screen, so the room can say "Екран 2" rather than only that
+            // something is being shown.
+            ...(sharing && label ? { screenLabel: label } : {}),
+          }));
+          void this.relayVoice({
+            kind: "voice-state",
+            channelId,
+            ...(sharing && label ? { screenLabel: label } : {}),
+          });
+        }
       },
     });
   };
@@ -1063,6 +1275,613 @@ export class MessagesStore {
       .catch(() => ({ ok: false as const, reason: "network" as const }));
   };
 
+  // --------------------------------------------------- servers and voice
+
+  /**
+   * The one voice room this device is in, if any.
+   *
+   * A call and a channel are the same thing to a person: a room other people are
+   * in, with tiles and a bar of switches at the bottom. They are different to
+   * the signalling, which is why they are two code paths, and they are the same
+   * to the view, which is why there is one view.
+   *
+   * A device is in one of them. Two at once would mean two sets of WebRTC
+   * connections keyed by the same addresses over one media layer, and the second
+   * one to be built would quietly take the first one's place.
+   */
+  voiceRoom = (): VoiceRoom | null => {
+    const call = this.state.call;
+    if (call.status !== "idle" && call.status !== "ended") {
+      const startedAt = call.answeredAt || call.startedAt;
+      return {
+        kind: "call",
+        id: call.callId,
+        label: call.peerName || call.peerEmail,
+        presences: call.participants
+          // Somebody who has gone keeps their row for a moment so a tile can fade;
+          // a room is not a list of everybody who ever picked up.
+          .filter((person) => person.status !== "left")
+          .map((person) => ({
+            email: person.email,
+            name: person.name,
+            avatar: person.avatar,
+            mic: person.mic,
+            camera: person.camera,
+            screen: person.screen,
+            screenSurface: person.screenSurface,
+            serverMuted: false,
+            deafened: false,
+            order: person.order,
+            status: "active" as const,
+            joinedAt: startedAt,
+          })),
+      };
+    }
+
+    const channelId = this.state.voiceChannelId;
+    if (!channelId) return null;
+    return {
+      kind: "channel",
+      id: channelId,
+      label: channelId,
+      presences: liveVoicePresences(this.state.voiceRosters[channelId]),
+    };
+  };
+
+  /** This account's own row in whichever room it is in, or null. */
+  selfInRoom = (): VoicePresence | null => {
+    const self = normalize(this.state.email);
+    return this.voiceRoom()?.presences.find((entry) => normalize(entry.email) === self) ?? null;
+  };
+
+  /**
+   * Frees the media layer before this device goes into another room.
+   *
+   * There is one camera and one microphone, so a device that is already in a
+   * room cannot also be in one. Called before a call is placed or answered, and
+   * before a channel is walked into, so the media is never asked to serve two
+   * things at once — which is where a call ends up connected to nobody while the
+   * screen says it is fine.
+   */
+  leaveAnyVoiceRoom = async () => {
+    const call = this.state.call;
+    if (call.status !== "idle" && call.status !== "ended") {
+      await this.endCall("hangup");
+      return;
+    }
+    const channelId = this.state.voiceChannelId ?? this.state.voiceConnectingId;
+    if (channelId) await this.leaveVoiceChannel(channelId);
+  };
+
+  /**
+   * The servers this account is in, each with the people and channels in it.
+   *
+   * Derived from the mirrored rows rather than stored beside them, so a sidebar
+   * cannot be showing a server the snapshot has dropped.
+   */
+  guildViews = (): GuildView[] => {
+    const snapshot = this.state.guilds;
+    return snapshot.guilds.map((guild) => guildView(guild, snapshot));
+  };
+
+  guildById = (guildId: string | null): GuildView | null => {
+    if (!guildId) return null;
+    return this.guildViews().find((guild) => guild.id === guildId) ?? null;
+  };
+
+  /** The people in a voice channel, in the order the mesh is built from. */
+  voicePresence = (channelId: string): VoicePresence[] =>
+    liveVoicePresences(this.state.voiceRosters[channelId]);
+
+  /** This account's own row in a channel, which is the only one it may act on. */
+  selfVoicePresence = (channelId: string): VoicePresence | null => {
+    const self = normalize(this.state.email);
+    return this.voicePresence(channelId).find((entry) => normalize(entry.email) === self) ?? null;
+  };
+
+  /**
+   * Sends one frame about a voice channel, with the microphone state that goes
+   * with it.
+   *
+   * The switches are attached here rather than by each caller, because a frame
+   * that says somebody is still in the room while their microphone is off is how
+   * a room ends up showing somebody as speaking when they are not.
+   */
+  private relayVoice = async (
+    signal: Omit<VoiceSignal, "roster" | "from" | "mic" | "camera" | "screen" | "surface">,
+    switches: {
+      mic: boolean;
+      camera: boolean;
+      screen: boolean;
+      surface: ScreenSurface;
+    } = this.voiceSwitches(),
+  ) => {
+    if (this.isLocal()) return { ok: false as const, reason: "offline" as const };
+    const result = await messagesApi
+      .voiceSignal({ ...signal, ...switches })
+      .catch(() => ({ ok: false as const, reason: "network" as const }) as const);
+    if (result.ok && result.roster) this.applyVoiceRoster(result.roster);
+    return result;
+  };
+
+  /** What this device is currently sending, as the room should be told. */
+  private voiceSwitches = (): {
+    mic: boolean;
+    camera: boolean;
+    screen: boolean;
+    surface: ScreenSurface;
+  } => {
+    /**
+     * Read off the device, not out of the room.
+     *
+     * The roster is the room's memory of this account, and a share that ended with
+     * the page stays in that memory: a reload, a browser that took the capture
+     * away, a second tab closed. Reporting that memory back as fact is how a room
+     * ends up permanently "sharing" a desktop nobody is sending, with a switch
+     * that cannot turn it off — because stopping asks the device for a capture it
+     * does not have, gets nothing, and so tells the room nothing either.
+     *
+     * The roster is only the answer on a device with no media layer of its own to
+     * ask, which is a test and nothing else.
+     */
+    const media = this.media;
+    if (media) {
+      return {
+        mic: media.sendingMic,
+        camera: media.sendingCamera,
+        screen: media.sendingScreen,
+        surface: media.sendingSurface,
+      };
+    }
+    const mine = this.selfVoicePresence(this.state.voiceChannelId ?? "");
+    return {
+      mic: mine?.mic ?? true,
+      camera: mine?.camera ?? false,
+      screen: mine?.screen ?? false,
+      surface: mine?.screenSurface ?? "monitor",
+    };
+  };
+
+  /**
+   * Puts a roster into the state.
+   *
+   * A roster naming nobody is one that does not know yet rather than one
+   * announcing an empty room, so it is ignored: taking it at its word replaces a
+   * stage full of people with an empty one.
+   */
+  private applyVoiceRoster = (roster: VoiceRoster) => {
+    if (roster.presences.length === 0) return;
+    const self = normalize(this.state.email);
+    const here = liveVoicePresences(roster).some((entry) => normalize(entry.email) === self);
+    const voiceRosters = { ...this.state.voiceRosters, [roster.channelId]: roster };
+    this.emit({
+      voiceRosters,
+      // A roster this account is not in means it has left the room, and the only
+      // thing that can take it out of its own media is that.
+      ...(roster.channelId === this.state.voiceChannelId && !here
+        ? { voiceChannelId: null, voiceConnectingId: null }
+        : {}),
+    });
+    void this.connectVoiceMesh(roster);
+  };
+
+  /**
+   * Makes the connections this account owes to the people in the room.
+   *
+   * The same rule as a call: whoever was in the room first offers, read from the
+   * roster's order, so two phones never offer at once. A late arrival is handed
+   * everybody who is already there, and everybody already there is handed the
+   * late arrival — which is why a join is broadcast to the whole server rather
+   * than to the occupants this device happens to know about.
+   */
+  private connectVoiceMesh = async (roster: VoiceRoster) => {
+    const media = this.media;
+    if (!media || roster.channelId !== this.state.voiceChannelId) return;
+    const self = normalize(this.state.email);
+    const live = liveVoicePresences(roster);
+    const order = live.map((entry) => ({ email: entry.email, order: entry.order }));
+
+    for (const person of live) {
+      if (normalize(person.email) === self) continue;
+      const mine = shouldOffer(self, person.email, order);
+      // Both sides are told which side of the link they are on, not only the one
+      // about to offer: it is also what decides who renegotiates.
+      media.setOfferer(person.email, mine);
+      if (!mine) continue;
+      if (media.connectedTo().includes(person.email)) continue;
+      try {
+        const offer = await media.createOffer(person.email);
+        await messagesApi.voiceSignal({
+          kind: "offer",
+          channelId: roster.channelId,
+          to: person.email,
+          description: offer,
+          ...this.voiceSwitches(),
+        });
+      } catch (error) {
+        console.warn("Failed to offer a connection to somebody in the channel.", error);
+      }
+    }
+  };
+
+  /**
+   * Applies one frame that arrived about a voice channel.
+   *
+   * The WebRTC frames are routed here rather than through the call machine,
+   * because a room and a call are different things with different lifetimes: the
+   * connection belongs to the channel, not to a conversation, and nobody is put
+   * out when somebody else's frame arrives.
+   */
+  handleVoiceSignal = (signal: VoiceSignal) => {
+    const self = normalize(this.state.email);
+    // The gateway hands every frame back to the sender's own devices, so this is
+    // how a phone tells that echo from somebody else speaking.
+    if (signal.from && normalize(signal.from) === self && signal.kind !== "voice-mute") return;
+    if (signal.roster) this.applyVoiceRoster(signal.roster);
+
+    const channelId = signal.channelId;
+    const roster = this.state.voiceRosters[channelId];
+
+    if (signal.kind === "voice-mute" && signal.target) {
+      this.enforceVoiceMute(channelId, signal.target, signal.muted === true, signal.from ?? "");
+      return;
+    }
+
+    if (signal.kind === "voice-kick" && signal.target === self) {
+      void this.leaveVoiceChannel(channelId);
+      return;
+    }
+
+    if (signal.kind === "voice-leave" && signal.from) {
+      this.dropVoicePresence(channelId, signal.from);
+      return;
+    }
+
+    // A microphone somebody else turned off reaches the phone holding it: the
+    // object cannot stop the audio, it can only say that it should.
+    if (signal.kind === "voice-state" && signal.from && signal.mic === false) {
+      this.media?.setMic(false);
+      if (this.state.voiceChannelId === channelId) {
+        this.patchVoicePresence(channelId, signal.from, (entry) => ({ ...entry, mic: false }));
+      }
+      return;
+    }
+
+    if (
+      (signal.kind === "offer" ||
+        signal.kind === "answer" ||
+        signal.kind === "candidate" ||
+        signal.kind === "renegotiate") &&
+      signal.from
+    ) {
+      const peer = signal.from;
+      if (signal.kind === "renegotiate") {
+        /**
+         * The other device added a track to this link, and it is the side that
+         * offers on a link, so it is the side that has to send the new
+         * description.
+         *
+         * Without this a shared screen arrives on the phone that was already in
+         * the channel and on nobody else: the sharer's own screen says it is
+         * working, the tile beside it stays a camera, and there is nothing on
+         * screen to say the other person cannot see it. The frame is not
+         * something `accept` can apply — it carries no description, it says that
+         * one is now needed.
+         */
+        this.pendingOffers.delete(peer);
+        void this.media?.renegotiate(peer).catch(() => undefined);
+        return;
+      }
+      void this.handleVoiceWebrtc(signal);
+      return;
+    }
+
+    // Anything else that names a change to somebody in the room is a roster the
+    // view can draw once the object has settled it.
+    if (roster && this.state.voiceChannelId === channelId) {
+      this.applyVoiceRoster(roster);
+    }
+  };
+
+  /** Applies a remote session description or candidate to the right peer. */
+  private handleVoiceWebrtc = async (signal: VoiceSignal) => {
+    const media = this.media;
+    const peer = signal.from;
+    if (!media || !peer) return;
+    try {
+      // The media layer answers an offer itself and sends the answer back through
+      // its own `onSignal`, which is the same path a call's handshake uses. So
+      // only the incoming frame is applied here.
+      await media.accept(peer, {
+        kind: signal.kind as "offer" | "answer" | "candidate",
+        description: signal.description,
+        candidate: signal.candidate,
+      });
+    } catch (error) {
+      console.warn("Failed to apply a connection frame in a voice channel.", error);
+    }
+  };
+
+  /** Marks somebody as gone without taking this account out of the room. */
+  private dropVoicePresence = (channelId: string, email: string) => {
+    const roster = this.state.voiceRosters[channelId];
+    if (!roster) return;
+    this.emit({
+      voiceRosters: {
+        ...this.state.voiceRosters,
+        [channelId]: {
+          ...roster,
+          presences: roster.presences.map((entry) =>
+            normalize(entry.email) === normalize(email) ? { ...entry, status: "left" } : entry,
+          ),
+        },
+      },
+    });
+    // A peer that is gone must not keep a connection open on this device, or it
+    // sits there decoding frames nobody is sending.
+    if (normalize(email) !== normalize(this.state.email)) this.media?.dropPeer(email);
+  };
+
+  private patchVoicePresence = (
+    channelId: string,
+    email: string,
+    patch: (entry: VoicePresence) => VoicePresence,
+  ) => {
+    const roster = this.state.voiceRosters[channelId];
+    if (!roster) return;
+    this.emit({
+      voiceRosters: {
+        ...this.state.voiceRosters,
+        [channelId]: {
+          ...roster,
+          presences: roster.presences.map((entry) =>
+            normalize(entry.email) === normalize(email) ? patch(entry) : entry,
+          ),
+        },
+      },
+    });
+  };
+
+  /**
+   * Applies a silence the server owner handed down.
+   *
+   * Only ever about this account: a member's own microphone is their own business,
+   * and a frame naming somebody else is not this phone's to act on.
+   */
+  private enforceVoiceMute = (
+    channelId: string,
+    target: string,
+    muted: boolean,
+    byWhom: string,
+  ) => {
+    if (normalize(target) !== normalize(this.state.email)) return;
+    this.media?.setMic(!muted);
+    this.patchVoicePresence(channelId, target, (entry) => ({
+      ...entry,
+      mic: muted ? false : entry.mic,
+      serverMuted: muted,
+      ...(muted ? { mutedBy: byWhom } : {}),
+    }));
+  };
+
+  /**
+   * Walks into a voice channel.
+   *
+   * The camera is asked for on the way in rather than on the first frame, because
+   * a browser only grants it to a gesture and a join is one.
+   */
+  joinVoiceChannel = async (channelId: string, guildId: string) => {
+    if (this.isLocal()) return { ok: false as const, reason: "offline" as const };
+    if (this.state.voiceChannelId === channelId) return { ok: true as const };
+
+    // A call and a channel are the same room to a person, and a device is in one
+    // at a time. Leaving whatever room this was in first is what stops the media
+    // layer being asked to serve both — which is where a call ends up connected
+    // to nobody while the screen says it is fine.
+    const call = this.state.call;
+    if (call.status !== "idle" && call.status !== "ended") {
+      return { ok: false as const, reason: "in-call" as const };
+    }
+    const previous = this.state.voiceChannelId;
+    if (previous) await this.leaveVoiceChannel(previous);
+
+    this.emit({ voiceConnectingId: channelId });
+    try {
+      // Audio only: a camera is something a person turns on once they are in the
+      // room, not something they are asked for on the way in. The stream that
+      // comes back is announced by the media layer, which is what this device's
+      // own tile plays.
+      await this.media?.start({ video: false });
+    } catch (error) {
+      console.warn("Failed to open the microphone for a voice channel.", error);
+      this.emit({ voiceConnectingId: null });
+      return { ok: false as const, reason: "no-media" as const };
+    }
+    this.emit({ voiceChannelId: channelId, voiceConnectingId: null });
+
+    const result = await this.relayVoice({ kind: "voice-join", channelId });
+    if (!result.ok) {
+      await this.leaveVoiceChannel(channelId);
+      return result;
+    }
+    void guildId;
+    return { ok: true as const };
+  };
+
+  /** Leaves a voice channel, which is not leaving a call: the room goes on. */
+  leaveVoiceChannel = async (channelId: string) => {
+    const was = this.state.voiceChannelId ?? this.state.voiceConnectingId;
+    if (!was || was !== channelId) return { ok: true as const };
+
+    this.emit({ voiceChannelId: null, voiceConnectingId: null });
+    // Told last, so the frame goes out while this device is still the one that
+    // left rather than after the media has already been torn down.
+    void this.relayVoice({ kind: "voice-leave", channelId });
+    // Only when a call is not holding the media. There is one camera and one
+    // microphone, and stopping it for a channel would take the call's video with
+    // it — which is how leaving a room hung up somebody else's call.
+    const call = this.state.call;
+    if (call.status === "idle" || call.status === "ended") {
+      this.media?.stop();
+      this.emit({ remoteStreams: {} });
+    }
+    return { ok: true as const };
+  };
+
+  /** A member's own microphone, which the server owner cannot take back for them. */
+  setVoiceMic = async (channelId: string, mic: boolean) => {
+    const mine = this.selfVoicePresence(channelId);
+    // Somebody else silenced it: the button is not theirs to press, and letting
+    // it look so would be a switch that does nothing.
+    if (mine?.serverMuted && mic) return { ok: false as const, reason: "server-muted" as const };
+    this.media?.setMic(mic);
+    this.patchVoicePresence(channelId, this.state.email, (entry) => ({ ...entry, mic }));
+    return this.relayVoice({ kind: "voice-state", channelId });
+  };
+
+  setVoiceCamera = async (channelId: string, camera: boolean) => {
+    const media = this.media;
+    if (!media) return { ok: false as const, reason: "no-media" as const };
+    try {
+      const changed = await media.setCamera(camera);
+      if (!changed) return { ok: false as const, reason: "no-camera" as const };
+    } catch (error) {
+      console.warn("Failed to change the camera in a voice channel.", error);
+      return { ok: false as const, reason: "no-camera" as const };
+    }
+    this.patchVoicePresence(channelId, this.state.email, (entry) => ({ ...entry, camera }));
+    return this.relayVoice({ kind: "voice-state", channelId });
+  };
+
+  /**
+   * Shows a screen to everybody in the channel, or stops showing it.
+   *
+   * Only the media is touched here. The state and the frame are written by
+   * `onScreen`, which the media calls on the way in and on the way out — including
+   * when the browser's own button is what ended it, which is the case that has to
+   * work and the one a wrapper around the button would miss.
+   *
+   * A share that did not start says so rather than leaving a lit button over
+   * nothing: a person who is showing a desktop nobody can see has no way of
+   * knowing that is why.
+   */
+  setVoiceScreen = async (_channelId: string, share: boolean, quality?: ScreenQuality) => {
+    const media = this.media;
+    if (!media) return { ok: false as const, reason: "no-media" as const };
+    if (share) {
+      const changed = await media.startScreen(quality).catch(() => false);
+      return changed ? { ok: true as const } : { ok: false as const, reason: "no-screen" as const };
+    }
+    const stopped = await media.stopScreen().catch(() => false);
+    return stopped ? { ok: true as const } : { ok: false as const, reason: "no-screen" as const };
+  };
+
+  /** The owner's silence, which is the only one this account may give. */
+  setVoiceServerMute = async (channelId: string, target: string, muted: boolean) => {
+    return this.relayVoice({ kind: "voice-mute", channelId, target, muted });
+  };
+
+  setVoiceDeafened = async (channelId: string, deafened: boolean) => {
+    // Deafening is this device's own business: it stops the audio coming out of
+    // it, and nobody else has any say in that.
+    this.patchVoicePresence(channelId, this.state.email, (entry) => ({ ...entry, deafened }));
+    if (deafened) this.emit({ remoteStreams: {} });
+    return this.relayVoice({ kind: "voice-state", channelId, deafened });
+  };
+
+  kickFromVoiceChannel = async (channelId: string, target: string) => {
+    return this.relayVoice({ kind: "voice-kick", channelId, target });
+  };
+
+  // ------------------------------------------------------------------ servers
+
+  createGuild = async (name: string) => {
+    if (this.isLocal()) return { ok: false as const, reason: "offline" as const };
+    const clean = name.trim().slice(0, 60);
+    if (!clean) return { ok: false as const, reason: "invalid-name" as const };
+    const id = `g-${createMessageId()}`;
+    const result = await messagesApi.createGuild({ id, name: clean });
+    if (!result.ok) return result;
+    await this.sync();
+    return { ok: true as const, guild: result.guild };
+  };
+
+  renameGuild = async (guildId: string, name: string) => {
+    const result = await messagesApi.renameGuild(guildId, name.trim().slice(0, 60));
+    if (!result.ok) return result;
+    await this.sync();
+    return { ok: true as const };
+  };
+
+  deleteGuild = async (guildId: string) => {
+    const result = await messagesApi.deleteGuild(guildId);
+    if (result.ok) await this.sync();
+    return result;
+  };
+
+  addGuildMember = async (guildId: string, email: string) => {
+    const result = await messagesApi.guildMember({ guildId, email });
+    if (result.ok) await this.sync();
+    return result;
+  };
+
+  /**
+   * Walks everybody who is already a friend into a new server.
+   *
+   * One call and one read afterwards, rather than one of each per person. Fifty
+   * friends is fifty full snapshots otherwise, and the last one to arrive is the
+   * one that decides what the sidebar draws — so the server would flicker through
+   * fifty different member counts on the way to the right one.
+   *
+   * Reports how many landed rather than only whether the call worked. A server
+   * with thirty-eight of fifty people in it is not a failure, but the person who
+   * made it should be told which thirty-eight, or they will assume all fifty
+   * arrived and go looking for the other twelve.
+   */
+  addGuildFriends = async (guildId: string) => {
+    const result = await messagesApi.guildMembers({ guildId });
+    if (!result.ok) return { ok: false as const, reason: result.reason, added: 0, wanted: 0 };
+    await this.sync();
+    return { ok: true as const, added: result.added, wanted: result.wanted };
+  };
+
+  removeGuildMember = async (guildId: string, email: string) => {
+    const result = await messagesApi.guildMember({ guildId, email, remove: true });
+    if (result.ok) await this.sync();
+    return result;
+  };
+
+  /**
+   * Adds a channel to a server.
+   *
+   * The id is made from the name and namespaced by the server, so two servers can
+   * both have a `общ` without either shadowing the other.
+   */
+  addGuildChannel = async (input: { guildId: string; kind: "text" | "voice"; name: string }) => {
+    const name = input.name.trim().slice(0, 40);
+    if (!name) return { ok: false as const, reason: "invalid-name" as const };
+    const result = await messagesApi.guildChannel({
+      guildId: input.guildId,
+      id: channelIdFor(input.guildId, input.kind === "voice" ? "v" : "t", name),
+      kind: input.kind,
+      name,
+    });
+    if (result.ok) await this.sync();
+    return result;
+  };
+
+  removeGuildChannel = async (input: { guildId: string; id: string; kind: "text" | "voice" }) => {
+    const result = await messagesApi.guildChannel({
+      guildId: input.guildId,
+      id: input.id,
+      kind: input.kind,
+      name: "x",
+      remove: true,
+    });
+    if (result.ok) await this.sync();
+    return result;
+  };
+
   /** Places a call to whoever the conversation is with. */
   startCall = async (input: { chatId: string; starts: CallMediaKind }) => {
     // A call needs the object, because the object is what carries the handshake
@@ -1093,6 +1912,8 @@ export class MessagesStore {
       peerEmail: chat.peerEmail,
       peerName: peer?.name ?? chat.peerEmail,
       peerAvatar: peer?.avatar ?? null,
+      // A call that has not been redirected has nobody before it.
+      previousPeerName: "",
       starts: input.starts,
       // My own address is the caller's, so the history can say so later.
       callerEmail: self,
@@ -1154,28 +1975,137 @@ export class MessagesStore {
     this.clearCallDeadlines();
     const call = this.state.call;
     if (call.status === "outgoing") {
+      // No clock at all when ringing is left to run for as long as it takes. The
+      // connect clock below is unaffected, so a call that is answered and then
+      // cannot meet is still given up rather than left on a spinner.
+      if (RING_TIMEOUT_MS <= 0) return;
       this.ringTimer = setTimeout(() => {
         this.ringTimer = null;
-        // Nobody picked up. Said once, by the app, rather than left ringing.
         if (this.state.call.status !== "outgoing") return;
-        void this.endCall("timeout");
+        void this.ringNextOrGiveUp();
       }, RING_TIMEOUT_MS);
       return;
     }
-    if (call.status === "connecting") this.startConnectDeadline();
+    // `active` is armed here as well as `connecting`, and that is not a
+    // duplication. A call goes on screen the moment it is picked up, so `active`
+    // is what an answered call looks like while the two sides are still trying to
+    // meet. Arming only `connecting` left that whole span with no clock on it,
+    // and a call that is answered and then never connects is exactly the case
+    // this timer exists for: it would sit on a spinner for good. The clock is
+    // stopped the moment the media layer reports the connection up.
+    if (call.status === "connecting" || call.status === "active") this.startConnectDeadline();
   };
 
-  /** The clock for a call that was answered and is still building its link. */
+  /**
+   * Nobody picked up in time, so the call is offered to somebody else before it
+   * is given up on.
+   *
+   * A person dialling somebody who is at work, driving, or asleep has not been
+   * told no, and ending the call on a timer answers a question they never asked.
+   * So the next name is tried, and only a list with nobody left on it ends the
+   * call as missed.
+   *
+   * The person who was rung keeps their place in the call and their history: they
+   * are marked as having been reached, not deleted, so a later invite list still
+   * says who was in it and an answer from them seconds later still finds a live
+   * call rather than one that has closed underneath them.
+   */
+  private ringNextOrGiveUp = async () => {
+    const call = this.state.call;
+    if (call.status !== "outgoing") return;
+    const next = this.nextCallCandidate();
+    if (!next) {
+      // Nobody left to try. Said once, by the app, rather than left ringing.
+      await this.endCall("timeout");
+      return;
+    }
+
+    // The one who did not answer is shown as reached rather than removed, so the
+    // call keeps its own record of who it tried.
+    const participants = call.participants.map((person) =>
+      person.email === call.peerEmail && person.status !== "active"
+        ? { ...person, status: "left" as const }
+        : person,
+    );
+    this.emit({
+      call: {
+        ...call,
+        status: "outgoing",
+        peerEmail: next.email,
+        peerName: next.name,
+        peerAvatar: next.avatar,
+        // Kept so the thread can say the first name did not answer, instead of
+        // only ever showing who the call is on now.
+        previousPeerName: call.peerName,
+        participants,
+      },
+    });
+    const invited = await this.inviteToCall(next.email);
+    if (!invited.ok) {
+      // The cloud would not carry the frame, so nobody is ringing. Saying the
+      // call is over beats leaving a screen that will never change.
+      await this.endCall("timeout");
+      return;
+    }
+    // A fresh clock for the new person, rather than the old one running out a
+    // moment after it starts ringing them.
+    this.armCallDeadlines();
+  };
+
+  /**
+   * The next person this account could ring, or nothing.
+   *
+   * Taken from the same list the invite panel shows, so "who would it try next"
+   * and "who is there to invite" cannot disagree. This account and everybody
+   * already in the call are left out, and so is whoever was just rung: dialling
+   * the same person again immediately is not trying somebody else.
+   */
+  private nextCallCandidate = (): CallCandidate | null => {
+    const call = this.state.call;
+    const tried = new Set(
+      call.participants.filter((person) => !person.isSelf).map((person) => normalize(person.email)),
+    );
+    const list = callCandidates({
+      friends: this.state.friends,
+      contacts: this.state.data?.contacts ?? [],
+      chats: this.state.data?.chats ?? [],
+      self: this.state.email,
+      inCall: [...tried],
+    });
+    return list[0] ?? null;
+  };
+
+  /**
+   * The clock for a call that was answered and is still building its link.
+   *
+   * Both `connecting` and `active` are in scope here, because a call goes on
+   * screen the moment it is picked up, so an answered call that has not yet met
+   * is `active`. Testing for `connecting` alone left this timer to fire into a
+   * status that no longer existed, return without doing anything, and leave a
+   * call that can never connect sitting on a spinner for good — which is the one
+   * thing this clock is here to prevent. The media layer stops it by clearing the
+   * deadlines the moment it reports the connection up.
+   */
   private startConnectDeadline = () => {
     if (this.connectTimer) clearTimeout(this.connectTimer);
     this.connectTimer = setTimeout(() => {
       this.connectTimer = null;
       const call = this.state.call;
-      if (call.status !== "connecting") return;
+      if (call.status !== "connecting" && call.status !== "active") return;
       // Somebody is there and the two sides never met, which is a network
       // problem rather than a person hanging up, and the history says so.
       this.emit({ call: { ...call, status: "ended", reason: "failed" } });
       this.media?.stop();
+      // Told to the people in it, not only written down here. The far side is a
+      // phone that is still ringing: it has no way of knowing this device gave
+      // up, so without this frame the other person is left listening to a call
+      // that ended on a machine they cannot see.
+      void this.relayCall({
+        kind: "end",
+        callId: call.callId,
+        chatId: call.chatId,
+        reason: "failed",
+      });
       void this.recordCall(call, "failed", true);
     }, CONNECT_TIMEOUT_MS);
   };
@@ -1239,6 +2169,7 @@ export class MessagesStore {
           peerEmail: host,
           peerName: this.nameOf(host),
           peerAvatar: this.avatarOf(host),
+          previousPeerName: "",
           starts: signal.starts === "video" ? "video" : "audio",
           // The other side is the caller, which is all the history needs.
           callerEmail: host,
@@ -1600,6 +2531,10 @@ export class MessagesStore {
   beginCall = async (input: { chatId: string; starts: CallMediaKind }) => {
     const media = this.callMedia();
     if (!media.supported) return { ok: false as const, reason: "unsupported" as const };
+    // A device is in one voice room at a time. A call asked for while a channel is
+    // up takes the media with it, so the channel is left first rather than the
+    // two quietly fighting over one camera.
+    await this.leaveVoiceChannel(this.state.voiceChannelId ?? "");
     const result = await this.startCall(input);
     if (!result.ok) return result;
 
@@ -1640,24 +2575,43 @@ export class MessagesStore {
     if (call.status !== "incoming") return { ok: false as const, reason: "no-call" as const };
     const media = this.callMedia();
     const host = call.host || call.peerEmail;
+    // Picking up leaves whatever channel this device was standing in. Both are
+    // the same room to a person and there is one microphone: answering while the
+    // channel still held the media is how a call connects and carries no sound.
+    await this.leaveVoiceChannel(this.state.voiceChannelId ?? "");
     this.emit({ call: { ...call, status: "connecting" } });
     this.markAnswered();
     this.clearCallDeadlines();
     this.startConnectDeadline();
+
+    // The microphone opens before the other side is told, not after.
+    //
+    // Answering sends `accept`, and the caller builds its offer the moment that
+    // arrives. If the microphone is still waking, the offer is answered from a
+    // connection that carries no audio at all, and the person who picked up is
+    // in the call and cannot be heard — which is the one failure nobody can
+    // explain from the screen, because both tiles look identical.
+    //
+    // This is the same order the caller uses, for the same reason: a call is
+    // offered from a connection that already has a microphone on it.
+    if (media.supported) {
+      try {
+        const stream = await media.start({ video: call.starts === "video" });
+        this.setCallLocalStream(stream);
+      } catch {
+        // No permission or no device. The call still goes ahead — the other
+        // side still has somebody to talk to — and the bar shows the microphone
+        // as off rather than claiming a voice that is not there.
+        this.emit({ call: { ...this.state.call, camera: false, mic: false } });
+      }
+    }
+
     await this.relayCall({
       kind: "accept",
       callId: call.callId,
       chatId: call.chatId,
       to: host,
     });
-
-    if (!media.supported) return { ok: true as const };
-    try {
-      const stream = await media.start({ video: call.starts === "video" });
-      this.setCallLocalStream(stream);
-    } catch {
-      this.emit({ call: { ...this.state.call, camera: false, mic: false } });
-    }
 
     // Everybody who offered this phone a connection gets answered, and the people
     // who arrive later are connected to from the other side instead.
@@ -2121,12 +3075,19 @@ export class MessagesStore {
    * The optimistic row is what makes sending feel instant, and the outbox is
    * what makes it survive a dropped connection: a message that could not be sent
    * is kept until a later sync carries it.
+   *
+   * The row goes in before anything is uploaded, which is the whole reason it is
+   * optimistic. A file has to reach the bucket before the message naming it can
+   * be written anywhere, and at four gigabytes that is minutes rather than
+   * seconds — so the bubble appears at once, says how far the file has got, and
+   * is only queued once the file is actually there.
    */
   sendMessage = async (input: {
     chatId: string;
     peerEmail: string;
     text: string;
     attachments: IncomingAttachment[];
+    signal?: AbortSignal;
   }) => {
     const id = createMessageId();
     const at = Date.now();
@@ -2140,17 +3101,7 @@ export class MessagesStore {
       at,
       status: "sending",
       ...(input.attachments.length
-        ? {
-            attachments: input.attachments.map((item) => ({
-              id: item.id,
-              kind: item.kind,
-              name: item.name,
-              mimeType: item.mimeType,
-              size: item.size,
-              stored: false,
-              dataUrl: item.dataUrl,
-            })),
-          }
+        ? { attachments: input.attachments.map(previewAttachment) }
         : {}),
     };
     this.mutateData((data) => ({
@@ -2172,11 +3123,81 @@ export class MessagesStore {
       this.emit({ data: messagesLocal.read() });
       return { ok: true as const, id };
     }
-    this.outbox.push({ id, ...input, text: input.text.trim(), at });
+
+    const attachments: IncomingAttachment[] = [];
+    for (const attachment of input.attachments) {
+      if (!attachment.file) {
+        attachments.push(uploadedAttachment(attachment));
+        continue;
+      }
+      this.setUpload(id, { name: attachment.name, sent: 0, total: attachment.size });
+      try {
+        await uploadAttachment(
+          { ...attachment, file: attachment.file },
+          {
+            ...(input.signal ? { signal: input.signal } : {}),
+            onProgress: ({ sent, total }) =>
+              this.setUpload(id, { name: attachment.name, sent, total }),
+          },
+        );
+      } catch (error) {
+        // The bubble is taken back rather than left spinning: a message whose
+        // file never arrived is not a message, and a send button that has already
+        // cleared the composer is not a place to find out otherwise.
+        this.clearUpload(id);
+        this.dropOptimistic(input.chatId, id);
+        // A deployment with nowhere to put a file is a different problem from a
+        // connection that gave out, and "try again" is the wrong advice for the
+        // first one — nobody is going to try again.
+        const reason =
+          error instanceof AttachmentUploadError && error.reason === "attachments-not-configured"
+            ? ("attachments-not-configured" as const)
+            : ("upload-failed" as const);
+        return { ok: false as const, reason };
+      }
+      attachments.push(uploadedAttachment(attachment));
+    }
+    this.clearUpload(id);
+
+    this.outbox.push({
+      id,
+      chatId: input.chatId,
+      peerEmail: input.peerEmail,
+      text: input.text.trim(),
+      at,
+      attachments,
+    });
     this.writeOutbox(this.state.email);
     await this.flushOutbox();
     return { ok: true as const, id };
   };
+
+  /** Moves a file's progress forward without rebuilding the whole state object. */
+  private setUpload(messageId: string, row: UploadProgressRow) {
+    this.emit({ uploads: { ...this.state.uploads, [messageId]: row } });
+  }
+
+  private clearUpload(messageId: string) {
+    if (!this.state.uploads[messageId]) return;
+    const next = { ...this.state.uploads };
+    delete next[messageId];
+    this.emit({ uploads: next });
+  }
+
+  /** Takes a message that never made it out of the conversation again. */
+  private dropOptimistic(chatId: string, messageId: string) {
+    this.mutateData((data) => ({
+      ...data,
+      chats: data.chats.map((chat) =>
+        chat.id === chatId
+          ? {
+              ...chat,
+              messages: chat.messages.filter((message) => message.id !== messageId),
+            }
+          : chat,
+      ),
+    }));
+  }
 
   editMessage = async (input: { chatId: string; messageId: string; text: string }) => {
     const text = input.text.trim().slice(0, MAX_TEXT_LENGTH);
@@ -2186,6 +3207,68 @@ export class MessagesStore {
 
   deleteMessage = async (input: { chatId: string; messageId: string }) =>
     this.changeMessage(input.chatId, input.messageId, "delete");
+
+  /**
+   * Adds or takes off this account's reaction to one message.
+   *
+   * The one change either participant may make to a message they did not send, and
+   * the only one that is not `canManageMessage`: reacting to somebody is the point
+   * of a conversation, and a chat where only your own words can be acknowledged is a
+   * chat with nobody in it.
+   *
+   * Which way the press goes is worked out here, from the row already in front of
+   * the reader, and sent as `on` rather than left for the far end to guess: this
+   * change is written into both objects, and a mirror that arrived twice must leave
+   * the same thing on the message rather than take the reaction back off.
+   *
+   * Applied here first so the button answers under the finger, then corrected by the
+   * sync that follows — the same order an edit lands in, because a reaction that
+   * waited for the round trip felt broken rather than slow.
+   */
+  toggleReaction = async (input: { chatId: string; messageId: string; emoji: string }) => {
+    const emoji = (input.emoji ?? "").trim();
+    if (!emoji) return { ok: false as const, reason: "no-emoji" as const };
+
+    const who = this.state.data?.profile.email ?? "";
+    const existing = this.state.data?.chats
+      .find((chat) => chat.id === input.chatId)
+      ?.messages.find((message) => message.id === input.messageId);
+    if (!existing) return { ok: false as const, reason: "unknown-message" as const };
+    // Refused here for the same reason it is refused at the object: a row this
+    // account cannot see is a row it cannot react to.
+    if (existing.deletedAt) return { ok: false as const, reason: "gone" as const };
+
+    const on = !isMineOn(existing, emoji, who);
+    const next = setReaction(existing, emoji, who, on);
+    if (!next) return { ok: false as const, reason: "refused" as const };
+
+    this.mutateData((data) => ({
+      ...data,
+      chats: data.chats.map((chat) =>
+        chat.id === input.chatId
+          ? {
+              ...chat,
+              messages: chat.messages.map((message) =>
+                message.id === input.messageId ? { ...message, reactions: next } : message,
+              ),
+            }
+          : chat,
+      ),
+    }));
+
+    if (this.isLocal()) {
+      messagesLocal.toggleReaction(input.chatId, input.messageId, emoji);
+      return { ok: true as const };
+    }
+
+    const result = await messagesApi
+      .react({ id: input.messageId, chatId: input.chatId, emoji, on })
+      .catch(() => ({ ok: false as const, reason: "network" as const }));
+    // The sync is what makes the other side's press land, and it is also what
+    // corrects this one if the object refused.
+    await this.sync();
+    return { ok: result.ok, ...(result.ok ? {} : { reason: result.reason }) };
+  };
 
   /**
    * Applies an edit or a deletion to one of this account's own messages.

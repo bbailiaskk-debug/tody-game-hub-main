@@ -52,6 +52,11 @@ nginx-proxy-manager-2.15.1/
 # Android (TWA) build artifacts
 android/android.keystore
 android/keystore-password.txt
+# The signing password, written by whoever builds the APK and read by
+# `npm run dist:android`. A keystore without its password is a signing identity that
+# cannot be used and cannot be replaced: the site's assetlinks.json names its
+# fingerprint, so a different keystore means editing and deploying the site as well.
+android/keystore.properties
 android/app/
 android/build/
 android/.gradle/
@@ -66,3 +71,19 @@ android/*.apk
 android/*.aab
 android/manifest-checksum.txt
 android/.idea/
+
+# The installer.
+#
+# Not in git, and not deployed with the site either: Cloudflare Workers refuses any
+# static asset over 25 MiB and the installer is 107 MiB, so putting it here made
+# `wrangler deploy` refuse the whole site rather than skip one file. It is served
+# from R2 instead, which is what R2 is for — a few megabytes of chat uploads and a
+# hundred megabyte installer are the same problem.
+#
+# Copy it next to the site with:
+#   npm run build && copy release\Tody-Game-Hub-1.0.0-setup-x64.exe public\downloads\
+# and upload it to the bucket with `npm run dist` followed by the bucket step in the
+# deploy notes. Nothing links there at the moment — the menu and the chat's account
+# panel hand over the installer from Drive, which is where the build already is — but
+# the worker still sets the right headers for it if it is ever served from here.
+public/downloads/

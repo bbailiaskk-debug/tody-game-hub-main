@@ -71,7 +71,17 @@ export const Route = createFileRoute("/ai")({
   }),
   head: () => {
     const seo = seoHead({
-      path: "/ai",
+      /**
+       * With the parameter, not without.
+       *
+       * `validateSearch` gives the page its chat out of the query string, so the
+       * router answers a bare `/ai` with a redirect to `/ai?chat=`. The canonical
+       * and the language alternates have to name the URL that answers 200: a
+       * canonical pointing at the redirect was reported by the site audit as an
+       * incorrect hreflang link on every language of this page, and the sitemap
+       * entry was reported as a page that is not there.
+       */
+      path: "/ai?chat=",
       title: "TK-Bot AI",
       description:
         "Попитай TK-Bot, изкуственият интелект асистент на Todor Khristov Gaming. Чат за канала, игрите и музиката.",

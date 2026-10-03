@@ -3,6 +3,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  giphyStickerText,
+  giphyStickerUrlFromText,
+  isStickerMessageText,
   STICKER_ASSETS,
   stickerById,
   stickerFromText,
@@ -68,5 +71,46 @@ describe("sticker tokens", () => {
     // The reader still has to know the message was a sticker.
     expect(stickerIdFromText(stickerText("retired-sticker"))).toBe("retired-sticker");
     expect(stickerFromText(stickerText("retired-sticker"))).toBeNull();
+  });
+});
+
+describe("giphy sticker tokens", () => {
+  const media = "https://media.giphy.com/media/abc123/giphy.gif";
+
+  it("round trips a media url through the message text", () => {
+    expect(giphyStickerUrlFromText(giphyStickerText(media)!)).toBe(media);
+  });
+
+  it("ignores surrounding whitespace", () => {
+    expect(giphyStickerUrlFromText(`  ${giphyStickerText(media)}  `)).toBe(media);
+  });
+
+  it("refuses a url that is not http, so a token can never smuggle javascript", () => {
+    expect(giphyStickerText("javascript:alert(1)")).toBeNull();
+    expect(giphyStickerText("data:image/svg+xml,<svg/>")).toBeNull();
+    expect(giphyStickerText("   ")).toBeNull();
+  });
+
+  it("rejects a url too long to be a sticker", () => {
+    expect(giphyStickerText(`https://media.giphy.com/${"a".repeat(400)}.gif`)).toBeNull();
+  });
+
+  it("does not mistake ordinary text or a sentence for a sticker", () => {
+    expect(giphyStickerUrlFromText("")).toBeNull();
+    expect(giphyStickerUrlFromText("здравей")).toBeNull();
+    expect(giphyStickerUrlFromText(`виж ${giphyStickerText(media)} тук`)).toBeNull();
+    expect(giphyStickerUrlFromText("[giphy:media.giphy.com/x.gif]")).toBeNull();
+    expect(giphyStickerUrlFromText("[giphy:]")).toBeNull();
+  });
+
+  it("does not mistake a bundled sticker token for a giphy one", () => {
+    expect(giphyStickerUrlFromText(stickerText("cuddle-love"))).toBeNull();
+    expect(stickerIdFromText(giphyStickerText(media)!)).toBeNull();
+  });
+
+  it("tells the reader that either token is a sticker message", () => {
+    expect(isStickerMessageText(giphyStickerText(media)!)).toBe(true);
+    expect(isStickerMessageText(stickerText("cuddle-love"))).toBe(true);
+    expect(isStickerMessageText("just a sentence")).toBe(false);
   });
 });

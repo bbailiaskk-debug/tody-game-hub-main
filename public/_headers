@@ -4,7 +4,7 @@
   X-Frame-Options: SAMEORIGIN
   Content-Security-Policy: frame-ancestors 'self' http://localhost:* http://127.0.0.1:* https://*.lovable.app
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
-  Permissions-Policy: camera=(self), microphone=(self), geolocation=()
+  Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), geolocation=()
   X-XSS-Protection: 0
   Vary: Accept-Encoding
 
@@ -15,6 +15,19 @@
   Cache-Control: public, max-age=31536000, immutable
   CDN-Cache-Control: max-age=31536000
   Access-Control-Allow-Origin: *
+
+/downloads/*
+  # The installer is a hundred megabytes and is replaced by hand when there is a
+  # new build, so it must never be cached: a stale copy here is somebody running
+  # last month's program and blaming it for this month's bug. Short enough that a
+  # fresh one arrives on the next visit, long enough that one person's download is
+  # not asked for twice by the edge.
+  Cache-Control: public, max-age=3600, must-revalidate
+  # Sent as a file rather than displayed. Without this the browser opens the .exe
+  # in place and the chat disappears behind Windows asking whether to run it.
+  Content-Disposition: attachment
+  # Nothing here is meant to be embedded or sniffed into something else.
+  X-Content-Type-Options: nosniff
 
 /images/*
   Cache-Control: public, max-age=2592000, immutable

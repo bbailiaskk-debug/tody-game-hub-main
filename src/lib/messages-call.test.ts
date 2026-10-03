@@ -179,8 +179,8 @@ const fakeMedia = () => {
   };
 };
 
-const boot = async () => {
-  const frames = install();
+const boot = async (extraChats: MessageChat[] = []) => {
+  const frames = install(extraChats);
   const fake = fakeMedia();
   messagesStore.attachCallMedia(fake.media);
   await messagesStore.start();
@@ -283,7 +283,7 @@ describe("placing a call", () => {
     expect(frames.filter((frame) => ["begin", "invite"].includes(frame.kind))).toEqual([]);
   });
 
-  it("gives up on a call nobody answers, instead of ringing for ever", async () => {
+  it("rings for as long as the caller wants, rather than giving up on a clock", async () => {
     vi.useFakeTimers();
     try {
       const { frames } = await boot();
@@ -291,16 +291,37 @@ describe("placing a call", () => {
       await vi.advanceTimersByTimeAsync(0);
       frames.length = 0;
 
-      await vi.advanceTimersByTimeAsync(45_000);
+      // An hour, which no ring clock ends. A person who has not been picked up
+      // has not been told no, and the call belongs to the person dialling it.
+      await vi.advanceTimersByTimeAsync(3_600_000);
 
-      // Nobody picked up, and the app says so rather than leaving a person
-      // watching a spinner and wondering whether it is still trying.
+      const call = messagesStore.getState().call;
+      expect(call.status).toBe("outgoing");
+      expect(call.reason).not.toBe("timeout");
+      expect(frames.some((frame) => frame.kind === "end")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 10_000);
+
+  it("still gives up on a call that is answered but never connects", async () => {
+    vi.useFakeTimers();
+    try {
+      const { frames } = await boot();
+      // Somebody rings this phone and it is answered, so the two sides are now
+      // trying to meet: the connect clock is armed, which is a different question
+      // from the ring clock and is not affected by ringing being open ended.
+      messagesStore.handleCallSignal({ kind: "invite", callId: "call-1", chatId: CHAT });
+      await vi.advanceTimersByTimeAsync(0);
+      await messagesStore.answerCall();
+      await vi.advanceTimersByTimeAsync(0);
+      frames.length = 0;
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
       const call = messagesStore.getState().call;
       expect(call.status).toBe("ended");
-      expect(call.reason).toBe("timeout");
-      expect(frames.some((frame) => frame.kind === "end" && frame["reason"] === "timeout")).toBe(
-        true,
-      );
+      expect(frames.some((frame) => frame.kind === "end")).toBe(true);
     } finally {
       vi.useRealTimers();
     }
@@ -331,6 +352,35 @@ describe("answering a call", () => {
     expect(call.peerEmail).toBe(PEER);
     expect(call.starts).toBe("video");
   });
+
+  it("opens the microphone before telling the other side it was answered", async () => {
+    /**
+     * Answering sends `accept`, and the caller builds its offer the moment that
+     * arrives. Answering before the microphone is open means the offer is
+     * answered from a connection carrying no audio, and the person who picked up
+     * is in the call and cannot be heard.
+     *
+     * The order is what is being checked, so the cloud stub is left alone: a
+     * test that brought its own network stub would be testing the stub.
+     */
+    const { frames } = await boot();
+    const opened = messagesStore.callMedia();
+    const started = new Promise<void>((resolve) => {
+      const original = opened.start.bind(opened);
+      opened.start = async (options) => {
+        const stream = await original(options);
+        resolve();
+        return stream;
+      };
+    });
+
+    messagesStore.handleCallSignal({ kind: "invite", callId: "call-1", chatId: CHAT });
+    await messagesStore.answerCall();
+    // If the microphone had not opened by the time answering returned, the
+    // `accept` went out on a connection with no audio on it.
+    await expect(Promise.race([started, Promise.resolve("not yet")])).resolves.toBeUndefined();
+    expect(frames.some((frame) => frame.kind === "accept")).toBe(true);
+  }, 10_000);
 
   it("answers with the accept and the answer the media built", async () => {
     const { frames } = await boot();

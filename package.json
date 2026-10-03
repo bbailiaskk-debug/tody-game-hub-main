@@ -22,6 +22,7 @@
     "desktop": "electron desktop/main.cjs",
     "desktop:dev": "cross-env TODY_APP_ORIGIN=http://localhost:8080 electron desktop/main.cjs",
     "dist": "npm run build && node scripts/build-desktop.mjs",
+    "dist:android": "node scripts/build-android.mjs",
     "dist:dir": "electron-builder --win --project desktop --dir",
     "dist:clean": "node -e \"require('node:fs').rmSync('release',{recursive:true,force:true})\""
   },
@@ -84,6 +85,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@bubblewrap/cli": "^1.25.0",
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "^2.15.0",
     "@types/node": "^22.16.5",

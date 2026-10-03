@@ -9,21 +9,26 @@ import {
   verifySessionToken,
   MESSAGES_COOKIE,
   MIRROR_HEADER,
+  VOICE_FROM_HEADER,
   SESSION_EMAIL_HEADER,
   SESSION_HEADER,
 } from "./src/lib/messages-auth";
 import {
+  attachmentObjectKey,
   MAX_ATTACHMENTS_PER_MESSAGE,
   MAX_ATTACHMENT_VALUE_CHARS,
+  MAX_BUCKET_FILE_BYTES,
   MAX_CALLS_PER_CHAT,
   MAX_CHATS,
-  MAX_FILE_BYTES,
   MAX_IMAGE_BYTES,
+  MAX_INLINE_ATTACHMENT_BYTES,
   MAX_MESSAGES_PER_CHAT,
+  MAX_NAME_LENGTH,
   MAX_TEXT_LENGTH,
   initialsForName,
   isOnlineAt,
   normalizePresenceStatus,
+  setReaction,
   splitFriendRequests,
   type CallOutcome,
   type CallRecord,
@@ -34,6 +39,12 @@ import {
   type FriendRequest,
   type FriendsSnapshot,
   type FriendshipStatus,
+  type Guild,
+  type GuildMember,
+  type GuildRole,
+  type GuildSnapshot,
+  type GuildTextChannel,
+  type GuildVoiceChannel,
   type IncomingAttachment,
   type MessageAttachment,
   type MessageChat,
@@ -41,7 +52,18 @@ import {
   type MessagesSnapshot,
   type MessagePush,
   type TypingState,
+  type VoicePresence,
+  type VoiceRoster,
+  type VoiceSignal,
+  type VoiceSignalKind,
+  channelBelongsToGuild,
+  guildInitials,
   liveTyping,
+  MAX_GUILD_MEMBERS,
+  MAX_GUILDS_PER_ACCOUNT,
+  MAX_TEXT_CHANNELS_PER_GUILD,
+  MAX_VOICE_CHANNELS_PER_GUILD,
+  MAX_VOICE_PRESENCES,
 } from "./src/lib/messages-protocol";
 
 import {
@@ -1676,13 +1698,58 @@ const FRIEND_PREFIX = "friend:";
 const FRIEND_INDEX_KEY = "friendIndex";
 const TYPING_KEY = "typing";
 const MAX_FRIEND_RECORDS = 500;
+const GUILD_PREFIX = "guild:";
+const GUILD_INDEX_KEY = "guildIndex";
+const GUILD_CHANNEL_PREFIX = "channel:";
+const GUILD_CHANNEL_INDEX_KEY = "channelIndex";
+const GUILD_MEMBER_INDEX_KEY = "guildMembers";
+/** Live voice occupancy, one row per channel, never a room that persists. */
+const VOICE_PREFIX = "voice:";
+const MAX_GUILD_RECORDS = 2000;
 
+/**
+ * A voice channel's occupancy, as this object holds it.
+ *
+ * Live state, never a room: it is rewritten on every join and every switch, and
+ * a member who closes their laptop is simply absent from the next read. The
+ * channel id is the session id, which is what lets a late arrival be handed the
+ * same roster the people already there are holding.
+ */
+type VoiceSession = {
+  channelId: string;
+  guildId: string;
+  ownerEmail: string;
+  presences: VoicePresence[];
+};
+
+/** The two kinds of channel share one row and one prefix; the row says which. */
+type StoredChannel = GuildTextChannel | GuildVoiceChannel;
+
+const isVoiceChannel = (channel: StoredChannel): channel is GuildVoiceChannel =>
+  channel.kind === "voice";
+
+/**
+ * What an attachment is, as this object holds it.
+ *
+ * The payload is not here. It is in the bucket under `key`, and this object
+ * holds the pointer, which is the whole of what it is for: an account can fetch
+ * a file exactly when it holds a record naming it, and that record only exists
+ * here for the two participants of a conversation.
+ *
+ * `data` is what attachments written before the bucket existed look like. It is
+ * read and never written, because a message that is already in somebody's
+ * history should not stop opening because the way it was stored has been
+ * replaced.
+ */
 type StoredAttachment = {
   id: string;
   mimeType: string;
   name: string;
+  size: number;
+  /** Where the payload is, empty for an inline or pre-bucket attachment. */
+  key: string;
   /** Base64 payload without the data-url prefix. */
-  data: string;
+  data?: string;
 };
 
 const jsonResponse = (data: unknown, status = 200) =>
@@ -1717,7 +1784,12 @@ const sanitizeAttachmentMeta = (value: unknown): MessageAttachment | null => {
         .trim()
         .slice(0, 120) || "file",
     mimeType: mimeType || "application/octet-stream",
-    size: Number.isFinite(size) && size > 0 ? Math.round(size) : 0,
+    // Bounded by what storage holds, not by what this build offers a sender. The
+    // two are different numbers on purpose — a build without a bucket still has to
+    // be able to read a conversation that was written by one with it — and
+    // clamping to the smaller of them here would quietly report a four-gigabyte
+    // file as a two-megabyte one to everyone who opens it.
+    size: Number.isFinite(size) && size > 0 ? Math.min(Math.round(size), MAX_BUCKET_FILE_BYTES) : 0,
     stored: Boolean(entry["stored"]),
   };
 };
@@ -1846,6 +1918,23 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
           );
           return jsonResponse({ ok: true, friends });
         }
+        if (path === "/voice/roster") {
+          /**
+           * Who is in a channel, as far as this account's own object knows.
+           *
+           * Read on its own because a room is not symmetric: the object a member
+           * joins through knows only that they are in it, and the people already
+           * there learn of them rather than the other way round. Without somebody
+           * asking the other side, the joiner walks into a room whose only
+           * occupant is themselves and stays there looking at an empty stage.
+           */
+          const channelId = (url.searchParams.get("channel") ?? "").trim().slice(0, 120);
+          const session = await this.ctx.blockConcurrencyWhile(() =>
+            channelId ? this.readVoice(channelId) : Promise.resolve(null),
+          );
+          if (!session) return jsonResponse({ ok: true, roster: null });
+          return jsonResponse({ ok: true, roster: this.rosterOf(session) });
+        }
         const snapshot = await this.ctx.blockConcurrencyWhile(() => this.readSnapshot());
         return jsonResponse(snapshot);
       }
@@ -1857,7 +1946,13 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
       // for it.
       const mirrored = request.headers.get(MIRROR_HEADER) === "1";
       const result = await this.ctx.blockConcurrencyWhile(() =>
-        this.applyWrite(path, payload, mirrored, identity),
+        this.applyWrite(
+          path,
+          payload,
+          mirrored,
+          identity,
+          mirrored ? (request.headers.get(VOICE_FROM_HEADER) ?? "") : "",
+        ),
       );
       // Typing pushes its own precise frame, so the generic notice would be a
       // second broadcast for the same change and would drag a full snapshot
@@ -2077,6 +2172,753 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
       rev: Number(rev) || 0,
       serverTime: now,
       typing: liveTyping(await this.readTyping(), now),
+      guilds: await this.readGuildSnapshot(),
+    };
+  }
+
+  // ------------------------------------------------------ guilds & channels
+
+  /**
+   * The servers this account is in, with their people and channels.
+   *
+   * Every row here is mirrored: the identical ids were written into each
+   * member's own object, so this is a read of local storage and there is no
+   * cross-account path that could answer for another server.
+   */
+  private async readGuildIds(): Promise<string[]> {
+    const stored = await this.ctx.storage.get<string[]>(GUILD_INDEX_KEY);
+    return Array.isArray(stored) ? stored : [];
+  }
+
+  private async readGuild(guildId: string): Promise<Guild | null> {
+    return (await this.ctx.storage.get<Guild>(`${GUILD_PREFIX}${guildId}`)) ?? null;
+  }
+
+  private async writeGuild(guild: Guild) {
+    await this.ctx.storage.put(`${GUILD_PREFIX}${guild.id}`, guild);
+    const ids = await this.readGuildIds();
+    const next = [guild.id, ...ids.filter((id) => id !== guild.id)].slice(
+      0,
+      MAX_GUILDS_PER_ACCOUNT,
+    );
+    await this.ctx.storage.put(GUILD_INDEX_KEY, next);
+  }
+
+  private async deleteGuild(guildId: string) {
+    const channels = await this.readChannels();
+    for (const channel of channels.filter((entry) => entry.guildId === guildId)) {
+      await this.ctx.storage.delete(`${GUILD_CHANNEL_PREFIX}${channel.id}`);
+      await this.ctx.storage.delete(`${VOICE_PREFIX}${channel.id}`);
+    }
+    const ids = await this.readGuildIds();
+    await this.ctx.storage.put(
+      GUILD_INDEX_KEY,
+      ids.filter((id) => id !== guildId),
+    );
+    await this.ctx.storage.delete(`${GUILD_PREFIX}${guildId}`);
+    await this.writeMembers(
+      (await this.readMembers()).filter((member) => member.guildId !== guildId),
+    );
+    const channelIds = await this.readChannelIds();
+    await this.ctx.storage.put(
+      GUILD_CHANNEL_INDEX_KEY,
+      channelIds.filter((id) => {
+        const channel = channels.find((entry) => entry.id === id);
+        return channel ? channel.guildId !== guildId : true;
+      }),
+    );
+  }
+
+  private async readChannelIds(): Promise<string[]> {
+    const stored = await this.ctx.storage.get<string[]>(GUILD_CHANNEL_INDEX_KEY);
+    return Array.isArray(stored) ? stored : [];
+  }
+
+  private async readChannel(channelId: string): Promise<StoredChannel | null> {
+    return (
+      (await this.ctx.storage.get<StoredChannel>(`${GUILD_CHANNEL_PREFIX}${channelId}`)) ?? null
+    );
+  }
+
+  private async readChannels(): Promise<StoredChannel[]> {
+    const ids = await this.readChannelIds();
+    const channels: StoredChannel[] = [];
+    for (const id of ids) {
+      const channel = await this.readChannel(id);
+      if (channel) channels.push(channel);
+    }
+    return channels;
+  }
+
+  private async writeChannel(channel: StoredChannel) {
+    await this.ctx.storage.put(`${GUILD_CHANNEL_PREFIX}${channel.id}`, channel);
+    const ids = await this.readChannelIds();
+    const next = [channel.id, ...ids.filter((id) => id !== channel.id)].slice(0, MAX_GUILD_RECORDS);
+    await this.ctx.storage.put(GUILD_CHANNEL_INDEX_KEY, next);
+  }
+
+  private async readMembers(): Promise<GuildMember[]> {
+    const stored = await this.ctx.storage.get<GuildMember[]>(GUILD_MEMBER_INDEX_KEY);
+    return Array.isArray(stored) ? stored : [];
+  }
+
+  private async writeMembers(members: GuildMember[]) {
+    await this.ctx.storage.put(GUILD_MEMBER_INDEX_KEY, members.slice(-MAX_GUILD_RECORDS));
+  }
+
+  /** The members of one server, which is also who a frame about it may reach. */
+  private async readGuildMembers(guildId: string): Promise<GuildMember[]> {
+    return (await this.readMembers()).filter((member) => member.guildId === guildId);
+  }
+
+  private async readGuildSnapshot(): Promise<GuildSnapshot> {
+    const [ids, members, channels] = await Promise.all([
+      this.readGuildIds(),
+      this.readMembers(),
+      this.readChannels(),
+    ]);
+    const guilds: Guild[] = [];
+    for (const id of ids) {
+      const guild = await this.readGuild(id);
+      if (guild) guilds.push(guild);
+    }
+    return {
+      guilds,
+      members,
+      channels: {
+        text: channels.filter((channel): channel is GuildTextChannel => !isVoiceChannel(channel)),
+        voice: channels.filter(isVoiceChannel),
+      },
+    };
+  }
+
+  /**
+   * Checks that this account is in the server a frame is about.
+   *
+   * The membership check lives on the object rather than in the view because a
+   * hidden button is still a button somebody can send a request for: without
+   * this, any account could name any channel id and be handed its roster.
+   */
+  private async requireGuildMember(
+    guildId: string,
+    email: string,
+  ): Promise<{ guild: Guild; members: GuildMember[] } | null> {
+    const guild = await this.readGuild(guildId);
+    if (!guild) return null;
+    const members = await this.readGuildMembers(guildId);
+    const who = normalizeMessagesEmail(email);
+    if (!members.some((member) => normalizeMessagesEmail(member.email) === who)) return null;
+    return { guild, members };
+  }
+
+  /**
+   * Creates a server, its owner and a first channel of each kind.
+   *
+   * Done in one write so an account is never left in a server with nothing in
+   * it, which is the state the sidebar cannot draw and the owner cannot undo.
+   */
+  private async createGuild(payload: Record<string, unknown>, sender: string) {
+    const rev = async () => Number(await this.ctx.storage.get(REV_KEY)) || 0;
+    const id = String(payload["id"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const name = String(payload["name"] ?? "")
+      .trim()
+      .slice(0, 60);
+    if (!id || !name) return { ok: false, rev: await rev() };
+
+    if (await this.readGuild(id)) {
+      return { ok: false, reason: "guild-exists", rev: await rev() };
+    }
+    const already = await this.readGuildIds();
+    if (already.length >= MAX_GUILDS_PER_ACCOUNT) {
+      return { ok: false, reason: "too-many-guilds", rev: await rev() };
+    }
+
+    const now = Date.now();
+    const guild: Guild = {
+      id,
+      name,
+      initials: guildInitials(name),
+      accent: /^#[0-9a-f]{6}$/i.test(String(payload["accent"] ?? ""))
+        ? String(payload["accent"])
+        : "#5865f2",
+      ownerEmail: normalizeMessagesEmail(sender),
+      createdAt: now,
+    };
+    await this.writeGuild(guild);
+
+    const ownerName =
+      String(payload["ownerName"] ?? "")
+        .trim()
+        .slice(0, 80) ||
+      (await this.readProfile()).name ||
+      sender;
+    const members = await this.readMembers();
+    await this.writeMembers([
+      ...members,
+      {
+        email: guild.ownerEmail,
+        guildId: guild.id,
+        name: ownerName,
+        avatar: readAvatarDataUrl(payload["ownerAvatar"]),
+        role: "owner",
+        joinedAt: now,
+      },
+    ]);
+
+    // A server with no text channel and no voice channel is a server that looks
+    // broken, so both are made up front and can be renamed afterwards.
+    await this.writeChannel({
+      id: `${guild.id}-t-obsch`,
+      guildId: guild.id,
+      kind: "text",
+      name: "общ",
+      topic: "",
+      order: 0,
+    });
+    await this.writeChannel({
+      id: `${guild.id}-v-lobi`,
+      guildId: guild.id,
+      kind: "voice",
+      name: "Лоби",
+      order: 0,
+    });
+
+    return {
+      ok: true,
+      rev: await this.bumpRev(),
+      guild,
+      members: await this.readGuildMembers(guild.id),
+    };
+  }
+
+  /**
+   * Writes one guild row into this object.
+   *
+   * The gateway has already checked that the change was allowed, which is why
+   * the mirror flag is what separates "a member asked for this" from "another
+   * member's object is being brought up to date". A row that arrives unmirrored
+   * and names somebody else is not applied at all.
+   */
+  private async upsertGuild(payload: Record<string, unknown>, mirrored: boolean, sender: string) {
+    const rev = async () => Number(await this.ctx.storage.get(REV_KEY)) || 0;
+    const id = String(payload["id"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const name = String(payload["name"] ?? "")
+      .trim()
+      .slice(0, 60);
+    if (!id || !name) return { ok: false, rev: await rev() };
+
+    const existing = await this.readGuild(id);
+    const ownerEmail = normalizeMessagesEmail(
+      String(payload["ownerEmail"] ?? existing?.ownerEmail ?? ""),
+    );
+    if (!ownerEmail) return { ok: false, rev: await rev() };
+
+    // The owner cannot be changed by a mirror: that would let a member promote
+    // themselves by writing a row somebody else's object is willing to relay.
+    const isNew = !existing;
+    if (!isNew && !mirrored) {
+      const mine = normalizeMessagesEmail(sender);
+      if (normalizeMessagesEmail(existing.ownerEmail) !== mine) {
+        return { ok: false, reason: "not-owner", rev: await rev() };
+      }
+    }
+
+    const guild: Guild = {
+      id,
+      name,
+      initials: guildInitials(name),
+      accent: /^#[0-9a-f]{6}$/i.test(String(payload["accent"] ?? existing?.accent ?? ""))
+        ? String(payload["accent"])
+        : (existing?.accent ?? "#5865f2"),
+      ownerEmail: isNew ? ownerEmail : (existing?.ownerEmail ?? ownerEmail),
+      createdAt: existing?.createdAt ?? Date.now(),
+    };
+    await this.writeGuild(guild);
+    return { ok: true, rev: await this.bumpRev(), guild };
+  }
+
+  /** Adds or removes one member of one server, mirrored into their object too. */
+  private async writeGuildMember(payload: Record<string, unknown>) {
+    const rev = async () => Number(await this.ctx.storage.get(REV_KEY)) || 0;
+    const guildId = String(payload["guildId"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const email = normalizeMessagesEmail(String(payload["email"] ?? ""));
+    if (!guildId || !email) return { ok: false, rev: await rev() };
+    const guild = await this.readGuild(guildId);
+    if (!guild) return { ok: false, reason: "unknown-guild", rev: await rev() };
+
+    const members = await this.readGuildMembers(guildId);
+    const leaving = payload["remove"] === true;
+    const mine = normalizeMessagesEmail(email);
+    const kept = members.filter((member) => normalizeMessagesEmail(member.email) !== mine);
+
+    if (leaving) {
+      // The owner leaving would leave a server nobody can administer.
+      if (normalizeMessagesEmail(guild.ownerEmail) === mine) {
+        return { ok: false, reason: "owner-cannot-leave", rev: await rev() };
+      }
+      if (kept.length === members.length) {
+        return { ok: true, rev: await rev(), members: kept };
+      }
+      await this.writeMembers([
+        ...(await this.readMembers()).filter((m) => m.guildId !== guildId),
+        ...kept,
+      ]);
+      await this.clearPresence(guildId, email);
+      return { ok: true, rev: await this.bumpRev(), members: kept, removed: email };
+    }
+
+    if (kept.length >= MAX_GUILD_MEMBERS) {
+      return { ok: false, reason: "guild-full", rev: await rev() };
+    }
+    const member: GuildMember = {
+      email,
+      guildId,
+      name:
+        String(payload["name"] ?? "")
+          .trim()
+          .slice(0, 80) || email,
+      avatar: readAvatarDataUrl(payload["avatar"]),
+      // The owner is whoever the guild row says, never what the caller claims.
+      role: (normalizeMessagesEmail(guild.ownerEmail) === mine ? "owner" : "member") as GuildRole,
+      joinedAt: Date.now(),
+    };
+    await this.writeMembers([
+      ...(await this.readMembers()).filter((m) => m.guildId !== guildId),
+      ...kept,
+      member,
+    ]);
+    return { ok: true, rev: await this.bumpRev(), members: [...kept, member], added: member };
+  }
+
+  /** A channel is created or renamed, and only by the owner of its server. */
+  private async writeGuildChannel(
+    payload: Record<string, unknown>,
+    sender: string,
+    mirrored = false,
+  ) {
+    const rev = async () => Number(await this.ctx.storage.get(REV_KEY)) || 0;
+    const guildId = String(payload["guildId"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const name = String(payload["name"] ?? "")
+      .trim()
+      .slice(0, 40);
+    if (!guildId || !name) return { ok: false, rev: await rev() };
+    const guild = await this.readGuild(guildId);
+    if (!guild) return { ok: false, reason: "unknown-guild", rev: await rev() };
+    /**
+     * Only the owner changes a channel of their own server.
+     *
+     * A mirrored row is the exception, and it is the exception that matters: a
+     * member being added to a server is given that server's channels, and this
+     * object has never heard of them. Refusing there is what left a new member
+     * holding a membership in a server with no channels in it — a column that
+     * draws nothing and a channel nobody can walk into.
+     */
+    if (!mirrored && normalizeMessagesEmail(guild.ownerEmail) !== normalizeMessagesEmail(sender)) {
+      return { ok: false, reason: "not-owner", rev: await rev() };
+    }
+
+    const id = String(payload["id"] ?? "")
+      .trim()
+      .slice(0, 120);
+    if (!id || !channelBelongsToGuild(id, guildId)) {
+      return { ok: false, reason: "foreign-channel", rev: await rev() };
+    }
+    const voice = payload["kind"] === "voice";
+
+    if (payload["remove"] === true) {
+      await this.ctx.storage.delete(`${GUILD_CHANNEL_PREFIX}${id}`);
+      await this.ctx.storage.delete(`${VOICE_PREFIX}${id}`);
+      const ids = await this.readChannelIds();
+      await this.ctx.storage.put(
+        GUILD_CHANNEL_INDEX_KEY,
+        ids.filter((entry) => entry !== id),
+      );
+      return { ok: true, rev: await this.bumpRev(), removed: id };
+    }
+
+    const siblings = (await this.readChannels()).filter((entry) => entry.guildId === guildId);
+    const cap = voice ? MAX_VOICE_CHANNELS_PER_GUILD : MAX_TEXT_CHANNELS_PER_GUILD;
+    const existing = await this.readChannel(id);
+    if (!existing && siblings.length >= cap) {
+      return {
+        ok: false,
+        reason: voice ? "too-many-voice-channels" : "too-many-text-channels",
+        rev: await rev(),
+      };
+    }
+
+    const keptTopic = existing && "topic" in existing ? (existing as GuildTextChannel).topic : "";
+    const channel: StoredChannel = voice
+      ? {
+          id,
+          guildId,
+          kind: "voice",
+          name,
+          order: Number.isFinite(Number(payload["order"]))
+            ? Number(payload["order"])
+            : siblings.length,
+        }
+      : {
+          id,
+          guildId,
+          kind: "text",
+          name,
+          topic: String(payload["topic"] ?? keptTopic).slice(0, 120),
+          order: Number.isFinite(Number(payload["order"]))
+            ? Number(payload["order"])
+            : siblings.length,
+        };
+    await this.writeChannel(channel);
+    return { ok: true, rev: await this.bumpRev(), channel };
+  }
+
+  // ------------------------------------------------------------ voice rooms
+
+  private async readVoice(channelId: string): Promise<VoiceSession | null> {
+    return (await this.ctx.storage.get<VoiceSession>(`${VOICE_PREFIX}${channelId}`)) ?? null;
+  }
+
+  private async writeVoice(session: VoiceSession) {
+    await this.ctx.storage.put(`${VOICE_PREFIX}${session.channelId}`, session);
+  }
+
+  /**
+   * Drops one person from every voice channel of a server.
+   *
+   * Leaving a server has to take their presence with it, or a member who was
+   * removed is still listed as connected to a channel they no longer have.
+   */
+  private async clearPresence(guildId: string, email: string) {
+    const channels = (await this.readChannels()).filter(
+      (entry) => entry.guildId === guildId && isVoiceChannel(entry),
+    );
+    const who = normalizeMessagesEmail(email);
+    for (const channel of channels) {
+      const session = await this.readVoice(channel.id);
+      if (!session) continue;
+      const kept = session.presences.filter((entry) => normalizeMessagesEmail(entry.email) !== who);
+      if (kept.length === session.presences.length) continue;
+      // An empty room is not a room. Keeping the row would leave a channel
+      // reading as one somebody had only just left.
+      if (kept.length === 0) await this.ctx.storage.delete(`${VOICE_PREFIX}${channel.id}`);
+      else await this.writeVoice({ ...session, presences: kept });
+    }
+  }
+
+  /**
+   * Takes somebody out of every other voice channel of a server.
+   *
+   * A member is in one channel at a time, the way the sidebar says they are. Two
+   * channels of one server both listing them is not two memberships, it is one
+   * membership written twice, and each of those rows would then be handed the
+   * WebRTC frames of a room they are not sitting in.
+   */
+  private async leaveOtherChannels(guildId: string, exceptChannelId: string, email: string) {
+    const channels = (await this.readChannels()).filter(
+      (entry) => entry.guildId === guildId && isVoiceChannel(entry) && entry.id !== exceptChannelId,
+    );
+    const who = normalizeMessagesEmail(email);
+    for (const channel of channels) {
+      const session = await this.readVoice(channel.id);
+      if (!session) continue;
+      const kept = session.presences.filter((entry) => normalizeMessagesEmail(entry.email) !== who);
+      if (kept.length === session.presences.length) continue;
+      if (kept.length === 0) await this.ctx.storage.delete(`${VOICE_PREFIX}${channel.id}`);
+      else await this.writeVoice({ ...session, presences: kept });
+    }
+  }
+
+  /** The roster as the clients read it. */
+  private rosterOf(session: VoiceSession): VoiceRoster {
+    return {
+      channelId: session.channelId,
+      guildId: session.guildId,
+      ownerEmail: session.ownerEmail,
+      presences: session.presences,
+    };
+  }
+
+  /**
+   * Applies one voice frame to the channel's occupancy.
+   *
+   * The object is a post office here too: it keeps who is in the channel, refuses
+   * a frame from somebody who is not, and hands back the addresses the frame has
+   * to reach. Who offers the WebRTC connection to whom is decided by the two
+   * phones from the `order` in the roster, so they never both offer at once.
+   *
+   * A voice channel is not a call, and the difference shows here: leaving is not
+   * ending. Nobody is put out, and the channel carries on with whoever is left.
+   */
+  private async applyVoiceFrame(input: {
+    channelId: string;
+    kind: string;
+    to: string;
+    sender: string;
+    payload: Record<string, unknown>;
+  }): Promise<{ peers: string[]; roster?: VoiceRoster; members?: string[] } | null> {
+    const { channelId, kind, to, sender } = input;
+    const now = Date.now();
+
+    const channel = await this.readChannel(channelId);
+    if (!channel || !isVoiceChannel(channel)) return null;
+    const guildId = channel.guildId;
+    const mine = normalizeMessagesEmail(sender);
+
+    const guild = await this.readGuild(guildId);
+    if (!guild) return null;
+    const members = await this.readGuildMembers(guildId);
+    if (!members.some((member) => normalizeMessagesEmail(member.email) === mine)) return null;
+
+    const owner = normalizeMessagesEmail(guild.ownerEmail);
+    let session = await this.readVoice(channelId);
+    if (!session) {
+      session = { channelId, guildId, ownerEmail: guild.ownerEmail, presences: [] };
+    }
+
+    // The seed presence for somebody arriving. Names and faces come from the
+    // server's own member row rather than from the frame, so one member cannot
+    // introduce another as anybody.
+    const seedPresence = (): VoicePresence | null => {
+      const row = members.find((member) => normalizeMessagesEmail(member.email) === mine);
+      if (!row) return null;
+      const order = session!.presences.reduce((most, entry) => Math.max(most, entry.order), 0);
+      return {
+        email: mine,
+        name: row.name || mine,
+        avatar: row.avatar,
+        mic: true,
+        camera: false,
+        screen: false,
+        screenSurface: "monitor",
+        serverMuted: false,
+        deafened: false,
+        order: session!.presences.length === 0 ? 0 : order + 1,
+        status: "active",
+        joinedAt: now,
+      };
+    };
+
+    let changed = false;
+    let roster: VoiceRoster | undefined;
+    const presence = session.presences.find(
+      (entry) => normalizeMessagesEmail(entry.email) === mine,
+    );
+
+    if (kind === "voice-join") {
+      // Somebody rejoining keeps the place they had, so the mesh order does not
+      // reshuffle under the people already connected.
+      if (presence) {
+        presence.status = "active";
+      } else {
+        const full = session.presences.filter((entry) => entry.status === "active");
+        if (full.length >= MAX_VOICE_PRESENCES) {
+          return { peers: [], roster: this.rosterOf(session) };
+        }
+        const seeded = seedPresence();
+        if (!seeded) return null;
+        session.presences = [
+          ...session.presences.filter((entry) => normalizeMessagesEmail(entry.email) !== mine),
+          seeded,
+        ];
+      }
+      changed = true;
+      roster = this.rosterOf(session);
+      // One channel at a time, so the other rooms of this server stop listing
+      // somebody who has walked into this one.
+      await this.leaveOtherChannels(guildId, channelId, mine);
+    }
+
+    if (kind === "voice-leave" || kind === "voice-kick") {
+      const target = normalizeMessagesEmail(
+        kind === "voice-kick" ? String(input.payload["target"] ?? sender) : sender,
+      );
+      // Only the owner may take somebody out, and the object checks it rather
+      // than the view hiding the button.
+      if (kind === "voice-kick" && owner !== mine) return { peers: [] };
+      session.presences = session.presences.map((entry) =>
+        normalizeMessagesEmail(entry.email) === target ? { ...entry, status: "left" } : entry,
+      );
+      changed = true;
+      roster = this.rosterOf(session);
+    }
+
+    if (kind === "voice-mute") {
+      // A silence is the owner's to give and the owner's to lift; anybody may
+      // hand their own microphone back, which is what `target` on themselves is.
+      const target = normalizeMessagesEmail(String(input.payload["target"] ?? sender) || mine);
+      if (target !== mine && owner !== mine) return { peers: [] };
+      const muted = input.payload["muted"] === true;
+      const row = session.presences.find((entry) => normalizeMessagesEmail(entry.email) === target);
+      if (!row) return { peers: [] };
+      row.serverMuted = muted;
+      row.mic = muted ? false : row.mic;
+      if (muted) row.mutedBy = mine;
+      else delete row.mutedBy;
+      changed = true;
+      roster = this.rosterOf(session);
+    }
+
+    if (kind === "voice-state") {
+      const row = presence;
+      if (row) {
+        // A server silence is not the member's to undo from their own phone, so a
+        // `voice-state` cannot quietly turn the microphone back on over it.
+        if (typeof input.payload["mic"] === "boolean") {
+          row.mic = row.serverMuted ? false : input.payload["mic"] === true;
+        }
+        if (typeof input.payload["camera"] === "boolean")
+          row.camera = input.payload["camera"] === true;
+        if (typeof input.payload["screen"] === "boolean")
+          row.screen = input.payload["screen"] === true;
+        if (
+          input.payload["surface"] === "monitor" ||
+          input.payload["surface"] === "window" ||
+          input.payload["surface"] === "browser"
+        ) {
+          row.screenSurface = input.payload["surface"];
+        }
+        if (typeof input.payload["deafened"] === "boolean")
+          row.deafened = input.payload["deafened"] === true;
+        // Which screen, as the browser named it. Bounded and plain: it is a label
+        // off somebody's own machine, and it is shown to everybody in the channel.
+        const label = String(input.payload["screenLabel"] ?? "")
+          .trim()
+          .slice(0, 60);
+        if (row.screen) {
+          if (label) row.screenLabel = label;
+          else delete row.screenLabel;
+        }
+        changed = true;
+        roster = this.rosterOf(session);
+      }
+    }
+
+    // Who else is in the channel, which is both the routing list and the answer
+    // to "who do I have to offer a connection to".
+    const others = session.presences
+      .filter((entry) => normalizeMessagesEmail(entry.email) !== mine && entry.status === "active")
+      .map((entry) => entry.email);
+
+    if (changed) {
+      // Gone members are dropped once there is nobody left to fade them for, so a
+      // busy channel does not keep a row for everybody who ever passed through.
+      if (session.presences.filter((entry) => entry.status === "active").length === 0) {
+        session.presences = [];
+      }
+      await this.writeVoice(session);
+    }
+
+    // A directed frame belongs to one pair of phones; anything else goes to
+    // everybody else in the channel.
+    const directed =
+      kind === "offer" || kind === "answer" || kind === "candidate" || kind === "renegotiate";
+    const peers = to
+      ? others.filter((email) => normalizeMessagesEmail(email) === to)
+      : directed
+        ? []
+        : others;
+
+    // A join is also broadcast to the rest of the server. This object only knows
+    // who was in the channel as of the last mirror it received, so a member who
+    // arrived seconds ago would otherwise never hear about somebody else joining
+    // and neither side would offer the connection.
+    const serverPeers =
+      kind === "voice-join" || kind === "voice-leave" || kind === "voice-kick"
+        ? members
+            .map((member) => member.email)
+            .filter((email) => normalizeMessagesEmail(email) !== mine && !peers.includes(email))
+        : [];
+
+    return {
+      peers: [...peers, ...serverPeers],
+      ...(roster ? { roster } : {}),
+      ...(kind === "voice-kick"
+        ? {
+            members: [normalizeMessagesEmail(String(input.payload["target"] ?? sender))].filter(
+              Boolean,
+            ),
+          }
+        : {}),
+    };
+  }
+
+  /**
+   * Passes one voice frame to this account's sockets and names who else the
+   * gateway has to write it into.
+   */
+  private async relayVoiceSignal(payload: Record<string, unknown>, mirrored: boolean, sender = "") {
+    const rev = async () => Number(await this.ctx.storage.get(REV_KEY)) || 0;
+    const channelId = String(payload["channelId"] ?? "")
+      .trim()
+      .slice(0, 120);
+    const kind = String(payload["kind"] ?? "");
+    const allowed = new Set<VoiceSignalKind>([
+      "voice-join",
+      "voice-roster",
+      "voice-leave",
+      "voice-state",
+      "voice-mute",
+      "voice-kick",
+      "offer",
+      "answer",
+      "candidate",
+      "renegotiate",
+    ]);
+    if (!channelId || !allowed.has(kind as VoiceSignalKind)) {
+      return { ok: false, rev: await rev(), silent: true };
+    }
+
+    const to = normalizeMessagesEmail(String(payload["to"] ?? ""));
+    const applied = await this.applyVoiceFrame({ channelId, kind, to, sender, payload });
+    if (!applied) return { ok: false, reason: "unknown-channel", rev: await rev(), silent: true };
+
+    const channel = await this.readChannel(channelId);
+    const guildId = channel?.guildId ?? "";
+
+    const signal: VoiceSignal = {
+      kind: kind as VoiceSignalKind,
+      channelId,
+      ...(sender ? { from: normalizeMessagesEmail(sender) } : {}),
+      ...(to ? { to } : {}),
+      ...(typeof payload["mic"] === "boolean" ? { mic: payload["mic"] } : {}),
+      ...(typeof payload["camera"] === "boolean" ? { camera: payload["camera"] } : {}),
+      ...(typeof payload["screen"] === "boolean" ? { screen: payload["screen"] } : {}),
+      ...(typeof payload["deafened"] === "boolean" ? { deafened: payload["deafened"] } : {}),
+      ...(payload["surface"] === "monitor" ||
+      payload["surface"] === "window" ||
+      payload["surface"] === "browser"
+        ? { surface: payload["surface"] }
+        : {}),
+      ...(typeof payload["screenLabel"] === "string"
+        ? { screenLabel: payload["screenLabel"].trim().slice(0, 60) }
+        : {}),
+      ...(typeof payload["muted"] === "boolean" ? { muted: payload["muted"] } : {}),
+      ...(payload["target"] ? { target: normalizeMessagesEmail(String(payload["target"])) } : {}),
+      ...(payload["description"] !== undefined ? { description: payload["description"] } : {}),
+      ...(payload["candidate"] !== undefined ? { candidate: payload["candidate"] } : {}),
+      ...(applied.roster ? { roster: applied.roster } : {}),
+    };
+
+    this.broadcast({ type: "voice", signal });
+    return {
+      ok: true,
+      rev: await rev(),
+      silent: true,
+      guildId,
+      peers: applied.peers,
+      // The roster travels back to the phone that asked, which is how somebody
+      // arriving learns who it has to offer a connection to.
+      ...(applied.roster ? { roster: applied.roster } : {}),
+      ...(applied.members ? { members: applied.members } : {}),
+      ...(mirrored ? { mirrored: true } : {}),
     };
   }
 
@@ -2129,7 +2971,29 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
     mirrored = false,
     /** Whose object this is, as the gateway resolved it rather than as claimed. */
     sender = "",
-  ): Promise<{ ok: boolean; rev: number; silent?: boolean; fanout?: boolean }> {
+    /**
+     * Who a relayed frame is really about, for the one kind of frame that cannot
+     * say so itself. Travels as an argument for the reason `mirrored` does: a body
+     * field would be something a client could fill in.
+     */
+    voiceFrom = "",
+  ): Promise<{
+    ok: boolean;
+    rev: number;
+    silent?: boolean;
+    fanout?: boolean;
+    /** Why a write was refused, for the one message that explains it. */
+    reason?: string;
+    /** On a voice frame: the server it belongs to, and who to write it into. */
+    guildId?: string;
+    peers?: string[];
+    /** On a guild write: the server and everybody in it. */
+    guild?: unknown;
+    members?: unknown;
+    channel?: unknown;
+    added?: unknown;
+    removed?: string | false;
+  }> {
     switch (path) {
       case "/message":
         return this.writeMessage(payload);
@@ -2150,8 +3014,19 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
         return this.markRead(payload);
       case "/message/change":
         return this.changeMessage(payload, mirrored);
+      case "/message/react":
+        // Its own route because its rule is the opposite one: a reaction is the
+        // only change either side may make to the other's message.
+        return this.reactToMessage(payload, mirrored, sender);
       case "/call":
-        return this.relayCallSignal(payload, mirrored, sender);
+        // Relayed frames are read against the speaker, for the same reason and with
+        // the same header as a voice frame: the request is authenticated as the
+        // person receiving it.
+        return this.relayCallSignal(
+          payload,
+          mirrored,
+          mirrored ? normalizeMessagesEmail(voiceFrom) || sender : sender,
+        );
       case "/chat/remove":
         return this.removeChat(payload);
       case "/chat/ensure":
@@ -2166,6 +3041,49 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
         return this.upsertFriend(payload);
       case "/friend/list":
         return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+      // ---------------------------------------------------------------- guilds
+      case "/guild/create":
+        return this.createGuild(payload, sender);
+      case "/guild/upsert":
+        return this.upsertGuild(payload, mirrored, sender);
+      case "/guild/member":
+        return this.writeGuildMember(payload);
+      case "/guild/channel":
+        return this.writeGuildChannel(payload, sender, mirrored);
+      case "/guild/remove": {
+        const guildId = String(payload["id"] ?? "")
+          .trim()
+          .slice(0, 80);
+        const guild = await this.readGuild(guildId);
+        if (!guild) return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
+        // Deleting a server is the owner's decision, and it is checked here so a
+        // member cannot remove a server by naming its id.
+        if (normalizeMessagesEmail(guild.ownerEmail) !== normalizeMessagesEmail(sender)) {
+          return {
+            ok: false,
+            reason: "not-owner",
+            rev: Number(await this.ctx.storage.get(REV_KEY)) || 0,
+          };
+        }
+        await this.deleteGuild(guildId);
+        return { ok: true, rev: await this.bumpRev(), guildId };
+      }
+      // ----------------------------------------------------------------- voice
+      case "/voice": {
+        /**
+         * Who the frame is about, which a relayed frame cannot say for itself.
+         *
+         * This object is the recipient's, so the session on the request names the
+         * recipient. Taken as the speaker, a relayed frame makes the recipient
+         * record its own presence as whatever the frame says, never records the
+         * person who actually spoke, and answers with a frame the recipient
+         * recognises as its own echo and throws away. The header is only trusted
+         * alongside the mirror marker, so a client cannot name itself as another
+         * person by sending one.
+         */
+        const from = mirrored ? normalizeMessagesEmail(voiceFrom) || sender : sender;
+        return this.relayVoiceSignal(payload, mirrored, from);
+      }
       default:
         return { ok: true, rev: Number(await this.ctx.storage.get(REV_KEY)) || 0 };
     }
@@ -2255,6 +3173,14 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
       ...(typeof payload["mic"] === "boolean" ? { mic: payload["mic"] } : {}),
       ...(typeof payload["camera"] === "boolean" ? { camera: payload["camera"] } : {}),
       ...(typeof payload["screen"] === "boolean" ? { screen: payload["screen"] } : {}),
+      // What kind of surface is being shared, re-checked here for the same reason
+      // the voice relay re-checks it: the far side draws a label from this, and a
+      // label that says "a window" when the truth is "the whole screen" is worse
+      // than no label. It was dropped here while the voice path carried it, so a
+      // one-to-one call could only ever say "the whole screen".
+      ...(payload["surface"] === "monitor" || payload["surface"] === "window"
+        ? { surface: payload["surface"] }
+        : {}),
       ...(typeof payload["reason"] === "string" ? { reason: payload["reason"].slice(0, 40) } : {}),
     };
 
@@ -2568,23 +3494,47 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
       : [];
     const storedIds: string[] = [];
 
+    // Who wrote this message, as the gateway stamped it. The storage key for an
+    // attachment is worked out from this rather than read out of the attachment,
+    // so nothing a client says can point a message at an object it did not put
+    // there — an object can check that a key looks right, but not that it belongs
+    // to the person sending, and only the address can answer that.
+    const authorEmail = normalizeMessagesEmail(String(payload["authorEmail"] ?? ""));
+
     for (const raw of rawAttachments) {
       const meta = sanitizeAttachmentMeta(raw);
       if (!meta) continue;
-      const dataUrl = String((raw as Record<string, unknown>)["dataUrl"] ?? "");
+      const entry = raw as Record<string, unknown>;
+
+      // Either the payload is in the bucket, or it is small enough to have
+      // travelled inside the message. The gateway decides which by asking the
+      // bucket whether the file is there, so a claim on its own is worth nothing.
+      const dataUrl = String(entry["dataUrl"] ?? "");
       const comma = dataUrl.indexOf(",");
       const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : "";
-      if (!base64) continue;
-      if (meta.kind === "image" && base64.length > MAX_ATTACHMENT_VALUE_CHARS) continue;
-      if (meta.kind === "file" && base64.length > MAX_ATTACHMENT_VALUE_CHARS) continue;
-      if (meta.size > MAX_IMAGE_BYTES || meta.size > MAX_FILE_BYTES) continue;
+      const inlineSize = meta.kind === "image" ? MAX_IMAGE_BYTES : MAX_INLINE_ATTACHMENT_BYTES;
 
-      const record: StoredAttachment = {
-        id: meta.id,
-        mimeType: meta.mimeType,
-        name: meta.name,
-        data: base64,
-      };
+      let record: StoredAttachment | null = null;
+      if (entry["inBucket"] === true && authorEmail) {
+        record = {
+          id: meta.id,
+          mimeType: meta.mimeType,
+          name: meta.name,
+          size: meta.size,
+          key: await attachmentObjectKey(authorEmail, meta.id),
+        };
+      } else if (base64 && base64.length <= MAX_ATTACHMENT_VALUE_CHARS && meta.size <= inlineSize) {
+        record = {
+          id: meta.id,
+          mimeType: meta.mimeType,
+          name: meta.name,
+          size: meta.size,
+          key: "",
+          data: base64,
+        };
+      }
+      if (!record) continue;
+
       await this.ctx.storage.put(`${ATTACHMENT_PREFIX}${meta.id}`, record);
       storedIds.push(meta.id);
 
@@ -2708,6 +3658,82 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
     await this.writeChat(chat);
     // The peer is answered from storage, not from the caller, so a client can
     // never name a third object to write into.
+    return { ok: true, rev: await this.bumpRev(), peerEmail: chat.peerEmail };
+  }
+
+  /**
+   * One person's reaction to one message, added or taken off.
+   *
+   * A reaction is the one change either participant may make to a message they did
+   * *not* send, which is why this is a route of its own and not another arm of
+   * `changeMessage`: that one is refused for anything but your own words, and
+   * quietly widening it would widen the one route every edit and every delete goes
+   * through.
+   *
+   * Who is reacting comes from `sender`, the identity the gateway resolved from the
+   * session — never from the body, which a client writes. The one exception is a
+   * mirrored write, where this object belongs to the *other* participant and its own
+   * `sender` is them; there the reacter is named in the body, which is safe only
+   * because the mirror marker is a header the gateway sets after stripping the
+   * client's copy, so a client cannot make this branch run.
+   */
+  private async reactToMessage(
+    payload: Record<string, unknown>,
+    mirrored: boolean,
+    sender: string,
+  ) {
+    const chatId = String(payload["chatId"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const messageId = String(payload["id"] ?? "")
+      .trim()
+      .slice(0, 80);
+    const emoji = String(payload["emoji"] ?? "").trim();
+    const who = normalizeMessagesEmail(
+      mirrored ? String(payload["authorEmail"] ?? "") : String(sender ?? ""),
+    );
+    /**
+     * Whether the press puts the reaction on or takes it off.
+     *
+     * Carried rather than inferred, because this object cannot tell the two apart:
+     * its own owner reacting to their own message and somebody else's reaction
+     * arriving through a mirror are the same write from here. Asking for a state
+     * instead of toggling one is also what makes a mirror safe to retry — a copy
+     * that arrives twice leaves the same thing on the message rather than taking the
+     * reaction back off.
+     */
+    const on = payload["on"] === true;
+    const quiet = async (peerEmail = "") => ({
+      ok: true,
+      rev: Number(await this.ctx.storage.get(REV_KEY)) || 0,
+      silent: true,
+      peerEmail,
+    });
+
+    if (!chatId || !messageId || !emoji || !who) return quiet();
+
+    const chat = await this.readChat(chatId);
+    if (!chat) return quiet();
+
+    const index = chat.messages.findIndex((message) => message.id === messageId);
+    const target = index >= 0 ? chat.messages[index] : undefined;
+    // A tombstone keeps its place but takes no more reactions: there is nothing
+    // left on screen to be reacting to.
+    if (!target || target.deletedAt) return quiet();
+
+    // Nothing changed: an unusable emoji, a ninth one, or a press that asks for what
+    // is already there. Said quietly, so a retry does not read as a change.
+    const next = setReaction(target, emoji, who, on);
+    if (!next) return quiet(chat.peerEmail);
+    if (JSON.stringify(next) === JSON.stringify(target.reactions ?? [])) {
+      return quiet(chat.peerEmail);
+    }
+
+    const updated: ChatMessage = { ...target, reactions: next };
+    chat.messages = chat.messages.map((message, position) =>
+      position === index ? updated : message,
+    );
+    await this.writeChat(chat);
     return { ok: true, rev: await this.bumpRev(), peerEmail: chat.peerEmail };
   }
 
@@ -2854,7 +3880,7 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
     const rawAvatar = payload["avatar"];
     const name = String(payload["name"] ?? profile.name)
       .trim()
-      .slice(0, 80);
+      .slice(0, MAX_NAME_LENGTH);
     const next: MessagesProfile = {
       ...profile,
       email: profile.email || normalizeMessagesEmail(String(payload["email"] ?? "")),
@@ -2929,20 +3955,32 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
     );
   }
 
+  /**
+   * Says where an attachment is, and nothing more.
+   *
+   * The bytes are not read here. A four-gigabyte file has no business passing
+   * through an object whose job is to answer "is this yours", and the gateway
+   * streams it straight out of the bucket once this has named the key.
+   *
+   * A record that is not there is the refusal: it exists for the two people in a
+   * conversation and for nobody else, so its absence is the answer to "may this
+   * account have this file" without a second check.
+   */
   private async handleAttachment(request: Request, url: URL): Promise<Response> {
     const id = (url.searchParams.get("id") ?? "").trim();
     if (!id) return jsonResponse({ error: "invalid-attachment" }, 400);
 
     const record = await this.ctx.storage.get<StoredAttachment>(`${ATTACHMENT_PREFIX}${id}`);
-    if (!record?.data) return jsonResponse({ error: "not-found" }, 404);
+    if (!record) return jsonResponse({ error: "not-found" }, 404);
 
-    const bytes = Uint8Array.from(atob(record.data), (char) => char.charCodeAt(0));
-    return new Response(bytes, {
-      headers: {
-        "content-type": record.mimeType || "application/octet-stream",
-        "content-disposition": `inline; filename="${record.name.replace(/"/g, "")}"`,
-        "cache-control": "private, max-age=31536000, immutable",
-      },
+    return jsonResponse({
+      ok: true,
+      id: record.id,
+      name: record.name,
+      mimeType: record.mimeType || "application/octet-stream",
+      size: Number(record.size) || 0,
+      key: record.key ?? "",
+      ...(record.data ? { data: record.data } : {}),
     });
   }
 
