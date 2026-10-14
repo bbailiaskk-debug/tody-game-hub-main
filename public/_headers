@@ -8,12 +8,18 @@
   X-XSS-Protection: 0
   Vary: Accept-Encoding
 
+# Content-hashed by Vite: a changed file gets a new name, so these are safe to
+# cache hard.
 /assets/*
   Cache-Control: public, max-age=2592000, immutable
+  CDN-Cache-Control: public, max-age=2592000
+  Cloudflare-CDN-Cache-Control: public, max-age=2592000
 
+# Public URLs are stable across builds, so revalidate them instead of marking them immutable.
 /fonts/*
-  Cache-Control: public, max-age=31536000, immutable
-  CDN-Cache-Control: max-age=31536000
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
   Access-Control-Allow-Origin: *
 
 /downloads/*
@@ -30,36 +36,44 @@
   X-Content-Type-Options: nosniff
 
 /images/*
-  Cache-Control: public, max-age=2592000, immutable
-  CDN-Cache-Control: max-age=2592000
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 /animo-focus-shift.mp4
-  Cache-Control: public, max-age=2592000, immutable
-  CDN-Cache-Control: max-age=2592000
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 /animo-focus-shift.webm
-  Cache-Control: public, max-age=2592000, immutable
-  CDN-Cache-Control: max-age=2592000
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 /animo-focus-shift-poster.jpg
-  Cache-Control: public, max-age=2592000, immutable
-  CDN-Cache-Control: max-age=2592000
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 /favicon.ico
-  Cache-Control: public, max-age=86400
-  CDN-Cache-Control: max-age=86400
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 /robots.txt
-  Cache-Control: public, max-age=86400
-  CDN-Cache-Control: max-age=86400
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 /site.webmanifest
-  Cache-Control: public, max-age=86400
-  CDN-Cache-Control: max-age=86400
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 /offline.html
-  Cache-Control: public, max-age=2592000, immutable
-  CDN-Cache-Control: max-age=2592000
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 /.well-known/assetlinks.json
   Content-Type: application/json
@@ -68,10 +82,141 @@
 
 /sw.js
   Content-Type: application/javascript
-  Cache-Control: no-cache, max-age=0, must-revalidate
-  CDN-Cache-Control: no-cache, max-age=0, must-revalidate
+  Cache-Control: no-store, no-cache, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 /sitemap.xml
   Content-Type: application/xml; charset=utf-8
   Cache-Control: public, max-age=3600
   CDN-Cache-Control: max-age=3600
+
+# Music, voice clips and stickers: tens of megabytes across these three folders.
+# The site rarely changes them and re-pulling a 10MB track on every visit is a
+# worse trade than the freshness the global rule above buys elsewhere, so they
+# revalidate instead of being stored. Matched by prefix; the folders are the
+# only ones with Cyrillic names.
+/звук на чята/*
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/мойта музика/*
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/стикер/*
+  Cache-Control: public, max-age=0, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+# Root-level files (icon.png, profile-photo.jpg, undraw_*.png, the .ttf/.otf
+# fonts) match no rule above, so a replaced one keeps being served from the edge.
+#
+# These are listed per extension on purpose rather than as a blanket /* rule.
+# Matching rules MERGE rather than override: a /* rule carrying no-store makes
+# /assets/*.js answer "no-cache, no-store, must-revalidate, public,
+# max-age=2592000, immutable", and the first directive is the one honoured, so
+# the hashed bundles lose their caching and are revalidated on every load. The
+# extensions below are exactly those that never appear in /assets/ (which holds
+# only .js and .css), so hashed bundles cannot be caught here.
+#
+# Placed last so that the more specific rules above keep the leading position
+# when two of these merge, which is what keeps the media folders on
+# "revalidate" instead of "no-store".
+# Cloudflare _headers rules:
+
+# Images
+/*.jpg
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.jpeg
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.png
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.gif
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.webp
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.svg
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.ico
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+# Fonts
+/*.woff2
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.woff
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.ttf
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.otf
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+# Media (the Cyrillic folders above match first and stay on "revalidate")
+/*.mp4
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.webm
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.mp3
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.wav
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.ogg
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+# Documents
+/*.html
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/*.txt
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store

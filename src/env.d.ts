@@ -1,3 +1,5 @@
+declare const __BUILD_DATE__: string;
+
 declare class WebSocketPair {
   0: import("cloudflare:workers").WebSocket;
   1: import("cloudflare:workers").WebSocket;

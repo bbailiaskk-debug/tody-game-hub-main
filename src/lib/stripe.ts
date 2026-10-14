@@ -105,7 +105,11 @@ async function stripeRequest(
   return (await response.json()) as Record<string, unknown>;
 }
 
-async function readCachedPriceId(plan: PlanKey, currency: string, amountCents: number): Promise<string> {
+async function readCachedPriceId(
+  plan: PlanKey,
+  currency: string,
+  amountCents: number,
+): Promise<string> {
   const kv = getStripeKv();
   if (!kv) return "";
 
@@ -204,9 +208,13 @@ async function createMonthlyPrice(
   if (typeof price["id"] !== "string") return "";
 
   // Keeps the product pointing at the price we just created so the dashboard shows it.
-  await stripeRequest(`/products/${encodeURIComponent(productId)}`, {
-    default_price: price["id"],
-  }, secretKey).catch(() => ({}));
+  await stripeRequest(
+    `/products/${encodeURIComponent(productId)}`,
+    {
+      default_price: price["id"],
+    },
+    secretKey,
+  ).catch(() => ({}));
 
   return price["id"];
 }

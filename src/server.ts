@@ -2,7 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import { getChessSecret, getRegisteredUser } from "./lib/chess-auth";
+import { getRegisteredUser } from "./lib/chess-auth";
 import { getAuthStore, verifyCredentials } from "./lib/auth-functions";
 import {
   MESSAGES_COOKIE,
@@ -120,7 +120,9 @@ function responseUrlPath(response: Response): string | null {
  */
 const HSTS_POLICY = "max-age=63072000; includeSubDomains; preload";
 
-function withHsts(response: Response): Response {
+export function withHsts(response: Response): Response {
+  if (response.status === 101) return response;
+
   const nextHeaders = new Headers(response.headers);
   if (!nextHeaders.has("strict-transport-security")) {
     nextHeaders.set("Strict-Transport-Security", HSTS_POLICY);
@@ -172,7 +174,14 @@ function withHsts(response: Response): Response {
     // HTML references hashed assets, so serving a stale document after a deploy
     // can point browsers at assets that no longer exist. Keep the document
     // revalidated while immutable assets remain cacheable by their own headers.
+    //
+    // Pragma/Expires are HTTP/1.0 holdovers and every browser here understands
+    // Cache-Control, but intermediaries that only predate it (and a few corporate
+    // proxies) still honour them, and a document that one of them caches is the
+    // exact stale-deploy failure the Cache-Control line above exists to prevent.
     nextHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    nextHeaders.set("Pragma", "no-cache");
+    nextHeaders.set("Expires", "0");
   }
 
   /**
@@ -260,6 +269,9 @@ function initializeCloudflareEnv(env: unknown): void {
 
 function buildSitemapXml(): string {
   const baseUrl = "https://tody-game-hub.bbailiaskk.workers.dev";
+  // Falls back to a fixed date if the build constant is missing, so a worker
+  // bundle built without Vite's `define` still serves a schema-valid sitemap.
+  const lastmod = typeof __BUILD_DATE__ === "string" ? __BUILD_DATE__ : "2026-01-01";
   const pages = [
     { loc: "/", changefreq: "daily", priority: "1.0" },
     { loc: "/games", changefreq: "daily", priority: "0.9" },
@@ -289,6 +301,7 @@ function buildSitemapXml(): string {
       (page) =>
         `  <url>
     <loc>${baseUrl}${page.loc}</loc>
+    <lastmod>${lastmod}</lastmod>
     <changefreq>${page.changefreq}</changefreq>
     <priority>${page.priority}</priority>
   </url>`,
@@ -630,20 +643,8 @@ async function serveChessGameRequest(request: Request, env: unknown): Promise<Re
   const id = namespace.idFromName(gameId);
   const stub = namespace.get(id);
 
-  // For WebSocket upgrades, mint (or read) the chess secret on the SSR side —
-  // the same secret serverChessAuth uses — and pass it to the DO as a header so
-  // token verification and minting always agree, independent of the DO's KV
-  // binding resolution.
-  let doRequest = request;
-  if ((request.headers.get("Upgrade") ?? "").toLowerCase() === "websocket") {
-    const secret = await getChessSecret();
-    const doHeaders = new Headers(request.headers);
-    doHeaders.set("x-chess-secret", secret);
-    doRequest = new Request(request, { headers: doHeaders });
-  }
-
   try {
-    return await stub.fetch(doRequest);
+    return await stub.fetch(request);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("Chess DO fetch failed.", error);
@@ -665,19 +666,8 @@ async function serveTicTacToeGameRequest(request: Request, env: unknown): Promis
   const id = namespace.idFromName(gameId);
   const stub = namespace.get(id);
 
-  // For WebSocket upgrades, mint (or read) the shared chess secret on the SSR
-  // side — the same secret serverTicTacToeAuth uses — and pass it to the DO as
-  // a header so token verification and minting always agree.
-  let doRequest = request;
-  if ((request.headers.get("Upgrade") ?? "").toLowerCase() === "websocket") {
-    const secret = await getChessSecret();
-    const doHeaders = new Headers(request.headers);
-    doHeaders.set("x-chess-secret", secret);
-    doRequest = new Request(request, { headers: doHeaders });
-  }
-
   try {
-    return await stub.fetch(doRequest);
+    return await stub.fetch(request);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("TicTacToe DO fetch failed.", error);
@@ -731,19 +721,8 @@ async function serveAirHockeyGameRequest(request: Request, env: unknown): Promis
   const id = namespace.idFromName(gameId);
   const stub = namespace.get(id);
 
-  // For WebSocket upgrades, mint (or read) the shared chess secret on the SSR
-  // side — the same secret serverAirHockeyAuth uses — and pass it to the DO as
-  // a header so token verification and minting always agree.
-  let doRequest = request;
-  if ((request.headers.get("Upgrade") ?? "").toLowerCase() === "websocket") {
-    const secret = await getChessSecret();
-    const doHeaders = new Headers(request.headers);
-    doHeaders.set("x-chess-secret", secret);
-    doRequest = new Request(request, { headers: doHeaders });
-  }
-
   try {
-    return await stub.fetch(doRequest);
+    return await stub.fetch(request);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("AirHockey DO fetch failed.", error);

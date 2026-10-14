@@ -186,11 +186,26 @@ function InfoPage() {
           <div className="flex flex-col gap-6">
             <div className="flex flex-col rounded-3xl border border-border bg-card p-6">
               <div className="relative aspect-[7/10] w-full overflow-hidden rounded-2xl bg-surface/70">
-                <img
-                  src="/Screenshot_32.png"
-                  alt={isBg ? "Профилна снимка" : "Profile photo"}
-                  className="absolute inset-0 h-full w-full rounded-xl object-cover object-center"
-                />
+                {/**
+                 * WebP first, PNG only for a browser that cannot decode it.
+                 *
+                 * The original was a 1.7 MB PNG for a box about 450 px wide, and
+                 * it was the single heaviest thing the site asked for: 1.7 MB on a
+                 * page whose whole budget is a few hundred. Same pixels, a
+                 * nineteenth of the bytes.
+                 */}
+                <picture>
+                  <source srcSet="/Screenshot_32.webp" type="image/webp" />
+                  <img
+                    src="/Screenshot_32.png"
+                    alt={isBg ? "Профилна снимка" : "Profile photo"}
+                    className="absolute inset-0 h-full w-full rounded-xl object-cover object-center"
+                    width={857}
+                    height={1222}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </picture>
               </div>
               <p className="label-mono mt-5 text-[0.6rem]">
                 {isBg ? "СЪЗДАТЕЛ / ГЕЙМЪР" : isZh ? "创作者 / 游戏玩家" : "CREATOR / GAMER"}

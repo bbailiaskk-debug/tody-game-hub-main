@@ -22,6 +22,9 @@ release
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
+# Plaintext KV dump from scripts/dump-kv.mjs - session tokens, refresh tokens and
+# password hashes, none of which belong in git.
+.env.kv
 
 # Editor keys and local agent settings. `.continue/config.yaml` held a real
 # provider key, which is a password for a paid API and not a setting that
@@ -33,6 +36,7 @@ release
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -87,3 +91,8 @@ android/.idea/
 # panel hand over the installer from Drive, which is where the build already is — but
 # the worker still sets the right headers for it if it is ever served from here.
 public/downloads/
+
+# CPU profiles written by scripts/profile-page.mjs. They are a build artefact of a
+# measurement, not source: the flame chart extension reads them off disk and they
+# are 5-15 MB each.
+profiles/

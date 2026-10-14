@@ -79,46 +79,46 @@ export function SiteTutorial() {
   const autoHideLabel = c.autoHide.replace("{n}", String(seconds));
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[76px] z-50 flex justify-center px-4">
+    <div className="pointer-events-none fixed inset-x-0 top-[76px] z-50 flex justify-center px-3 sm:px-4 lg:left-[var(--sidebar-w)]">
       <div
         role="dialog"
         aria-label={c.title}
-        className={`pointer-events-auto w-full max-w-2xl rounded-3xl border border-brand/30 bg-surface/95 p-7 text-foreground shadow-2xl backdrop-blur-xl transition-all duration-300 ${
+        className={`pointer-events-auto w-full max-w-2xl rounded-3xl border border-brand/30 bg-surface/95 p-4 text-foreground shadow-2xl backdrop-blur-xl transition-all duration-300 sm:p-7 ${
           leaving ? "-translate-y-2 opacity-0" : "translate-y-0 opacity-100"
         }`}
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <BookOpen className="size-6 text-brand" />
-            <h2 className="font-display text-2xl font-bold">{c.title}</h2>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <BookOpen className="size-5 text-brand sm:size-6" />
+            <h2 className="font-display text-lg font-bold sm:text-2xl">{c.title}</h2>
           </div>
           <button
             type="button"
             onClick={hide}
             aria-label={c.closeLabel}
-            className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground sm:size-10"
           >
-            <X className="size-5" />
+            <X className="size-4 sm:size-5" />
           </button>
         </div>
 
-        <p className="mt-4 flex items-start gap-3 text-lg text-muted-foreground">
-          <MenuIcon className="mt-1 size-6 shrink-0 text-brand" />
+        <p className="mt-2 flex items-start gap-2 text-sm text-muted-foreground sm:mt-4 sm:gap-3 sm:text-lg">
+          <MenuIcon className="mt-0.5 size-5 shrink-0 text-brand sm:mt-1 sm:size-6" />
           <span>{c.steps}</span>
         </p>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-          <span className="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-4 py-2 font-mono text-sm text-brand">
-            <Timer className="size-4" />
+        <div className="mt-3 flex items-center justify-between gap-2 sm:mt-6 sm:gap-4">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-brand/30 bg-brand/10 px-3 py-1.5 font-mono text-xs text-brand sm:gap-2 sm:px-4 sm:py-2 sm:text-sm">
+            <Timer className="size-3.5 sm:size-4" />
             {autoHideLabel}
           </span>
           <Link
             to="/rules"
             onClick={hide}
-            className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 font-mono text-base font-bold tracking-[0.14em] text-primary-foreground transition-transform hover:-translate-y-0.5"
+            className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 font-mono text-xs font-bold tracking-[0.14em] text-primary-foreground transition-transform hover:-translate-y-0.5 sm:gap-2 sm:px-6 sm:py-3 sm:text-base"
           >
             {c.cta}
-            <ArrowRight className="size-4" />
+            <ArrowRight className="size-3.5 sm:size-4" />
           </Link>
         </div>
       </div>

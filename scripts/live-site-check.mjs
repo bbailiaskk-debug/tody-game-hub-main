@@ -81,8 +81,8 @@ const run = async () => {
     return {
       title: document.title,
       hasChat: Boolean(document.querySelector(".discord-shell")),
-      columns: [...(document.querySelector(".discord-shell")?.children ?? [])].map(
-        (c) => c.tagName.toLowerCase(),
+      columns: [...(document.querySelector(".discord-shell")?.children ?? [])].map((c) =>
+        c.tagName.toLowerCase(),
       ),
       callButtons: buttons.filter((label) => /разговор|обаждане|call/i.test(label)),
       signedInAs: document.querySelector("header")?.textContent?.slice(0, 60) ?? "",
@@ -111,8 +111,12 @@ const run = async () => {
   console.log(`ICE reachable    : ${ice.candidateTypes.join(", ") || "nothing gathered"}`);
 
   const errors = console_.filter((line) => /error|warn/i.test(line));
-  console.log(`console problems : ${errors.length ? errors.slice(0, 6).join("\n                   ") : "none"}`);
-  console.log(`page failures    : ${failures.length ? failures.slice(0, 6).join("\n                   ") : "none"}`);
+  console.log(
+    `console problems : ${errors.length ? errors.slice(0, 6).join("\n                   ") : "none"}`,
+  );
+  console.log(
+    `page failures    : ${failures.length ? failures.slice(0, 6).join("\n                   ") : "none"}`,
+  );
 
   await browser.close();
 };

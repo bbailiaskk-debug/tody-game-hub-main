@@ -30,10 +30,13 @@ Replace `unit` with the actual container name from `docker ps --format '{{.Names
 
 The config proxies all requests to `https://tody-game-hub.bbailiaskk.workers.dev` with:
 
-- **Hashed bundles** (`.css`, `.js`, `.mjs`) — `Cache-Control: max-age=31536000, immutable` (1 year, safe because Vite content-hashes filenames)
+- **`/sw.js`** — `Cache-Control: no-store, must-revalidate`. It gets its own rule and must stay above everything else. The worker is what purges stale precached pages on each deploy, so a browser that keeps a copy of `/sw.js` never receives that purge and keeps serving an old document — and the moment its stylesheet is gone, the site renders with only its inline critical sheet.
+- **Hashed bundles** (`/assets/*.css`, `/assets/*.js`) — `Cache-Control: max-age=2592000, immutable` (30 days, safe because Vite content-hashes filenames). Matched by the `/assets/` prefix, **not** by extension: `*.css` / `*.js` also matches `/sw.js` and any unhashed file served from the root, and an `immutable` year on those freezes whichever build first fetched them.
 - **Images & fonts** — `Cache-Control: max-age=604800, immutable` (1 week)
 - **Source maps** (`.map`) — `Cache-Control: max-age=0, must-revalidate` (never cached)
 - **HTML & other routes** — security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`), no explicit cache (browser default)
+
+The `Cache-Control` values here are written over whatever the Worker origin sent. The origin already gets these right — `public/_headers` marks `/sw.js` `no-store` and HTML `no-cache, no-store` — so any rule added to this file has to agree with it, and a rule that does not is silently the one the browser obeys.
 
 ## HTTPS
 

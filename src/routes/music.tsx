@@ -249,7 +249,10 @@ function MusicPage() {
   return (
     <main className="min-h-[calc(100vh-68px)] bg-cover bg-center pb-24">
       <div className="grid min-h-[calc(100vh-164px)] grid-cols-[64px_minmax(0,1fr)] lg:grid-cols-[72px_minmax(0,1fr)_280px]">
-        <aside className="border-r border-border bg-surface/70 px-2 py-5">
+        <aside
+          aria-label={isBg ? "Страници" : isZh ? "页面" : "Pages"}
+          className="border-r border-border bg-surface/70 px-2 py-5"
+        >
           <div className="flex flex-col items-center gap-4">
             <Link
               to="/"
@@ -383,7 +386,10 @@ function MusicPage() {
           </div>
         </section>
 
-        <aside className="hidden border-l border-border bg-surface/50 p-6 lg:block">
+        <aside
+          aria-label={isBg ? "Сейча�� играе" : isZh ? "正在播放" : "Now playing"}
+          className="hidden border-l border-border bg-surface/50 p-6 lg:block"
+        >
           <span className="label-mono text-brand">
             {isBg ? "СЕГА СВИРИ" : isZh ? "正在播放" : "NOW PLAYING"}
           </span>

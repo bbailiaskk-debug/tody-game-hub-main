@@ -166,9 +166,36 @@ describe("writing a theme onto the chat shell", () => {
   it("sets every variable the shell declares for itself", () => {
     // The shell hard-codes --brand, --primary and --ring, so a theme that only
     // set one of them would repaint the buttons and leave the focus ring and the
-    // active server roundel in the old colour.
+    // active server roundel in the old colour. --on-brand is the fourth half of
+    // the same contract: it is the ink for a label on a filled accent button, and
+    // without it those buttons fall back to white, which most themes cannot carry.
     const properties = chatThemeVariables(chatThemeById("orchid")).map(([name]) => name);
-    expect(properties).toEqual(["--brand", "--brand-bright", "--brand-dim", "--primary", "--ring"]);
+    expect(properties).toEqual([
+      "--brand",
+      "--brand-bright",
+      "--brand-dim",
+      "--primary",
+      "--ring",
+      "--on-brand",
+    ]);
+  });
+
+  it("gives every theme a label that clears WCAG AA on its own accent", () => {
+    // The failure this guards against is real: every one of the filled accent
+    // buttons used to be drawn `text-white`, and most themes cannot hold white
+    // ink — `abyss` at #8fa0f9 measures 2.45:1.
+    const measured = CHAT_THEMES.map((theme) => {
+      const variables = Object.fromEntries(chatThemeVariables(theme));
+      const label = variables["--on-brand"] ?? CHAT_THEME_INK;
+      const la = themeLuminance(label);
+      const lb = themeLuminance(theme.brand);
+      return {
+        id: theme.id,
+        ratio: (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05),
+      };
+    });
+    const worst = measured.reduce((a, b) => (a.ratio < b.ratio ? a : b));
+    expect(worst.ratio).toBeGreaterThanOrEqual(4.5);
   });
 
   it("takes the accent's colour into the variables that show as buttons", () => {

@@ -13,6 +13,8 @@ const shell = createRequire(import.meta.url)("../../desktop/shell.cjs") as {
   DEFAULT_ORIGIN: string;
   isExternal: (url: string, origin?: string) => boolean;
   isInternal: (url: string, origin?: string) => boolean;
+  opensInBrowser: (url: unknown) => boolean;
+  isFullScreenKey: (input: unknown) => boolean;
   mayGrant: (permission: string, requester: string, origin?: string) => boolean;
   nextBounds: (
     saved: unknown,
@@ -85,6 +87,50 @@ describe("what stays in the window", () => {
   it("does not treat rubbish as internal", () => {
     expect(shell.isInternal("not a url", ORIGIN)).toBe(false);
     expect(shell.isExternal("mailto:someone@example.com", ORIGIN)).toBe(false);
+  });
+});
+
+describe("a link that asked for its own window", () => {
+  it("sends it to the browser, whichever site it points at", () => {
+    expect(shell.opensInBrowser("https://example.com/x")).toBe(true);
+    // The app's own pages too. The chat is the one window there is, and the
+    // sign-in card on its lock screen is a form rather than somewhere for the chat
+    // to go — an earlier version refused these, which made the card work under
+    // `desktop:dev` and do nothing on a production build.
+    expect(shell.opensInBrowser(`${ORIGIN}/login`)).toBe(true);
+    expect(shell.opensInBrowser("http://localhost:8787/login")).toBe(true);
+  });
+
+  it("has nowhere to send what is not a web page", () => {
+    for (const url of ["about:blank", "mailto:someone@example.com", "not a url", "", null]) {
+      expect(shell.opensInBrowser(url)).toBe(false);
+    }
+  });
+});
+
+describe("the key that fills the screen", () => {
+  it("is F11, and nothing else", () => {
+    expect(shell.isFullScreenKey({ key: "F11" })).toBe(true);
+    for (const key of ["F12", "Escape", "Enter", "f11", ""]) {
+      expect(shell.isFullScreenKey({ key })).toBe(false);
+    }
+  });
+
+  /**
+   * Escape is left alone on purpose.
+   *
+   * It is how every dialog on the page is closed, and a full screen window that
+   * could only be left with a key the dialogs also want would be one key with two
+   * meanings depending on what happened to be open.
+   */
+  it("leaves Escape to the page", () => {
+    expect(shell.isFullScreenKey({ key: "Escape" })).toBe(false);
+  });
+
+  it("copes with being handed nothing", () => {
+    expect(shell.isFullScreenKey(undefined)).toBe(false);
+    expect(shell.isFullScreenKey(null)).toBe(false);
+    expect(shell.isFullScreenKey({})).toBe(false);
   });
 });
 
@@ -203,8 +249,11 @@ describe("where the window reopens", () => {
   });
 
   it("never comes back too small to use", () => {
+    // 1024 is `lg`, the width from which the chat lays the servers down the left
+    // edge, so a window narrower than this puts the servers behind a menu on a
+    // screen that had room for them.
     expect(shell.nextBounds({ width: 200, height: 100 }, area)).toEqual({
-      width: 900,
+      width: 1024,
       height: 600,
       x: undefined,
       y: undefined,

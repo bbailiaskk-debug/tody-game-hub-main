@@ -106,22 +106,21 @@ const run = async () => {
     await one.setLocalDescription(offer);
     await two.setRemoteDescription(offer);
     described = true;
-    for (const candidate of held.splice(0)) await two.addIceCandidate(candidate).catch(() => undefined);
+    for (const candidate of held.splice(0))
+      await two.addIceCandidate(candidate).catch(() => undefined);
 
     const answer = await two.createAnswer();
     await two.setLocalDescription(answer);
     await one.setRemoteDescription(answer);
-    for (const candidate of held.splice(0)) await one.addIceCandidate(candidate).catch(() => undefined);
+    for (const candidate of held.splice(0))
+      await one.addIceCandidate(candidate).catch(() => undefined);
 
     const deadline = Date.now() + 20_000;
     while (one.connectionState !== "connected" && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 200));
     }
 
-    const tracks = await Promise.race([
-      arrived,
-      new Promise((r) => setTimeout(() => r(0), 5_000)),
-    ]);
+    const tracks = await Promise.race([arrived, new Promise((r) => setTimeout(() => r(0), 5_000))]);
 
     // Let RTP actually flow before asking the counters.
     await new Promise((r) => setTimeout(r, 4_000));
@@ -140,8 +139,7 @@ const run = async () => {
       iceConnectionState: one.iceConnectionState,
       remoteTracks: tracks,
       packetsReceived: packets,
-      candidateType:
-        typeof RTCIceCandidate !== "undefined" ? "supported" : "missing",
+      candidateType: typeof RTCIceCandidate !== "undefined" ? "supported" : "missing",
     };
   });
 
@@ -168,7 +166,9 @@ const run = async () => {
   if (process.exitCode) {
     console.error("\nThe frontend does NOT carry audio on this machine and network.");
   } else {
-    console.log("\nThe frontend carries audio. Anything that still fails is a network path, not this code.");
+    console.log(
+      "\nThe frontend carries audio. Anything that still fails is a network path, not this code.",
+    );
   }
 };
 

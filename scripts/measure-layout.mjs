@@ -113,9 +113,7 @@ const run = async () => {
         `${String(measured.window).padStart(5)}px | chat ${measured.left}..${measured.right} top ${measured.top} bottom ${measured.bottom} | right gap ${measured.rightGap} | bottom gap ${measured.bottomGap} | header right gap ${measured.headerRightGap} | doc ${measured.scrollWidth}`,
       );
       console.log(
-        `        ${measured.columns
-          .map((c) => `${c.tag}=${c.width}px@${c.right}`)
-          .join(" ")}`,
+        `        ${measured.columns.map((c) => `${c.tag}=${c.width}px@${c.right}`).join(" ")}`,
       );
     }
     await page.close();

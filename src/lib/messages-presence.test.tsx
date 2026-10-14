@@ -120,7 +120,7 @@ const install = (status = "online") => {
 const roots: Array<{ unmount: () => void }> = [];
 
 const render = async () => {
-  const { MessagesPage } = await import("../routes/messages");
+  const { MessagesPage } = await import("../components/messages/MessagesPage");
   const { SiteSettingsProvider } = await import("../components/site/theme");
   const { createElement } = await import("react");
   const host = document.createElement("div");

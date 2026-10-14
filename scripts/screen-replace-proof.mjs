@@ -99,7 +99,11 @@ const run = async () => {
     await new Promise((r) => setTimeout(r, 1500));
     const before = far.getReceivers().find((x) => x.track?.kind === "video");
     if (before?.track) {
-      report.before = { trackId: before.track.id, live: before.track.readyState === "live", kind: before.track.kind };
+      report.before = {
+        trackId: before.track.id,
+        live: before.track.readyState === "live",
+        kind: before.track.kind,
+      };
     }
 
     // Now the camera is swapped for a screen, which is what a share does.
@@ -111,7 +115,11 @@ const run = async () => {
     await new Promise((r) => setTimeout(r, 2500));
     const after = far.getReceivers().find((x) => x.track?.kind === "video");
     if (after?.track) {
-      report.after = { trackId: after.track.id, live: after.track.readyState === "live", kind: after.track.kind };
+      report.after = {
+        trackId: after.track.id,
+        live: after.track.readyState === "live",
+        kind: after.track.kind,
+      };
     }
 
     // And what a video element bound to that track is doing, which is the part
@@ -153,9 +161,7 @@ const run = async () => {
   say(`video has a stream : ${out.videosWithStream}`);
   say(`video is playing   : ${out.videosPlaying}`);
   say(`picture brightness : ${out.pixels} (0 would be a black rectangle)`);
-  say(
-    `track id preserved : ${out.before.trackId && out.before.trackId === out.after.trackId}`,
-  );
+  say(`track id preserved : ${out.before.trackId && out.before.trackId === out.after.trackId}`);
 
   await browser.close();
   server.close();

@@ -126,7 +126,7 @@ const install = () => {
 };
 
 const render = async () => {
-  const { MessagesPage } = await import("../routes/messages");
+  const { MessagesPage } = await import("../components/messages/MessagesPage");
   const { SiteSettingsProvider } = await import("../components/site/theme");
   const { createElement } = await import("react");
   const host = document.createElement("div");
@@ -338,11 +338,19 @@ describe("picking a chat theme", () => {
     const host = await render();
     rootHosts.push(host);
 
-    // The account panel, opened the way a person opens it: the face and the name.
-    const accountTrigger = host.querySelector<HTMLElement>(
-      'button[aria-label="Настройки на профила"]',
+    /*
+     * The account panel, opened the way a person opens it: the face and the name.
+     *
+     * Found by what it shows rather than by an aria-label. The trigger used to
+     * carry `aria-label="Настройки на профила"`, which was itself the bug this
+     * selector was papering over: the label replaced the person's name and
+     * address with a phrase that appears nowhere on screen, so the control
+     * announced as something it is not.
+     */
+    const accountTrigger = [...host.querySelectorAll<HTMLElement>("button")].find((node) =>
+      (node.textContent ?? "").includes("Alice"),
     );
-    expect(accountTrigger).not.toBeNull();
+    expect(accountTrigger).toBeDefined();
     await act(async () => {
       accountTrigger?.click();
     });

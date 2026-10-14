@@ -26,7 +26,7 @@
  * to keep working without the program.
  */
 export const PROGRAM_DOWNLOAD =
-  "https://drive.usercontent.google.com/download?id=1zCg6kOjJtQOo48x_rWPZqaNmWySm30OA&export=download&confirm=t";
+  "https://drive.usercontent.google.com/download?id=1prr8OPYCyfibGcskiApBN8FszXJ2rOI3&export=download&confirm=t";
 
 /**
  * The program for a phone, which is the same site in an Android shell.

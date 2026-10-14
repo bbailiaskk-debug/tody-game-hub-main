@@ -3,4 +3,6 @@ Allow: /
 Disallow: /login
 Disallow: /profile
 Disallow: /reset-password
+Disallow: /messages
+Disallow: /prompt-lab
 Sitemap: https://tody-game-hub.bbailiaskk.workers.dev/sitemap.xml

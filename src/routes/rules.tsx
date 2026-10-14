@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Baby,
   CalendarClock,
@@ -220,7 +220,14 @@ function RulesPage() {
   const rules = isZh ? zhRules : isBg ? bgRules : enRules;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+    /*
+     * `<main>`, not a bare div, so the page has a landmark. Without one the
+     * list below sat outside every landmark — invisible to anyone navigating by
+     * region — and the page's own `<header>` counted as a second `banner`
+     * alongside the site header, because a `<header>` only stops being one once
+     * it is scoped inside `main`. Every other route on the site already does this.
+     */
+    <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <header className="mb-8 text-center">
         <span className="label-mono mb-3 inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-4 py-1.5 text-[0.6rem] tracking-[0.25em] text-brand">
           <Sparkles className="size-3" />
@@ -270,7 +277,7 @@ function RulesPage() {
         {isZh ? (
           <p>
             感谢你帮助这里保持有序！请通过{" "}
-            <Link to="/info" className="text-brand underline-offset-2 hover:underline">
+            <Link to="/info" className="text-brand underline underline-offset-2">
               联系页面
             </Link>{" "}
             反馈。
@@ -278,7 +285,7 @@ function RulesPage() {
         ) : isBg ? (
           <p>
             Благодарим, че помагаш да пазим реда! За съмнения или сигнали пиши ни през{" "}
-            <Link to="/info" className="text-brand underline-offset-2 hover:underline">
+            <Link to="/info" className="text-brand underline underline-offset-2">
               информационната страница
             </Link>
             .
@@ -286,13 +293,13 @@ function RulesPage() {
         ) : (
           <p>
             Thanks for helping keep this place friendly! For questions or reports, reach out via the{" "}
-            <Link to="/info" className="text-brand underline-offset-2 hover:underline">
+            <Link to="/info" className="text-brand underline underline-offset-2">
               info page
             </Link>
             .
           </p>
         )}
       </div>
-    </div>
+    </main>
   );
 }

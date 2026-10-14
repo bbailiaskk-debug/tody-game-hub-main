@@ -153,9 +153,13 @@ const run = async () => {
   await browser.close();
 
   if (heard.length === 0 && shown.length > 0) {
-    console.log("\nAccount 1 built a call that account 2 never heard: the gateway did not carry it.");
+    console.log(
+      "\nAccount 1 built a call that account 2 never heard: the gateway did not carry it.",
+    );
   } else if (heard.length > 0) {
-    console.log("\nThe frames crossed. Signalling through the Durable Object works between two accounts.");
+    console.log(
+      "\nThe frames crossed. Signalling through the Durable Object works between two accounts.",
+    );
   } else {
     console.log("\nNothing was sent: there was no conversation to call from.");
   }

@@ -3,7 +3,9 @@
     "tht13.html-preview-vscode",
     "esbenp.prettier-vscode",
     "dbaeumer.vscode-eslint",
-    "bradlc.vscode-tailwindcss"
+    "bradlc.vscode-tailwindcss",
+    "thedevlabs-io.shush",
+    "anthropic.claude-code"
   ],
   "unwantedRecommendations": []
 }

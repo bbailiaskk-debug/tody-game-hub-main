@@ -87,7 +87,9 @@ const run = async () => {
       console.log("This platform does not offer screen capture to web pages.");
     }
   } else {
-    console.log(`\nScreen capture works here: ${report.tracks} track(s). The problem is in the app.`);
+    console.log(
+      `\nScreen capture works here: ${report.tracks} track(s). The problem is in the app.`,
+    );
   }
   if (pageErrors.length) console.log(`page errors: ${pageErrors.join(" | ")}`);
 };

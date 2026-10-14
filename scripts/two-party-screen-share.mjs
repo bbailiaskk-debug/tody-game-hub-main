@@ -59,9 +59,11 @@ const see = (page) =>
       })),
       namesUnderTiles: names.filter((value) => value.length > 0 && value.length < 30).slice(0, 8),
       liveBadges,
-      shareState:
-        document.querySelector('button[aria-label="Спри споделянето"]') ? "sharing" :
-        document.querySelector('button[aria-label="Сподели екран"]') ? "idle" : "no-button",
+      shareState: document.querySelector('button[aria-label="Спри споделянето"]')
+        ? "sharing"
+        : document.querySelector('button[aria-label="Сподели екран"]')
+          ? "idle"
+          : "no-button",
     };
   });
 
@@ -97,11 +99,15 @@ const run = async () => {
   const b = await two.newPage();
 
   const problems = [];
-  for (const [tag, page] of [["A", a], ["B", b]]) {
+  for (const [tag, page] of [
+    ["A", a],
+    ["B", b],
+  ]) {
     page.on("pageerror", (error) => problems.push(`${tag} pageerror: ${error.message}`));
     page.on("console", (line) => {
       const text = line.text();
-      if (/error|fail|denied|refused|abort/i.test(text)) problems.push(`${tag}: ${text.slice(0, 160)}`);
+      if (/error|fail|denied|refused|abort/i.test(text))
+        problems.push(`${tag}: ${text.slice(0, 160)}`);
     });
   }
 
@@ -128,13 +134,13 @@ const run = async () => {
   // Somebody to share with. A voice channel the other person can also walk into
   // is the simplest room of two that both accounts can reach.
   report.steps.aRooms = await a.evaluate(() => ({
-    voiceChannels: [...document.querySelectorAll("[data-voice-channel]")].map(
-      (node) => node.getAttribute("data-voice-channel"),
+    voiceChannels: [...document.querySelectorAll("[data-voice-channel]")].map((node) =>
+      node.getAttribute("data-voice-channel"),
     ),
   }));
   report.steps.bRooms = await b.evaluate(() => ({
-    voiceChannels: [...document.querySelectorAll("[data-voice-channel]")].map(
-      (node) => node.getAttribute("data-voice-channel"),
+    voiceChannels: [...document.querySelectorAll("[data-voice-channel]")].map((node) =>
+      node.getAttribute("data-voice-channel"),
     ),
   }));
 

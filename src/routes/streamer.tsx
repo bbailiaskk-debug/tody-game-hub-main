@@ -471,8 +471,20 @@ function StreamerPage() {
     return () => window.clearInterval(timer);
   }, [day, lang, phase]);
 
+  /*
+   * `scrollIntoView` is a layout read under another name, so doing it from an
+   * effect forces a synchronous layout inside the commit. With an empty chat
+   * there is nothing below the fold to scroll to, so the first run is skipped;
+   * the rest are pushed into the next frame, by which point the new lines have
+   * been laid out and the browser scrolls the box itself rather than being
+   * asked to re-lay it out first.
+   */
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ block: "end" });
+    if (chat.length === 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      chatEndRef.current?.scrollIntoView({ block: "end" });
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [chat]);
 
   const tone = useCallback(

@@ -133,12 +133,27 @@ function LocalTicTacToeGame() {
             const isWinCell = winLine?.includes(i);
             const isX = cell === "X";
             const isO = cell === "O";
+            /*
+             * An empty cell is a button with no text in it, which is an unnamed
+             * control: the grid is the only thing giving it a position, and that
+             * is lost the moment the visual disappears. Naming it here also makes
+             * the move legible — "row 2, column 3" rather than a bare button —
+             * and the X/O cell is read from the letter the button already shows,
+             * which is why that part is left out of the aria-label and the glyph
+             * is hidden from assistive technology instead.
+             */
+            const position = `row ${Math.floor(i / 3) + 1}, column ${(i % 3) + 1}`;
             return (
               <button
                 key={i}
                 type="button"
                 onClick={() => handleCellClick(i)}
                 disabled={!!cell || gameOver}
+                aria-label={
+                  cell
+                    ? `${position}, ${isX ? "X" : "O"}${isWinCell ? ", winning line" : ""}`
+                    : `${position}, empty`
+                }
                 className={`grid size-[clamp(5rem,18vw,8rem)] place-items-center rounded-2xl border font-mono text-[clamp(2rem,8vw,4rem)] font-bold transition-all duration-200 ${
                   isWinCell
                     ? "border-[#1DB954]/60 bg-[#1DB954]/15 shadow-[0_0_20px_rgba(29,185,84,0.25)]"
@@ -147,7 +162,7 @@ function LocalTicTacToeGame() {
                       : "border-border/30 bg-surface/30 hover:border-border/60 hover:bg-surface/60"
                 } ${isX ? "text-[#4ADE80]" : isO ? "text-[#f97316]" : "text-transparent"}`}
               >
-                {cell}
+                <span aria-hidden="true">{cell}</span>
               </button>
             );
           })}

@@ -73,7 +73,7 @@ const seed = (now: number): LocalData => {
       peerEmail: "",
       name: "Todor Khristov",
       initials: "TK",
-      about: "Р РЋРЎвЂљРЎР‚Р С‘Р в„–Р С Р Р†РЎРѓРЎРЏР С”Р В° Р Р†Р ВµРЎвЂЎР ВµРЎР‚ Р Р† 20:00",
+      about: "Стрийм всяка вечер в 20:00",
       accent: "#1DB954",
       avatar: null,
       online: true,
@@ -85,9 +85,9 @@ const seed = (now: number): LocalData => {
     {
       id: "local-nelka",
       peerEmail: "",
-      name: "Р СњР ВµР В»Р С”Р В°",
-      initials: "Р Сњ",
-      about: "Р РЋР В°Р СР С• Р С‘Р С–РЎР‚Р С‘ Р С‘ Р СРЎС“Р В·Р С‘Р С”Р В°",
+      name: "Нелка",
+      initials: "Н",
+      about: "Само игри и музика",
       accent: "#22d3ee",
       avatar: null,
       online: true,
@@ -99,10 +99,9 @@ const seed = (now: number): LocalData => {
     {
       id: "local-katiya",
       peerEmail: "",
-      name: "Р С™Р В°РЎвЂљРЎРЏ",
-      initials: "Р С™",
-      about:
-        "Р СњР Вµ Р СР Вµ Р С—Р С‘РЎв‚¬Р С‘ Р Р…Р В° РЎР‚Р В°Р В±Р С•РЎвЂљР В°РЎвЂљР В° СЂСџв„ўвЂљ",
+      name: "Катя",
+      initials: "К",
+      about: "Няма ме вкъщи на работата 🙂",
       accent: "#f97316",
       avatar: null,
       online: false,
@@ -141,22 +140,12 @@ const seed = (now: number): LocalData => {
         muted: false,
         updatedAt: now - minutes(12),
         messages: [
-          message(
-            "l1",
-            false,
-            "Р вЂ”Р Т‘РЎР‚Р В°Р Р†Р ВµР в„–! Р В Р В°Р В·Р Т‘Р ВµР В»РЎР‰РЎвЂљ РЎР‚Р В°Р В±Р С•РЎвЂљР С‘ Р С‘ Р В±Р ВµР В· Р Р†РЎР‚РЎР‰Р В·Р С”Р В° СЂСџв„ўвЂљ",
-            now - hours(2),
-          ),
-          message(
-            "l2",
-            true,
-            "Р РЋРЎС“Р С—Р ВµРЎР‚, Р В±Р В»Р В°Р С–Р С•Р Т‘Р В°РЎР‚РЎРЏ!",
-            now - hours(2) + 4,
-          ),
+          message("l1", false, "Здравей, Тодор! Разделът става и без впитване 🙂", now - hours(2)),
+          message("l2", true, "Супер, благодаря!", now - hours(2) + 4),
           message(
             "l3",
             false,
-            "Р В©Р Вµ РЎРѓР Вµ Р Р†РЎР‰РЎР‚Р Р…Р В° Р С”РЎР‰Р С Р С•Р В±Р В»Р В°Р С”Р В°, Р С”Р С•Р С–Р В°РЎвЂљР С• Р С‘Р СР В°Р С Р С‘Р Р…РЎвЂљР ВµРЎР‚Р Р…Р ВµРЎвЂљ.",
+            "Ще се върна към облака, когато играя на компютъра.",
             now - minutes(12),
           ),
         ],
@@ -168,13 +157,8 @@ const seed = (now: number): LocalData => {
         muted: false,
         updatedAt: now - hours(1),
         messages: [
-          message(
-            "l4",
-            true,
-            "Р С™Р С•РЎРЏ РЎвЂ°Р Вµ Р С‘Р С–РЎР‚Р В°Р ВµР С Р Т‘Р Р…Р ВµРЎРѓ?",
-            now - days(1),
-          ),
-          message("l5", false, "2048 Р Т‘Р С• 10? СЂСџВвЂћ", now - days(1) + minutes(3)),
+          message("l4", true, "Кога ще идеята ти днес?", now - days(1)),
+          message("l5", false, "2048 до 10? 😄", now - days(1) + minutes(3)),
         ],
       },
       {
@@ -184,18 +168,8 @@ const seed = (now: number): LocalData => {
         muted: true,
         updatedAt: now - days(2),
         messages: [
-          message(
-            "l6",
-            false,
-            "Р ВР СР В°РЎв‚¬ Р В»Р С‘ Р С‘Р Т‘Р ВµРЎРЏ Р С”Р В°Р С”Р Р†Р С• Р Т‘Р В° Р С—Р С•Р Т‘Р В°РЎР‚Р С‘Р С Р Р…Р В° Р СћР С•Р Т‘Р С•РЎР‚?",
-            now - days(2),
-          ),
-          message(
-            "l7",
-            true,
-            "Р СњР ВµРЎвЂ°Р С• Р В·Р ВµР В»Р ВµР Р…Р С• Р С‘ Р В±РЎР‰РЎР‚Р В·Р С• СЂСџВР‹",
-            now - days(2) + hours(1),
-          ),
+          message("l6", false, "Имаш ли идея да разбиеш на парчета?", now - days(2)),
+          message("l7", true, "Няма го зеленото, бързо 😎", now - days(2) + hours(1)),
         ],
       },
     ],

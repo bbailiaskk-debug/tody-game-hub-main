@@ -332,7 +332,7 @@ const stubCallBrowser = () => {
 };
 
 const render = async () => {
-  const { MessagesPage } = await import("../routes/messages");
+  const { MessagesPage } = await import("../components/messages/MessagesPage");
   const { SiteSettingsProvider } = await import("../components/site/theme");
   const { createElement } = await import("react");
   const host = document.createElement("div");
@@ -1083,6 +1083,106 @@ describe("the chat view loads from the cloud without errors", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("makes a server from the phone's menu, which is the only place a phone has", async () => {
+    viewportWidth = 390;
+    const { root } = await render();
+
+    const trigger = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Отвори менюто"]',
+    );
+    await act(async () => {
+      trigger?.click();
+    });
+
+    // On a phone the rail is only ever inside this menu, so this button is the
+    // whole of "make a server" on Android. It used to do nothing but close the
+    // menu again, which is why the servers could be seen but never added.
+    const plus = [
+      ...(document.body.querySelector("[role='dialog']")?.querySelectorAll("button") ?? []),
+    ]
+      .filter((button) => button.getAttribute("aria-label") === "Нов сървър")
+      .at(0);
+    expect(plus).toBeDefined();
+
+    await act(async () => {
+      plus?.click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    /**
+     * A field of the site's own rather than the browser's prompt.
+     *
+     * The Android app is a trusted web activity — a Chrome custom tab — and
+     * Chrome does not run `window.prompt` there: the call is refused and hands
+     * back nothing, so on a phone the question could not be asked at all. A test
+     * that only checked a dialog appeared would pass against the prompt too, so
+     * this asks for a field with a name to type into.
+     */
+    const field = document.body.querySelector<HTMLInputElement>(
+      'input[placeholder="Име на сървъра"]',
+    );
+    expect(field).not.toBeNull();
+
+    await act(async () => {
+      if (!field) return;
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      setter?.call(field, "Клуб");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const save = [...document.body.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Създай сървър",
+    );
+    expect(save).toBeDefined();
+
+    await act(async () => {
+      save?.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    // The name reached the gateway, which is the thing a phone could not do.
+    expect(calls.some((url) => url.includes("/api/messages/guild/create"))).toBe(true);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("carries the chat's colours into the tray, which is not inside the chat", async () => {
+    vi.stubEnv("VITE_GIPHY_API_KEY", "test-key");
+    resetGiphyCache();
+    const { root } = await render();
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>('button[aria-label="Стикери"]')?.click();
+    });
+
+    const tab = document.body.querySelector<HTMLButtonElement>('button[role="tab"]');
+    expect(tab).not.toBeNull();
+
+    /**
+     * The tray arrives through a portal, so it lands at the end of the document and
+     * outside the element that carries the chat's palette — however it was written,
+     * and it is written inside the chat. A portal that lands back in the root comes
+     * out wearing the site's green, which is how a tab inside a blue conversation
+     * came to offer a green pill, in a second set of greys as well.
+     *
+     * So the palette has to travel on the tray itself, and this is the assertion
+     * that says so: the tray is inside a `.discord-shell`, and it is not the chat's
+     * own one.
+     */
+    const tray = tab?.closest(".discord-shell");
+    expect(tray).not.toBeNull();
+    expect(tray).not.toBe(document.querySelector("section.discord-shell"));
+
+    await act(async () => {
+      root.unmount();
+    });
+    vi.unstubAllEnvs();
   });
 
   it("shows a setup hint in the sticker tray when giphy has no key", async () => {

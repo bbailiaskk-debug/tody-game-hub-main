@@ -50,6 +50,41 @@ const isExternal = (url, origin = DEFAULT_ORIGIN) =>
   /^https?:/i.test(url) && !isInternal(url, origin);
 
 /**
+ * Whether a link that asked for a window of its own belongs in the user's browser.
+ *
+ * Yes for anything that is a web page, and that includes this app's own pages. The
+ * program is one window and that window is the chat, and the sign-in card on the
+ * lock screen is a form — a form is not something to walk the chat out of. What the
+ * person wants from that card is a browser they can sign in in and come back from,
+ * with the lock screen still standing when they do.
+ *
+ * This is the whole of the rule, and the origin is not part of it. An earlier
+ * version sent only the links that left the app and refused the rest, which made
+ * the same card work under `desktop:dev` and do nothing on a production build —
+ * the app's own address counted as internal, was not external, and was dropped
+ * without a word.
+ *
+ * Not for `about:blank`, `mailto:` and the rest: there is nowhere to send those, and
+ * a scheme that can reach the machine is refused rather than handed over.
+ */
+const opensInBrowser = (url) => /^https?:/i.test(String(url ?? ""));
+
+/**
+ * Whether a key press is the one that puts the window full screen.
+ *
+ * `F11` alone, and it is caught on the way into the page rather than through a menu
+ * accelerator. An accelerator only fires while the application menu is the thing
+ * with focus, so a window that is not showing its menu bar — maximised, or with the
+ * bar hidden, which is most of the time somebody is actually in a chat — never hears
+ * it, and F11 did nothing at all while the menu said it was bound.
+ *
+ * `Escape` is deliberately not here. It is how every dialog on the page is closed,
+ * and a full screen window that could only be left with a key the dialogs also want
+ * would be a window with two meanings on one key.
+ */
+const isFullScreenKey = (input) => String(input?.key ?? "") === "F11";
+
+/**
  * The permissions the chat needs to be a chat.
  *
  * A microphone is the whole point of the voice settings, so `media` and
@@ -195,9 +230,17 @@ const nextBounds = (saved, area) => {
     width: Number(area?.width) || 1920,
     height: Number(area?.height) || 1080,
   };
+  // 1024 and 600 are the window's own minimums, and they are said in one place
+  // here rather than twice with a number each: a saved size below the minimum is
+  // pulled up to it here so the placement maths below is working with the width
+  // the window will actually have.
+  const floor = { width: 1024, height: 600 };
   if (!saved || typeof saved !== "object") return { ...fallback };
-  const width = Math.min(Math.max(Number(saved.width) || fallback.width, 900), room.width);
-  const height = Math.min(Math.max(Number(saved.height) || fallback.height, 600), room.height);
+  const width = Math.min(Math.max(Number(saved.width) || fallback.width, floor.width), room.width);
+  const height = Math.min(
+    Math.max(Number(saved.height) || fallback.height, floor.height),
+    room.height,
+  );
   const place = (value, extent, size) => {
     if (!Number.isFinite(value)) return undefined;
     // The window has to keep its title bar reachable, so the furthest left and
@@ -225,4 +268,6 @@ module.exports = {
   resolveEntry,
   screenSourceFor,
   shareCards,
+  opensInBrowser,
+  isFullScreenKey,
 };

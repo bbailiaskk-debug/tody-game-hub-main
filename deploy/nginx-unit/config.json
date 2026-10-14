@@ -8,12 +8,23 @@
     "site": [
       {
         "match": {
-          "uri": ["*.css", "*.js", "*.mjs"]
+          "uri": ["/sw.js"]
         },
         "action": {
           "proxy": "https://tody-game-hub.bbailiaskk.workers.dev",
           "response_headers": {
-            "Cache-Control": "public, max-age=1576800000, immutable"
+            "Cache-Control": "no-store, no-cache, max-age=0, must-revalidate"
+          }
+        }
+      },
+      {
+        "match": {
+          "uri": ["/assets/*.css", "/assets/*.js", "/assets/*.mjs"]
+        },
+        "action": {
+          "proxy": "https://tody-game-hub.bbailiaskk.workers.dev",
+          "response_headers": {
+            "Cache-Control": "public, max-age=2592000, immutable"
           }
         }
       },

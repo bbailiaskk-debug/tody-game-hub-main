@@ -52,19 +52,42 @@ type SiteSettings = {
 
 const SiteSettingsContext = createContext<SiteSettings | null>(null);
 
-const normalizeAccentColor = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return "#40cc3c";
+/**
+ * The accent the stylesheet already declares, and the one this provider leaves
+ * alone.
+ *
+ * `:root` in styles.css defines `--brand`, `--primary`, `--ring` and their
+ * `--brand-dim` / `--brand-bright` neighbours. When the visitor has not picked a
+ * colour of their own, those declarations are already the right answer — but the
+ * provider used to start from a different green and write six custom properties
+ * over them on hydration. Every first visit therefore invalidated the style of
+ * every element that reads those tokens and repainted the whole document
+ * immediately after the first paint, and the designed `--brand-dim` /
+ * `--brand-bright` pair was flattened to two copies of the same colour.
+ *
+ * Starting from the stylesheet's value and skipping the writes in the effect
+ * below when nothing has been customised makes hydration a no-op for the common
+ * case: the first paint is already the final colour, and nothing is recomputed.
+ *
+ * Keep in step with the `:root` block in styles.css.
+ */
+export const DEFAULT_ACCENT = "#1db954";
+
+const normalizeAccentColor = (value: string | null | undefined): string => {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return DEFAULT_ACCENT;
 
   const withHash = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
   if (!/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(withHash)) {
-    return "#40cc3c";
+    return DEFAULT_ACCENT;
   }
 
   return withHash.toLowerCase();
 };
 
 const ACCENT_TARGET_CONTRAST = 4.5;
+const ACCENT_LIGHT_FOREGROUND = "#ffffff";
+const ACCENT_DARK_FOREGROUND = "#0d1a17";
 
 function channelsOf(hex: string): [number, number, number] {
   const value = parseInt(hex.slice(1), 16);
@@ -79,9 +102,43 @@ function luminanceOf(rgb: [number, number, number]): number {
   return 0.2126 * toLinear(rgb[0]) + 0.7152 * toLinear(rgb[1]) + 0.0722 * toLinear(rgb[2]);
 }
 
-function contrastWithWhite(rgb: [number, number, number]): number {
-  const l = luminanceOf(rgb);
-  return 1.05 / (l + 0.05);
+function contrastRatio(rgbA: [number, number, number], rgbB: [number, number, number]): number {
+  const luminanceA = luminanceOf(rgbA);
+  const luminanceB = luminanceOf(rgbB);
+  const lighter = Math.max(luminanceA, luminanceB);
+  const darker = Math.min(luminanceA, luminanceB);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+export function contrastRatioBetween(background: string, foreground: string): number {
+  return contrastRatio(channelsOf(background), channelsOf(foreground));
+}
+
+/**
+ * Lightens an accent until it can carry a label on its own tinted background.
+ *
+ * The other direction from `resolveAccentContrast`, and needed for the same
+ * reason: an accent drawn as *text* rather than as a fill. The chat draws a
+ * person's initials in their accent over a 12%-alpha tint of that same accent,
+ * and for most accents that lands at 3.7:1 — legible, and under the 4.5:1 that AA
+ * asks for. The accent belongs to the person, so it is not something to override;
+ * the text is carried towards white until it clears the threshold.
+ *
+ * The background is composited rather than assumed: what the browser actually
+ * blends is a translucent accent over the chat's raised surface, and measuring
+ * against the raw surface overstated the ratio by enough to leave the failing
+ * cases still failing.
+ *
+ * Measured rather than guessed, so the result is right for any accent, and a
+ * theme added later cannot reintroduce it.
+ */
+export function readableAccentOnTint(accent: string, tint = 0.12, surface = "#383a40"): string {
+  const background = mixHex(surface, accent, tint);
+  for (let step = 0; step <= 40; step++) {
+    const candidate = mixHex(accent, "#ffffff", step / 40);
+    if (contrastRatioBetween(background, candidate) >= ACCENT_TARGET_CONTRAST) return candidate;
+  }
+  return "#ffffff";
 }
 
 function toHex(rgb: [number, number, number]): string {
@@ -94,29 +151,58 @@ function toHex(rgb: [number, number, number]): string {
     .join("")}`;
 }
 
-function darkenAccentForLight(hex: string): string {
-  const base = channelsOf(hex);
-  if (contrastWithWhite(base) >= ACCENT_TARGET_CONTRAST) return hex;
+function mixHex(hex: string, target: string, ratio: number): string {
+  const source = channelsOf(hex);
+  const tone = channelsOf(target);
+  const mixed: [number, number, number] = [
+    source[0] + (tone[0] - source[0]) * ratio,
+    source[1] + (tone[1] - source[1]) * ratio,
+    source[2] + (tone[2] - source[2]) * ratio,
+  ];
+  return toHex(mixed);
+}
+
+export function resolveAccentContrast(hex: string): { accent: string; foreground: string } {
+  const original: string = normalizeAccentColor(hex);
+  const candidates: [string, string] = [ACCENT_LIGHT_FOREGROUND, ACCENT_DARK_FOREGROUND];
+  let foreground: string = candidates[0];
+  let best: number = contrastRatioBetween(original, foreground);
+
+  for (const candidate of candidates.slice(1)) {
+    const ratio = contrastRatioBetween(original, candidate);
+    if (ratio > best) {
+      foreground = candidate;
+      best = ratio;
+    }
+  }
+
+  if (best >= ACCENT_TARGET_CONTRAST) return { accent: original, foreground };
+
+  const target = foreground === ACCENT_LIGHT_FOREGROUND ? "#000000" : "#ffffff";
   let lo = 0;
   let hi = 1;
-  for (let i = 0; i < 24; i++) {
-    const t = (lo + hi) / 2;
-    const mixed: [number, number, number] = [
-      base[0] * (1 - t),
-      base[1] * (1 - t),
-      base[2] * (1 - t),
-    ];
-    if (contrastWithWhite(mixed) >= ACCENT_TARGET_CONTRAST) hi = t;
-    else lo = t;
+
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    const candidate = mixHex(original, target, mid);
+    if (contrastRatioBetween(candidate, foreground) >= ACCENT_TARGET_CONTRAST) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
   }
-  return toHex([base[0] * (1 - hi), base[1] * (1 - hi), base[2] * (1 - hi)]);
+
+  return {
+    accent: mixHex(original, target, hi),
+    foreground,
+  };
 }
 
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
   const [lang, setLangState] = useState<Lang>("bg");
   const [graphicsSize, setGraphicsSizeState] = useState<GraphicsSize>("small");
-  const [accentColor, setAccentColorState] = useState("#40cc3c");
+  const [accentColor, setAccentColorState] = useState(DEFAULT_ACCENT);
   const [backgroundImage, setBackgroundImageState] = useState<string | null>(null);
 
   useEffect(() => {
@@ -146,7 +232,7 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
         activeUser?.accentColor ??
         readPersistedUserAccentColor(currentEmail) ??
         settings.accentColor ??
-        "#40cc3c";
+        DEFAULT_ACCENT;
       setAccentColorState(normalizeAccentColor(storedAccent));
     };
 
@@ -164,21 +250,35 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
 
     root.lang = lang === "zh" ? "zh-CN" : lang === "bg" ? "bg" : "en";
 
-    const accent = accentColor || "#40cc3c";
-    const brand = theme === "light" ? darkenAccentForLight(accent) : accent;
-    root.style.setProperty("--brand", brand);
-    root.style.setProperty("--primary", brand);
-    root.style.setProperty("--ring", brand);
-    root.style.setProperty("--brand-dim", brand);
-    root.style.setProperty("--brand-bright", accent);
-    root.style.setProperty("--primary-foreground", theme === "light" ? "#ffffff" : "#0d1a17");
+    /*
+     * Every `setProperty` here invalidates the style of every element that reads
+     * the token, so writing a value the stylesheet already declares costs a full
+     * document restyle and repaint and changes nothing on screen. The default
+     * accent is the case that matters: the server rendered with the stylesheet's
+     * own green, so on an ordinary first visit there is nothing to write and the
+     * whole block is skipped.
+     *
+     * `--site-background-image` is the same story, and `--graphics-scale` is only
+     * ever read by the rules that ask for a larger graphics size.
+     */
+    const accent = accentColor || DEFAULT_ACCENT;
+    if (accent !== DEFAULT_ACCENT) {
+      const { accent: adjustedAccent, foreground } = resolveAccentContrast(accent);
+      root.style.setProperty("--brand", adjustedAccent);
+      root.style.setProperty("--primary", adjustedAccent);
+      root.style.setProperty("--ring", adjustedAccent);
+      root.style.setProperty("--brand-dim", adjustedAccent);
+      root.style.setProperty("--brand-bright", accent);
+      root.style.setProperty("--primary-foreground", foreground);
+    }
 
-    root.style.setProperty("--graphics-scale", graphicsSize === "large" ? "1.08" : "1");
+    if (graphicsSize !== "small") {
+      root.style.setProperty("--graphics-scale", "1.08");
+    }
 
-    root.style.setProperty(
-      "--site-background-image",
-      backgroundImage ? `url("${backgroundImage}")` : "none",
-    );
+    if (backgroundImage) {
+      root.style.setProperty("--site-background-image", `url("${backgroundImage}")`);
+    }
   }, [theme, lang, accentColor, graphicsSize, backgroundImage]);
 
   const setTheme = useCallback((t: Theme) => {

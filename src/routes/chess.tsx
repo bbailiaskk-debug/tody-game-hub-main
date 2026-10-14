@@ -5,8 +5,10 @@ import { useCallback, useMemo, useState } from "react";
 import { useSiteSettings } from "../components/site/theme";
 import { seoHead } from "../lib/seo";
 import {
+  COLOR_NAME,
   FILES,
   PIECE_GLYPH,
+  PIECE_NAME,
   PROMOTION_TYPES,
   RANKS,
   allLegalMoves,
@@ -57,7 +59,7 @@ function ChessBoard({
   onSquareClick,
 }: BoardProps) {
   return (
-    <div className="grid grid-cols-8 overflow-hidden rounded-2xl border border-border/50 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+    <div className="grid aspect-square grid-cols-8 grid-rows-8 overflow-hidden rounded-2xl border border-border/50 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
       {board.map((row, r) =>
         row.map((piece, c) => {
           const isLight = (r + c) % 2 === 0;
@@ -75,45 +77,78 @@ function ChessBoard({
           const showRank = c === 0;
 
           return (
-            <button
-              key={key}
-              type="button"
-              disabled={readonly}
-              onClick={() => onSquareClick(r, c)}
-              className={`relative flex aspect-square items-center justify-center ${
-                isLight ? "bg-[#c9d1c0]" : "bg-[#6f8268]"
-              } transition-colors`}
-              aria-label={`${FILES[c] ?? ""}${RANKS[r] ?? ""}`}
-            >
-              {isLast && <span className="absolute inset-0 bg-yellow-400/25" />}
-              {isSel && (
-                <span className="absolute inset-0 bg-brand/30 shadow-[inset_0_0_0_2px_var(--brand)]" />
-              )}
-              {isCheck && (
-                <span className="absolute inset-0 bg-red-500/40 shadow-[inset_0_0_0_2px_#ef4444]" />
-              )}
-              {isTarget && !isCapture && (
-                <span className="absolute size-[clamp(0.7rem,3vw,1.1rem)] rounded-full bg-brand/80 shadow-[0_0_10px_rgba(29,185,84,0.6)]" />
-              )}
-              {isTarget && isCapture && (
-                <span className="absolute inset-0 border-[3px] border-brand/80" />
-              )}
-              {piece && (
-                <span
-                  className={`relative z-10 font-mono font-bold leading-none ${
-                    piece.color === "w" ? "text-[#f8f3e5]" : "text-[#181d15]"
-                  } text-[clamp(1.6rem,6vw,2.9rem)] drop-shadow-[0_2px_2px_rgba(0,0,0,0.45)]`}
-                >
-                  {PIECE_GLYPH[piece.type]}
-                </span>
-              )}
+            /*
+             * The coordinates live outside the button, on a wrapper that owns
+             * their positioning.
+             *
+             * They are decoration of the board — they tell a sighted player
+             * where the rank runs — and the square's accessible name already
+             * carries them in words. Inside the button they were part of the
+             * control's visible text, and a control whose visible text is not
+             * contained in its accessible name is exactly what
+             * label-content-name-mismatch reports. Outside it, the button is
+             * left with the piece glyph alone, which is a symbol rather than
+             * text and is announced by the name instead.
+             */
+            <div key={key} className="relative">
+              <button
+                type="button"
+                disabled={readonly}
+                onClick={() => onSquareClick(r, c)}
+                className={`relative flex w-full h-full items-center justify-center ${
+                  isLight ? "bg-[#EBECD0]" : "bg-[#739552]"
+                } transition-colors`}
+                aria-label={
+                  piece
+                    ? `${FILES[c] ?? ""}${RANKS[r] ?? ""}, ${COLOR_NAME[piece.color]} ${PIECE_NAME[piece.type]}`
+                    : `${FILES[c] ?? ""}${RANKS[r] ?? ""}, empty`
+                }
+              >
+                {isLast && (
+                  <span aria-hidden="true" className="absolute inset-0 bg-yellow-400/25" />
+                )}
+                {isSel && (
+                  <span className="absolute inset-0 bg-brand/30 shadow-[inset_0_0_0_2px_var(--brand)]" />
+                )}
+                {isCheck && (
+                  <span className="absolute inset-0 bg-red-500/40 shadow-[inset_0_0_0_2px_#ef4444]" />
+                )}
+                {isTarget && !isCapture && (
+                  <span className="absolute size-[clamp(0.7rem,3vw,1.1rem)] rounded-full bg-brand/80 shadow-[0_0_10px_rgba(29,185,84,0.6)]" />
+                )}
+                {isTarget && isCapture && (
+                  <span className="absolute inset-0 border-[3px] border-brand/80" />
+                )}
+                {piece && (
+                  /* Decorative: the name above already says what the piece is. */
+                  <span
+                    aria-hidden="true"
+                    style={
+                      piece.color === "w"
+                        ? {
+                            color: "#FFFFFF",
+                            textShadow:
+                              "0 0 1px #4a4a4a, 0.5px 0.5px 0 #4a4a4a, -0.5px 0.5px 0 #4a4a4a, 0.5px -0.5px 0 #4a4a4a, -0.5px -0.5px 0 #4a4a4a, 0 1px 2px rgba(0,0,0,0.35)",
+                          }
+                        : { color: "#262421", textShadow: "0 1px 2px rgba(0,0,0,0.35)" }
+                    }
+                    className="relative z-10 leading-none text-[clamp(1.8rem,6.5vw,3.2rem)]"
+                  >
+                    {PIECE_GLYPH[piece.type]}
+                  </span>
+                )}
+              </button>
               {(showFile || showRank) && (
-                <span className="absolute bottom-0.5 flex w-full items-end justify-between px-1 font-mono text-[0.45rem] leading-none text-muted-foreground opacity-70">
-                  <span>{showRank ? RANKS[r] : ""}</span>
-                  <span>{showFile ? FILES[c] : ""}</span>
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute bottom-0.5 right-0.5 font-mono text-[0.5rem] leading-none font-bold opacity-80 ${
+                    isLight ? "text-[#739552]" : "text-[#EBECD0]"
+                  }`}
+                >
+                  {showFile ? FILES[c] : RANKS[r]}
                 </span>
               )}
-            </button>
+            </div>
           );
         }),
       )}
@@ -358,7 +393,7 @@ function LocalChessGame() {
           <span className="text-[#f8f3e5]">♔</span> — {isBg ? "Бели" : isZh ? "白棋" : "White"}
         </span>
         <span>
-          <span className="text-[#181d15]">♚</span> — {isBg ? "Черни" : isZh ? "黑棋" : "Black"}
+          <span className="text-foreground">♚</span> — {isBg ? "Черни" : isZh ? "黑棋" : "Black"}
         </span>
         <span>
           {isBg

@@ -279,11 +279,7 @@ export class ChessMatchDO extends DurableObject<ChessEnv> {
     const connId = (url.searchParams.get("cid") ?? "").trim();
     const token = url.searchParams.get("auth");
 
-    // The SSR service injects the authoritative chess secret (the same one it
-    // uses to mint WS auth tokens) as X-Chess-Secret, so mint and verify always
-    // match. Fall back to local bindings for direct-to-DO requests.
-    const injectedSecret = request.headers.get("x-chess-secret")?.trim();
-    const secret = injectedSecret || (await getChessSecret(this.env.AUTH_USERS_KV));
+    const secret = await getChessSecret(this.env.AUTH_USERS_KV);
     const valid = await verifyChessToken(secret, gameId, email, token);
     if (!valid || !email || !connId) {
       return json({ error: "unauthorized" }, 401);
@@ -709,11 +705,8 @@ export class TicTacToeMatchDO extends DurableObject<TttEnv> {
     const connId = (url.searchParams.get("cid") ?? "").trim();
     const token = url.searchParams.get("auth");
 
-    // The SSR service injects the authoritative chess secret (the same one it
-    // uses to mint WS auth tokens) as X-Chess-Secret, so mint and verify always
-    // match. Fall back to local bindings for direct-to-DO requests.
-    const injectedSecret = request.headers.get("x-chess-secret")?.trim();
-    const secret = injectedSecret || (await getChessSecret(this.env.AUTH_USERS_KV));
+    // The server and Durable Object read the same auth secret from AUTH_USERS_KV.
+    const secret = await getChessSecret(this.env.AUTH_USERS_KV);
     const valid = await verifyChessToken(secret, gameId, email, token);
     if (!valid || !email || !connId) {
       return json({ error: "unauthorized" }, 401);
@@ -1211,9 +1204,8 @@ export class AirHockeyDO extends DurableObject<AirHockeyEnv> {
     const preferredRole: AhPreferredRole | null =
       roleQuery === "p1" || roleQuery === "p2" ? roleQuery : null;
 
-    // Same shared chess secret used by the SSR mint/verify path (see server.ts).
-    const injectedSecret = request.headers.get("x-chess-secret")?.trim();
-    const secret = injectedSecret || (await getChessSecret(this.env.AUTH_USERS_KV));
+    // The server and Durable Object read the same auth secret from AUTH_USERS_KV.
+    const secret = await getChessSecret(this.env.AUTH_USERS_KV);
     const valid = await verifyChessToken(secret, gameId, email, token);
     if (!valid || !email || !connId) {
       return json({ error: "unauthorized" }, 401);

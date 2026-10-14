@@ -19,6 +19,12 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    define: {
+      // Stamped once per build so the sitemap's <lastmod> is identical on every
+      // request. A date that changes per request tells Google nothing, and it
+      // discards the field entirely.
+      __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+    },
     server: {
       host: true,
       allowedHosts: true,

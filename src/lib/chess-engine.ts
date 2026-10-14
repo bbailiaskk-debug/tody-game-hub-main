@@ -27,6 +27,28 @@ export const PIECE_GLYPH: Record<PieceType, string> = {
   p: "♟",
 };
 
+/**
+ * Spoken names for the glyphs.
+ *
+ * A board square is a button whose visible content is the piece symbol, and a
+ * screen reader announcing "a8, black pawn" needs the word, not "a8, ♟" — the
+ * glyph is read out as its own character name otherwise, which is neither the
+ * piece nor the square.
+ */
+export const PIECE_NAME: Record<PieceType, string> = {
+  k: "king",
+  q: "queen",
+  r: "rook",
+  b: "bishop",
+  n: "knight",
+  p: "pawn",
+};
+
+export const COLOR_NAME: Record<Color, string> = {
+  w: "white",
+  b: "black",
+};
+
 export const PROMOTION_TYPES: PieceType[] = ["q", "r", "b", "n"];
 
 export const opposite = (color: Color): Color => (color === "w" ? "b" : "w");

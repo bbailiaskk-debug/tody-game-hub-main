@@ -93,4 +93,6 @@ const html = `<!doctype html>
 `;
 
 await writeFile(outFile, html, "utf8");
-console.log(`Wrote ${outFile} (${(Buffer.byteLength(html) / 1024).toFixed(0)} kB, css ${(Buffer.byteLength(css) / 1024).toFixed(0)} kB).`);
+console.log(
+  `Wrote ${outFile} (${(Buffer.byteLength(html) / 1024).toFixed(0)} kB, css ${(Buffer.byteLength(css) / 1024).toFixed(0)} kB).`,
+);

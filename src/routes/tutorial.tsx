@@ -98,7 +98,14 @@ function TutorialPage() {
   const menuMock = ["НАЧАЛО", "ИГРИ", "ПРАВИЛА", "МУЗИКА", "ИНФОРМАЦИЯ"];
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+    /*
+     * `<main>`, not a bare div, so the page has a landmark. Without one the steps
+     * below sat outside every landmark — invisible to anyone navigating by region
+     * — and the page's own `<header>` counted as a second `banner` alongside the
+     * site header, because a `<header>` only stops being one once it is scoped
+     * inside `main`. Every other route on the site already does this.
+     */
+    <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <header className="mb-8 text-center">
         <span className="label-mono mb-3 inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-4 py-1.5 text-[0.6rem] tracking-[0.25em] text-brand">
           <Sparkles className="size-3" />
@@ -188,6 +195,6 @@ function TutorialPage() {
               : 'Tip: the "Rules" link is also in the footer at the bottom of every page.'}
         </p>
       </div>
-    </div>
+    </main>
   );
 }

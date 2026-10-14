@@ -34,6 +34,8 @@ const {
   nextBounds,
   resolveEntry,
   shareCards,
+  opensInBrowser,
+  isFullScreenKey,
 } = require("./shell.cjs");
 
 /** One window, one chat, one microphone light. */
@@ -296,7 +298,7 @@ const buildMenu = () => {
         { role: "zoomIn", label: "Zoom in" },
         { role: "zoomOut", label: "Zoom out" },
         { type: "separator" },
-        { role: "togglefullscreen", label: "Full screen" },
+        { role: "togglefullscreen", label: "Full screen", registerAccelerator: false },
         // The developer tools are a development tool, not a shipped feature.
         ...(app.isPackaged
           ? []
@@ -322,7 +324,11 @@ const createWindow = () => {
     height: bounds.height,
     x: bounds.x,
     y: bounds.y,
-    minWidth: 900,
+    // `lg` in the site's own stylesheet — 1024 — and not a round number below it.
+    // The chat lays the servers down the left edge from that width, and below it
+    // the servers move into the menu behind the hamburger, so a narrower window
+    // puts the servers two taps away on a screen that had room for them.
+    minWidth: 1024,
     minHeight: 600,
     // The site's own background, so there is no white flash before it paints.
     backgroundColor: "#0d120d",
@@ -345,6 +351,21 @@ const createWindow = () => {
   });
 
   win.once("ready-to-show", () => win?.show());
+
+  /**
+   * F11, on the way into the page.
+   *
+   * The menu item carries the same command with its accelerator switched off, so
+   * the key is bound exactly once. Bound here rather than as an accelerator because
+   * an accelerator belongs to the menu, and a window that is not showing its menu
+   * bar — maximised, or in the middle of a chat — never receives one.
+   */
+  win.webContents.on("before-input-event", (event, input) => {
+    if (!isFullScreenKey(input)) return;
+    event.preventDefault();
+    if (!win || win.isDestroyed()) return;
+    win.setFullScreen(!win.isFullScreen());
+  });
   win.on("close", () => {
     if (win && !win.isDestroyed()) writeBounds(win.getBounds());
   });
@@ -352,9 +373,16 @@ const createWindow = () => {
     win = null;
   });
 
-  // A link to another site is the user's business, opened where they expect it.
+  /**
+   * A link that asked for a window of its own goes to the user's browser.
+   *
+   * Every one of them, the app's own pages included: the chat is the one window
+   * there is, and the sign-in card on its lock screen is a form rather than
+   * somewhere for the chat to go. The browser is also where a person can sign in
+   * and come back to the lock screen they left standing.
+   */
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isExternal(url, appOrigin())) void shell.openExternal(url);
+    if (opensInBrowser(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
   // The same for anything that tries to walk the window somewhere else. Both of

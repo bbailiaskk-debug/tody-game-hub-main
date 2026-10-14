@@ -85,7 +85,13 @@ function GamesPage() {
                       <Icon className="size-4 text-muted-foreground transition-colors group-hover:text-brand" />
                     )}
                   </div>
-                  <h3 className="mt-10 text-2xl">{game.title[lang]}</h3>
+                  {/*
+                  h2, not h3: the page's only h1 is the "PLAY NOW" heading above,
+                  and each card title is a section directly beneath it. Going
+                  straight to h3 skipped a level, which axe reports as a
+                  heading-order violation.
+                */}
+                  <h2 className="mt-10 text-2xl">{game.title[lang]}</h2>
                   <p className="mt-2 text-sm text-muted-foreground">{game.note[lang]}</p>
                   <span className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#1DB954]/30 bg-[#161B16] px-4 py-2 font-mono text-[0.65rem] font-bold tracking-[0.15em] text-[var(--brand-bright)] uppercase transition-all duration-200 group-hover:bg-[#1DB954]/10 group-hover:shadow-[0_0_12px_rgba(29,185,84,0.2)]">
                     {gameLocked

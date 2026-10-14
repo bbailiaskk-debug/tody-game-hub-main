@@ -173,7 +173,6 @@ const run = async () => {
       trace.push("far side offered, sharer applying it");
     };
 
-
     const deadline = Date.now() + 15_000;
     while (peer.connectionState !== "connected" && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 200));

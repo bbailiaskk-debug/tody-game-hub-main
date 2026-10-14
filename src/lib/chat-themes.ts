@@ -262,6 +262,10 @@ export const chatThemeVariables = (theme: ChatTheme | null) =>
     ["--brand-dim", theme?.dim ?? ""],
     ["--primary", theme?.brand ?? ""],
     ["--ring", theme?.brand ?? ""],
+    // The ink for a label on a filled accent button. Declared here rather than
+    // written as `text-white` at each call site, because "white on the accent" is
+    // only readable for some of the themes.
+    ["--on-brand", theme ? chatThemeLabel(theme.brand) : ""],
   ] as const;
 
 /** Relative luminance. Kept here because the tests measure with it and nowhere else does. */
@@ -286,6 +290,30 @@ export const themeLuminance = (hex: string) => {
  * the test that measures this is what would say so.
  */
 export const CHAT_THEME_INK = "#0b0d10";
+
+const CHAT_THEME_PAPER = "#ffffff";
+
+/** WCAG relative-contrast ratio between two hex colours. */
+const contrastRatio = (a: string, b: string) => {
+  const la = themeLuminance(a);
+  const lb = themeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+
+/**
+ * The ink for a label sitting on a filled accent button.
+ *
+ * Same decision as CHAT_THEME_INK, but made per theme rather than assumed for
+ * all of them. A filled button is much less forgiving than a tick on a swatch:
+ * the buttons were drawn `text-white` on `var(--brand)`, and every one of the 23
+ * themes that sits under 4.5:1 with white ink fails WCAG AA — `abyss` at
+ * #8fa0f9 measures 2.45:1, barely half of what is asked.
+ *
+ * Measured rather than hardcoded so a theme added later cannot reintroduce it,
+ * and so the test can assert the property instead of one sample colour.
+ */
+export const chatThemeLabel = (brand: string): string =>
+  contrastRatio(CHAT_THEME_INK, brand) >= 4.5 ? CHAT_THEME_INK : CHAT_THEME_PAPER;
 
 const CHAT_THEME_KEY = "tk-chat-theme";
 

@@ -114,7 +114,9 @@ const run = async () => {
   } else if (report.devices === 0) {
     console.log("\nNo audio input is visible to the browser. Check Windows sound settings.");
   } else if (report.peak < 0.005) {
-    console.log("\nThe microphone opened but is silent. Speak while it runs, or check Windows input volume.");
+    console.log(
+      "\nThe microphone opened but is silent. Speak while it runs, or check Windows input volume.",
+    );
   } else {
     console.log(`\nThe microphone works: peak ${(report.peak * 100).toFixed(0)}% of full scale.`);
     console.log("So capture is fine here, and the problem is in the call, not the hardware.");

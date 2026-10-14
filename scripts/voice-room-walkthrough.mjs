@@ -52,8 +52,13 @@ const snapshot = (page) =>
       videoElements: count("video"),
       liveBadges: text("span").filter((value) => /НА ЖИВО|LIVE/.test(value)),
       shareButtons: [...document.querySelectorAll("button")]
-        .filter((node) => /Сподели екран|Спри споделянето/.test(node.getAttribute("aria-label") ?? ""))
-        .map((node) => ({ label: node.getAttribute("aria-label"), pressed: node.getAttribute("aria-pressed") })),
+        .filter((node) =>
+          /Сподели екран|Спри споделянето/.test(node.getAttribute("aria-label") ?? ""),
+        )
+        .map((node) => ({
+          label: node.getAttribute("aria-label"),
+          pressed: node.getAttribute("aria-pressed"),
+        })),
     };
   });
 

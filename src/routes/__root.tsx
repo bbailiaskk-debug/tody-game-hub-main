@@ -7,64 +7,31 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
-
+import { useEffect, useState, type ReactNode } from "react";
 import appCssUrl from "../styles.css?url";
 import criticalCss from "../critical.css?inline";
+import { SITE_URL } from "../lib/seo";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SiteHeader } from "../components/site/SiteHeader";
-import { SiteSettingsProvider, useSiteSettings } from "../components/site/theme";
-import { SplashScreen } from "../components/site/SplashScreen";
+import { SiteSidebar } from "../components/site/SiteSidebar";
+import { SiteSettingsProvider } from "../components/site/theme";
 import { SiteTutorial } from "../components/site/SiteTutorial";
 
-/**
- * The page for a URL that is not here.
- *
- * Localised like everything else, because this is the one page somebody arrives at
- * from outside — a link in a chat, a bookmark, a search result — and an English
- * sentence on a Bulgarian site is the first thing they read.
- *
- * The heading is an `h1` rather than the second and third levels it used to be, for
- * the same reason every other page has one: a page whose main heading is an `h2`
- * has no heading as far as a reader — human or crawler — is concerned, and this is
- * exactly the page a crawler reaches when it follows a stale link.
- */
 function NotFoundComponent() {
-  const { lang } = useSiteSettings();
-  const copy =
-    lang === "bg"
-      ? {
-          code: "404",
-          title: "Страницата не е намерена",
-          body: "Страницата, която търсиш, не съществува или е преместена.",
-          home: "Към началото",
-        }
-      : lang === "zh"
-        ? {
-            code: "404",
-            title: "页面未找到",
-            body: "你找的页面不存在或已被移动。",
-            home: "回到首页",
-          }
-        : {
-            code: "404",
-            title: "Page not found",
-            body: "The page you're looking for doesn't exist or has been moved.",
-            home: "Go home",
-          };
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <p className="text-7xl font-bold text-foreground">{copy.code}</p>
-        <h1 className="mt-4 text-xl font-semibold text-foreground">{copy.title}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{copy.body}</p>
+        <p className="text-7xl font-bold text-foreground">404</p>
+        <h1 className="mt-4 text-xl font-semibold text-foreground">Страницата не е намерена</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Страницата, която търсиш, не съществува или е преместена.
+        </p>
         <div className="mt-6">
           <Link
             to="/"
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            {copy.home}
+            Към началото
           </Link>
         </div>
       </div>
@@ -75,6 +42,8 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   if (import.meta.env.DEV) console.error(error);
   const router = useRouter();
+  const [recoveryFailed, setRecoveryFailed] = useState(false);
+
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
@@ -82,29 +51,54 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
-        </h2>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          Страницата не се зареди
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          Възникна неочаквана грешка. Опитай отново или презареди страницата.
         </p>
+        {recoveryFailed ? (
+          <p role="alert" className="mt-3 text-sm text-destructive">
+            Повторният опит не успя. Презареди страницата, за да опиташ отново.
+          </p>
+        ) : null}
+        {import.meta.env.DEV && error?.message ? (
+          <details className="mt-4 text-left text-xs text-muted-foreground">
+            <summary className="cursor-pointer">Технически подробности</summary>
+            <pre className="mt-2 overflow-auto whitespace-pre-wrap">{error.message}</pre>
+          </details>
+        ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <Link
-            to="/"
-            onClick={(event) => {
-              event.preventDefault();
-              router.invalidate();
-              reset();
+          <button
+            type="button"
+            onClick={() => {
+              setRecoveryFailed(false);
+              void router
+                .invalidate()
+                .then(() => {
+                  reset();
+                })
+                .catch((retryError: unknown) => {
+                  console.error("Root route recovery failed", retryError);
+                  setRecoveryFailed(true);
+                });
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Try again
-          </Link>
+            Опитай отново
+          </button>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            Презареди страницата
+          </button>
           <Link
             to="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Go home
+            Към началото
           </Link>
         </div>
       </div>
@@ -127,8 +121,6 @@ export const Route = createRootRoute({
       { property: "og:site_name", content: "Todor Khristov Gaming" },
       { property: "og:locale", content: "bg_BG" },
       { name: "theme-color", content: "#1DB954" },
-      // iOS ignores the manifest when a page is added to the home screen, so it
-      // is told here as well: full screen, with the site's own bar colour.
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
@@ -142,6 +134,7 @@ export const Route = createRootRoute({
       { rel: "icon", href: "/android-chrome-192x192.png", type: "image/png", sizes: "192x192" },
       { rel: "icon", href: "/android-chrome-512x512.png", type: "image/png", sizes: "512x512" },
       { rel: "manifest", href: "/site.webmanifest" },
+      { rel: "sitemap", type: "application/xml", href: `${SITE_URL}/sitemap.xml` },
     ],
   }),
   shellComponent: RootShell,
@@ -150,61 +143,133 @@ export const Route = createRootRoute({
   errorComponent: ErrorComponent,
 });
 
-/**
- * A route that owns the whole window, with no site furniture around it.
- *
- * The header already respected this. The footer did not, and it is not a small
- * thing on a full height page: the chat fills the viewport exactly, so a footer
- * under it pushed the document past the screen and left a scrollbar with nowhere
- * to scroll. That is what F11 exposed — a fullscreen window has no browser chrome
- * left to hide the overflow behind.
- *
- * Checked here in the shell rather than in the document, because the footer lives
- * in the shell and the header in the component: they were written as two separate
- * decisions about the same idea, and only one of them knew.
- */
 const FULL_BLEED_ROUTES = ["/messages"];
-
 const isFullBleed = (pathname: string) =>
   FULL_BLEED_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
-/**
- * Whether the hint about where the rules are belongs on this page.
- *
- * Not on the chat. The hint is for somebody reading the site and wondering where the
- * rules went; the chat is a window somebody opens to talk to somebody, and it is
- * what the program opens on, so a panel across its corner is a panel in the way of
- * the thing they opened it for. Everywhere else it stays, because there it is
- * answering a question somebody actually has.
+/*
+ * Routes that supply their own full-screen layout and must not be wrapped in
+ * the desktop rail. /messages already opts out via FULL_BLEED_ROUTES; /ai is
+ * a fixed-inset chat shell that covers the viewport on its own, so putting a
+ * rail beside it would only push the conversation off-centre.
  */
+const NO_SIDEBAR_ROUTES = ["/messages", "/ai"];
+const showsSidebar = (pathname: string) =>
+  !NO_SIDEBAR_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+
 export const showsRulesHint = (pathname: string) => !isFullBleed(pathname);
 
 function RootShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const fullBleed = isFullBleed(pathname);
+  const sidebar = showsSidebar(pathname);
 
   return (
-    <html lang="bg" className="dark" suppressHydrationWarning>
+    <html
+      lang="bg"
+      className="dark"
+      style={{ colorScheme: "dark", backgroundColor: "#161B16" }}
+      suppressHydrationWarning
+    >
       <head>
+        {/*
+          The very first bytes of <head>. Literal values, no custom properties
+          and no dependency on a stylesheet, so the canvas is the site's colour
+          from the moment the parser reaches this line — before the critical
+          sheet below, before any network, and before any of it can fail.
+          Without it the browser paints its default white while the rest of the
+          head is still arriving, which is the white frame FCP is measured on.
+
+          #161B16 is the site's own --background, kept in step with styles.css by
+          hand. It is a literal rather than a custom property on purpose: this
+          rule has to apply before the rest of the head, including the critical
+          sheet that defines the tokens. Measured from a rendered pixel, so the
+          first frame is the same colour as the last instead of shifting to it.
+        */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: "html{background-color:#161B16;color-scheme:dark}",
+          }}
+        />
         <HeadContent />
         <style dangerouslySetInnerHTML={{ __html: criticalCss }} />
+        {/*
+          Loaded without blocking the first paint: fetched at high priority by
+          the preload, held off-screen by media="print", switched to "all" once
+          it has arrived. The inline sheet above carries the first paint.
+
+          This is safe because critical.css is generated, not hand-written —
+          scripts/extract-critical-css.mjs renders the built page and keeps every
+          rule matching the first viewport, and scripts/check-critical-css.mjs
+          fails the build if that render stops matching the full stylesheet.
+          Maintaining the mirror by hand is what made this arrangement show a
+          broken layout before: 35 classes above the fold were missing and the
+          header and hero buttons rendered collapsed.
+
+          The script below may not simply wait for `load`. `load` does not fire
+          when the stylesheet fails, and media="print" is permanent until
+          something flips it, so a single failed request pinned the whole page
+          to critical.css forever: unstyled links, the browser's default font
+          stack, the hero heading at 102px instead of 61px, and no recovery
+          short of a manual reload. A cached HTML document outliving the
+          hashed stylesheet it names is enough to trigger it, and so is a 504
+          from the network.
+          
+          So it treats "did the rules actually arrive" as the only success
+          signal, and it is checked on load, on error, and on a timer — because
+          a cached response can report success while carrying nothing. A miss
+          is re-requested under a fresh URL, which is the one cache layer this
+          cannot answer: HTTP cache, Cache Storage and the service worker all
+          key on the exact string, and a query that was never stored misses all
+          three at once.
+        */}
         <link rel="preload" href={appCssUrl} as="style" fetchPriority="high" />
-        <link rel="stylesheet" href={appCssUrl} media="all" id="app-css" suppressHydrationWarning />
-        <noscript>
-          <link rel="stylesheet" href={appCssUrl} media="all" />
-        </noscript>
+        <link
+          rel="stylesheet"
+          href={appCssUrl}
+          media="print"
+          id="app-css"
+          fetchPriority="high"
+          suppressHydrationWarning
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){
-  var l=document.getElementById("app-css");if(!l)return;
-  function apply(){document.documentElement.setAttribute("data-css-on","");}
-  try{if(l.sheet)apply();}catch(e){}
-  l.onload=apply;
-  var guard=setInterval(function(){try{if(l.sheet)apply();}catch(e){apply();}},200);
-  window.addEventListener("load",function(){clearInterval(guard);apply();},{once:true});
+var l=document.getElementById("app-css");if(!l)return;
+var settled=false;
+function activate(){if(settled)return;settled=true;l.media="all";}
+if(l.sheet){activate();return;}
+l.addEventListener("load",activate,{once:true});
+
+function recover(){
+  if(settled)return;
+  // A slow stylesheet has a sheet by now even though load has not fired yet.
+  // Anything without rules is a miss, whatever the response said.
+  if(l.sheet&&l.sheet.cssRules&&l.sheet.cssRules.length){activate();return;}
+  settled=true;
+  var href=l.getAttribute("href");
+  // Nothing left to wait for: this link either failed outright or came back
+  // carrying no rules, and leaving it in the document means getElementById
+  // keeps handing out a stylesheet that can never style anything.
+  l.remove();
+  if(!href)return;
+  var fresh=document.createElement("link");
+  fresh.rel="stylesheet";
+  // media="all" rather than the print/activate dance: the page has already
+  // painted once, so holding the second one back would only buy a flash of
+  // critical-only layout between the two.
+  fresh.media="all";
+  fresh.href=href+(href.indexOf("?")<0?"?":"&")+"tkg-css-retry="+Date.now();
+  document.head.appendChild(fresh);
+}
+l.addEventListener("error",recover,{once:true});
+setTimeout(recover,4000);
 })();`,
           }}
         />
+        <noscript>
+          <link rel="stylesheet" href={appCssUrl} />
+        </noscript>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -214,15 +279,15 @@ function RootShell({ children }: { children: ReactNode }) {
                 {
                   "@type": "WebSite",
                   name: "Todor Khristov Gaming",
-                  url: "https://tody-game-hub.bbailiaskk.workers.dev/",
+                  url: `${SITE_URL}/`,
                   description: "Яки игри и забавление с Todor Khristov Gaming",
                   inLanguage: "bg",
                 },
                 {
                   "@type": "Organization",
                   name: "Todor Khristov Gaming",
-                  url: "https://tody-game-hub.bbailiaskk.workers.dev/",
-                  logo: "https://tody-game-hub.bbailiaskk.workers.dev/images/og-image.jpg",
+                  url: `${SITE_URL}/`,
+                  logo: `${SITE_URL}/images/og-image.jpg`,
                   sameAs: [
                     "https://www.youtube.com/channel/UCBZMHdKCLVYkEPElCScTiFQ",
                     "https://www.tiktok.com/@todorkhristovgmaing",
@@ -236,52 +301,90 @@ function RootShell({ children }: { children: ReactNode }) {
         />
       </head>
       <body className="bg-background text-foreground min-h-screen antialiased selection:bg-primary selection:text-primary-foreground">
-        {children}
-        {fullBleed ? null : (
-          <footer className="border-t border-border/60 py-10">
-            <div className="mx-auto flex max-w-[1000px] flex-wrap items-center justify-between gap-3 px-6">
-              <span className="label-mono text-[0.6rem]">TODOR KHRISTOV GAMING</span>
-              <nav className="flex items-center gap-4" aria-label="Footer navigation">
-                <Link to="/" className="label-mono text-[0.6rem] hover:text-foreground">
-                  Начало
-                </Link>
-                <Link to="/games" className="label-mono text-[0.6rem] hover:text-foreground">
-                  Игри
-                </Link>
-                <Link to="/rules" className="label-mono text-[0.6rem] hover:text-foreground">
-                  Правила
-                </Link>
-                <Link to="/tutorial" className="label-mono text-[0.6rem] hover:text-foreground">
-                  Туториал
-                </Link>
-                <Link to="/music" className="label-mono text-[0.6rem] hover:text-foreground">
-                  Музика
-                </Link>
-                <Link to="/messages" className="label-mono text-[0.6rem] hover:text-foreground">
-                  Съобщения
-                </Link>
-                <Link to="/info" className="label-mono text-[0.6rem] hover:text-foreground">
-                  Информация
-                </Link>
-                <span className="label-mono text-[0.6rem]">© {new Date().getFullYear()}</span>
-              </nav>
-            </div>
-          </footer>
-        )}
+        {/*
+          The rail is fixed and the column beside it is inset by the same
+          variable, rather than a two-column grid: the header stays full-bleed
+          across the content column and the pages below keep their own
+          `mx-auto` centring, which a grid cell would have fought with.
+          Below lg the inset is zero and the rail is display:none, so mobile is
+          untouched.
+        */}
+        <div className={sidebar ? "lg:pl-[var(--sidebar-w)]" : undefined}>
+          {children}
+          {fullBleed ? null : (
+            <footer className="border-t border-border/60 py-10">
+              <div className="mx-auto flex max-w-[1000px] flex-wrap items-center justify-between gap-3 px-6">
+                <span className="label-mono text-[0.6rem]">TODOR KHRISTOV GAMING</span>
+                <nav className="flex items-center gap-4" aria-label="Footer navigation">
+                  <Link to="/" className="label-mono text-[0.6rem] hover:text-foreground">
+                    Начало
+                  </Link>
+                  <Link to="/games" className="label-mono text-[0.6rem] hover:text-foreground">
+                    Игри
+                  </Link>
+                  <Link to="/rules" className="label-mono text-[0.6rem] hover:text-foreground">
+                    Правила
+                  </Link>
+                  <Link to="/tutorial" className="label-mono text-[0.6rem] hover:text-foreground">
+                    Туториал
+                  </Link>
+                  <Link to="/music" className="label-mono text-[0.6rem] hover:text-foreground">
+                    Музика
+                  </Link>
+                  <Link to="/messages" className="label-mono text-[0.6rem] hover:text-foreground">
+                    Съобщения
+                  </Link>
+                  <Link to="/info" className="label-mono text-[0.6rem] hover:text-foreground">
+                    Информация
+                  </Link>
+                  <span className="label-mono text-[0.6rem]">© {new Date().getFullYear()}</span>
+                </nav>
+              </div>
+            </footer>
+          )}
+        </div>
         <Scripts />
         <script
           dangerouslySetInnerHTML={{
             __html: `if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function () {
-    navigator.serviceWorker
-      .register("/sw.js")
-      .then(function (registration) {
-        console.log("ServiceWorker registered:", registration.scope);
-      })
-      .catch(function (error) {
-        console.warn("ServiceWorker registration failed:", error);
-      });
-  });
+window.addEventListener("load", function () {
+            var hadController = Boolean(navigator.serviceWorker.controller);
+            var refreshing = false;
+            navigator.serviceWorker.addEventListener("controllerchange", function () {
+            if (!hadController || refreshing) return;
+            refreshing = true;
+            window.location.reload();
+            });
+            navigator.serviceWorker
+            .register("/sw.js", { updateViaCache: "none" })
+            .then(function (registration) {
+            console.log("ServiceWorker registered:", registration.scope);
+            function activateWaitingWorker() {
+            if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
+            activateWaitingWorker();
+            registration.addEventListener("updatefound", function () {
+            var installing = registration.installing;
+            if (!installing) return;
+            installing.addEventListener("statechange", function () {
+            if (installing.state === "installed") activateWaitingWorker();
+            });
+            });
+            function updateWorker() {
+            registration.update().catch(function (error) {
+            console.warn("ServiceWorker update check failed:", error);
+});
+}
+if (navigator.onLine) updateWorker();
+window.addEventListener("online", updateWorker);
+document.addEventListener("visibilitychange", function () {
+if (document.visibilityState === "visible" && navigator.onLine) updateWorker();
+});
+})
+.catch(function (error) {
+console.warn("ServiceWorker registration failed:", error);
+});
+});
 }`,
           }}
         />
@@ -290,36 +393,20 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Routes that own the whole window.
- *
- * The header is 68px, and on a chat that is a strip of the screen taken from the
- * conversation for a row of links the person is not using while they are talking
- * to somebody. On these routes it is not rendered at all, so what is left is the
- * chat, edge to edge, and there is no height for it to be short of.
- *
- * `/` keeps it: it is the way back, and a page that is the way back does not hide
- * the way back.
- *
- * The footer is held back by the same list, but only on these routes. Everywhere
- * else the pages scroll, and a footer at the bottom of a long page is the one
- * place its links sit at a size anybody reads.
- */
 function RootComponent() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const fullBleed = isFullBleed(pathname);
 
   return (
     <SiteSettingsProvider>
-      <SplashScreen />
+      {/*
+        Rendered here rather than from RootShell: the rail reads language,
+        theme and the accent colour through useSiteSettings, and the provider
+        lives inside this component — the shell's <body> is outside it.
+      */}
+      {showsSidebar(pathname) ? <SiteSidebar /> : null}
       {fullBleed ? null : <SiteHeader />}
-      {/**
-       * The hint, everywhere but the chat. `showsRulesHint` is the whole of that
-       * decision, and it is a function rather than a condition in here so the test
-       * can pin it without a router around it.
-       */}
       {showsRulesHint(pathname) ? <SiteTutorial /> : null}
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </SiteSettingsProvider>
   );

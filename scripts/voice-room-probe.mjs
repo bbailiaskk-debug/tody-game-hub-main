@@ -25,8 +25,8 @@ const snapshot = (page) =>
   page.evaluate(() => {
     const count = (selector) => document.querySelectorAll(selector).length;
     const buttonByName = (name) =>
-      [...document.querySelectorAll("button")].find((button) =>
-        button.getAttribute("aria-label") === name,
+      [...document.querySelectorAll("button")].find(
+        (button) => button.getAttribute("aria-label") === name,
       ) ?? null;
     return {
       panes: {
@@ -47,7 +47,9 @@ const snapshot = (page) =>
         /НА ЖИВО|LIVE/.test(node.textContent ?? ""),
       ).length,
       screenShareButton: Boolean(buttonByName("Сподели екран") || buttonByName("Спри споделянето")),
-      microphoneButtons: Boolean(buttonByName("Заглуши микрофона") || buttonByName("Включи микрофона")),
+      microphoneButtons: Boolean(
+        buttonByName("Заглуши микрофона") || buttonByName("Включи микрофона"),
+      ),
       callOverlayPresent: Boolean(document.querySelector(".discord-shell > section.absolute")),
       heading: document.querySelector("h2")?.textContent?.trim() ?? "",
     };
@@ -97,14 +99,14 @@ const run = async () => {
   } else {
     // No marker: fall back to whatever looks like a voice channel in the column.
     const fallback = await page.evaluate(() => {
-      const heading = [...document.querySelectorAll("p, span")].find(
-        (node) => /^(Гласови канали|Voice channels|语音频道)$/.test(node.textContent?.trim() ?? ""),
+      const heading = [...document.querySelectorAll("p, span")].find((node) =>
+        /^(Гласови канали|Voice channels|语音频道)$/.test(node.textContent?.trim() ?? ""),
       );
       if (!heading) return null;
       let node = heading.parentElement;
       for (let i = 0; i < 12 && node; i += 1) {
-        const button = [...node.querySelectorAll("button")].find((candidate) =>
-          (candidate.textContent ?? "").trim().length > 0,
+        const button = [...node.querySelectorAll("button")].find(
+          (candidate) => (candidate.textContent ?? "").trim().length > 0,
         );
         if (button) return button.textContent?.trim() ?? "";
         node = node.parentElement;

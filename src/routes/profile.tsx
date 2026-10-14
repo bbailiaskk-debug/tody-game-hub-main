@@ -97,6 +97,7 @@ function Profile() {
       let nextGender = hasLocalGender ? (localGender ?? "") : (activeUser?.gender ?? "");
       let nextName = storageGet("userName") ?? activeUser?.name ?? "";
       let nextAvatar = storageGet("userAvatar") ?? null;
+      let avatarChanged = false;
 
       if (profileEmail) {
         try {
@@ -113,7 +114,10 @@ function Profile() {
             if (!hasLocalBirthday && serverBirthday) nextBirthday = serverBirthday;
             if (!hasLocalGender && serverGender) nextGender = serverGender;
             nextName = result.data.name || nextName;
-            if (result.data.avatar) nextAvatar = result.data.avatar;
+            if (result.data.avatar && result.data.avatar !== nextAvatar) {
+              nextAvatar = result.data.avatar;
+              avatarChanged = true;
+            }
             writePersistedUserProfile({
               name: nextName,
               email: result.data.email || nextEmail,
@@ -133,6 +137,7 @@ function Profile() {
       setBirthday(nextBirthday);
       setGender(nextGender);
       setAvatar(nextAvatar);
+      if (avatarChanged) window.dispatchEvent(new Event("userAvatarChanged"));
     };
 
     loadProfile();
@@ -153,7 +158,6 @@ function Profile() {
         maxBytes: 250_000,
         quality: 0.7,
       });
-
       setAvatar(compressed);
       storageSet("userAvatar", compressed);
       writePersistedUserProfile({ avatar: compressed });

@@ -172,6 +172,7 @@ export function SiteHeader() {
     window.addEventListener("storage", handleUserChange);
 
     window.addEventListener("userStateChanged", handleUserChange);
+    window.addEventListener("userAvatarChanged", handleUserChange);
     document.addEventListener("mousedown", handlePointerDown);
 
     return () => {
@@ -180,6 +181,7 @@ export function SiteHeader() {
       window.removeEventListener("storage", handleUserChange);
 
       window.removeEventListener("userStateChanged", handleUserChange);
+      window.removeEventListener("userAvatarChanged", handleUserChange);
       document.removeEventListener("mousedown", handlePointerDown);
     };
   }, [checkUser]);
@@ -234,7 +236,7 @@ export function SiteHeader() {
   return (
     <header className="site-header sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl max-sm:bg-background max-sm:backdrop-blur-none">
       <div className="mx-auto flex h-[68px] w-full max-w-none items-center justify-between gap-3 px-4 sm:gap-4 sm:px-5">
-        <Link to="/" className="site-header-brand flex items-center gap-2 flex-shrink-0">
+        <Link to="/" className="site-header-brand flex items-center gap-2 flex-shrink-0 lg:hidden">
           <span className="site-header-logo relative grid size-12 place-items-center rounded-full bg-surface-2 font-display text-base font-bold">
             TK
             <span className="absolute right-0 top-0 size-2 rounded-full bg-brand" />
@@ -327,7 +329,7 @@ export function SiteHeader() {
             </Link>
           )}
 
-          <div ref={menuRef} className="relative">
+          <div ref={menuRef} className="relative lg:hidden">
             <button
               type="button"
               aria-label={menuOpen ? "Затвори менюто" : "Отвори менюто"}

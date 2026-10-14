@@ -7,8 +7,26 @@ type KvLike = {
 
 export const CHESS_SECRET_KEY = "chess-auth-secret";
 const TOKEN_TTL_MS = 10 * 60 * 1000;
+const FALLBACK_CHESS_SECRET = "tody-game-hub-chess-dev-secret";
+let cachedChessSecret: string | null = null;
 
-export const normalizeEmail = (email: string) => email.trim().toLowerCase();
+export const normalizeEmail = (email: string | null | undefined) =>
+  typeof email === "string" ? email.trim().toLowerCase() : "";
+
+function resolveFallbackSecret(): string {
+  const globalStore = globalThis as typeof globalThis & {
+    __env?: { CHESS_AUTH_SECRET?: string };
+    CF_ENV?: { CHESS_AUTH_SECRET?: string };
+  };
+
+  const envSecret =
+    (typeof process !== "undefined" && process.env?.["CHESS_AUTH_SECRET"]) ||
+    globalStore.__env?.CHESS_AUTH_SECRET ||
+    globalStore.CF_ENV?.CHESS_AUTH_SECRET ||
+    FALLBACK_CHESS_SECRET;
+
+  return envSecret.trim() || FALLBACK_CHESS_SECRET;
+}
 
 function getKv(): KvLike | null {
   const workerEnv = env as unknown as { AUTH_USERS_KV?: KvLike };
@@ -22,19 +40,29 @@ function getKv(): KvLike | null {
 }
 
 export async function getChessSecret(storage?: KvLike | null): Promise<string> {
+  if (cachedChessSecret) return cachedChessSecret;
+
   const kv = storage ?? getKv();
+  const fallbackSecret = resolveFallbackSecret();
+
   if (kv) {
     try {
       const existing = await kv.get(CHESS_SECRET_KEY);
-      if (existing) return existing;
-      const created = `${crypto.randomUUID()}${crypto.randomUUID()}`;
-      await kv.put(CHESS_SECRET_KEY, created);
-      return created;
+      if (existing && existing.trim()) {
+        cachedChessSecret = existing.trim();
+        return cachedChessSecret;
+      }
+
+      cachedChessSecret = fallbackSecret;
+      await kv.put(CHESS_SECRET_KEY, cachedChessSecret);
+      return cachedChessSecret;
     } catch (error) {
       console.warn("Failed to read chess secret from KV.", error);
     }
   }
-  return "tody-game-hub-chess-dev-secret";
+
+  cachedChessSecret = fallbackSecret;
+  return cachedChessSecret;
 }
 
 async function hmacHex(secret: string, payload: string): Promise<string> {
@@ -53,28 +81,40 @@ async function hmacHex(secret: string, payload: string): Promise<string> {
 }
 
 export async function mintChessToken(
-  secret: string,
-  gameId: string,
-  email: string,
+  secret: string | null | undefined,
+  gameId: string | null | undefined,
+  email: string | null | undefined,
 ): Promise<string> {
+  const safeSecret = typeof secret === "string" ? secret.trim() : "";
+  const safeGameId = typeof gameId === "string" ? gameId.trim() : "";
+  const safeEmail = normalizeEmail(email);
+
+  if (!safeSecret || !safeGameId || !safeEmail) {
+    throw new Error("invalid-chess-token-input");
+  }
+
   const expiresAt = Date.now() + TOKEN_TTL_MS;
-  const signature = await hmacHex(secret, `${gameId}|${email}|${expiresAt}`);
+  const signature = await hmacHex(safeSecret, `${safeGameId}|${safeEmail}|${expiresAt}`);
   return `${expiresAt}.${signature}`;
 }
 
 export async function verifyChessToken(
-  secret: string,
-  gameId: string,
-  email: string,
-  token: string | null,
+  secret: string | null | undefined,
+  gameId: string | null | undefined,
+  email: string | null | undefined,
+  token: string | null | undefined,
 ): Promise<boolean> {
-  if (!token) return false;
+  const safeSecret = typeof secret === "string" ? secret.trim() : "";
+  const safeGameId = typeof gameId === "string" ? gameId.trim() : "";
+  const safeEmail = normalizeEmail(email);
+  if (!safeSecret || !safeGameId || !safeEmail || !token || typeof token !== "string") return false;
+
   const separator = token.indexOf(".");
   if (separator === -1) return false;
   const expiresAt = Number(token.slice(0, separator));
   const signature = token.slice(separator + 1);
   if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return false;
-  const expected = await hmacHex(secret, `${gameId}|${email}|${expiresAt}`);
+  const expected = await hmacHex(safeSecret, `${safeGameId}|${safeEmail}|${expiresAt}`);
   return expected === signature;
 }
 

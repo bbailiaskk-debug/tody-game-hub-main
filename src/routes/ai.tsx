@@ -66,22 +66,34 @@ import {
 } from "../lib/local-persistence";
 
 export const Route = createFileRoute("/ai")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    chat: typeof search["chat"] === "string" ? search["chat"] : "",
-  }),
+  validateSearch: (search: Record<string, unknown>) =>
+    /**
+     * Only the parameter that is actually there.
+     *
+     * Returning `chat: ""` for a bare `/ai` reads as harmless, but the router
+     * compares what came back against what went out and redirects when they differ,
+     * so it answered `/ai` with a 307 to `/ai?chat=`. That is what the canonical and
+     * the sitemap entry below were then bent around: a canonical pointing at a
+     * redirect was reported as an incorrect hreflang on every language, and the
+     * sitemap entry was reported as a page that is not there.
+     *
+     * The query string is not worth that. It put a URL in the sitemap with an empty
+     * parameter on it, which reads to a crawler as a facet rather than a page, and
+     * every chat in the history is `/ai?chat=<id>` carrying the same text as every
+     * other one. A family of near-identical URLs is a family Google declines to
+     * index, which is the whole of what it was reporting.
+     *
+     * So an absent `chat` stays absent, and the page answers 200 on `/ai` itself.
+     */
+    typeof search["chat"] === "string" ? { chat: search["chat"] } : {},
   head: () => {
     const seo = seoHead({
       /**
-       * With the parameter, not without.
-       *
-       * `validateSearch` gives the page its chat out of the query string, so the
-       * router answers a bare `/ai` with a redirect to `/ai?chat=`. The canonical
-       * and the language alternates have to name the URL that answers 200: a
-       * canonical pointing at the redirect was reported by the site audit as an
-       * incorrect hreflang link on every language of this page, and the sitemap
-       * entry was reported as a page that is not there.
+       * The bare path, and now it is the URL that answers 200 rather than one that
+       * redirects to itself, so the canonical, the language alternates and the
+       * sitemap all name a page that is actually there.
        */
-      path: "/ai?chat=",
+      path: "/ai",
       title: "TK-Bot AI",
       description:
         "Попитай TK-Bot, изкуственият интелект асистент на Todor Khristov Gaming. Чат за канала, игрите и музиката.",
@@ -553,6 +565,8 @@ const INLINE_ATTACHMENT_EXTENSIONS = new Set([
 ]);
 const IMAGE_THUMB_MAX = 400;
 const IMAGE_THUMB_QUALITY = 0.72;
+/** How tall the prompt composer may grow before it scrolls instead. */
+const MAX_COMPOSER_HEIGHT = 160;
 
 const IMAGE_GALLERY_COLUMNS: Record<number, string> = {
   2: "grid-cols-2",
@@ -1512,8 +1526,23 @@ function AiPage() {
     }
   };
 
+  /*
+   * Deferred into a frame, and skipped entirely while there is nothing to scroll.
+   *
+   * `scrollHeight` is a layout read and `scrollTop` is a layout write, so doing
+   * the pair from an effect runs it inside React's commit phase, where the write
+   * is still fresh and the read makes the browser recompute layout mid-task.
+   *
+   * The empty check is what keeps it off the startup path: on the first render
+   * there are no messages, so the container has no height to scroll and the read
+   * could only ever return zero. Deferring to the next frame lets the browser
+   * lay out for its own reasons first, which is also when the measurements taken
+   * here are the ones the user will actually see.
+   */
   useEffect(() => {
-    scrollMessagesToBottom();
+    if (messages.length === 0) return;
+    const frame = window.requestAnimationFrame(scrollMessagesToBottom);
+    return () => window.cancelAnimationFrame(frame);
   }, [messages, loading]);
 
   useEffect(() => {
@@ -1542,12 +1571,39 @@ function AiPage() {
     return () => window.clearTimeout(timeoutId);
   }, [spamWarningUntil]);
 
+  /*
+   * Auto-grow for the composer, without a forced reflow per keystroke.
+   *
+   * `height: "auto"` followed by a read of `scrollHeight` is the shape that costs
+   * the most: the write invalidates layout and the read immediately makes the
+   * browser redo it, synchronously, inside React's commit. Three things remove
+   * it here.
+   *
+   *   - An empty composer has nothing to grow to, so it is not measured at all.
+   *     That also covers the first run on mount, which measured a textarea that
+   *     was already the right size and wrote the identical value straight back.
+   *   - The measure happens in the next animation frame, after React has
+   *     committed and the browser has settled layout on its own terms.
+   *   - The measured height is only written when it differs from what is already
+   *     there, so a keystroke that does not change the number of lines writes
+   *     nothing and invalidates nothing.
+   */
   useEffect(() => {
     const el = chatTextareaRef.current;
     if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-    el.scrollTop = el.scrollHeight;
+
+    if (prompt.length === 0) {
+      el.style.height = "";
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      el.style.height = "auto";
+      const next = `${Math.min(el.scrollHeight, MAX_COMPOSER_HEIGHT)}px`;
+      if (el.style.height !== next) el.style.height = next;
+      if (el.scrollTop > 0) el.scrollTop = el.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [prompt]);
 
   useEffect(() => {
@@ -1619,7 +1675,12 @@ function AiPage() {
 
       setChats(stored);
 
-      const target = stored.find((chat) => chat.id === chatParam && chat.userEmail === scope);
+      // Guarded rather than compared, because `chatParam` is absent on a bare `/ai`
+      // now and a chat whose id happened to be missing would otherwise match every
+      // one of them.
+      const target = chatParam
+        ? stored.find((chat) => chat.id === chatParam && chat.userEmail === scope)
+        : undefined;
       if (target) {
         setActiveChatId(target.id);
         setMessages(target.messages);
