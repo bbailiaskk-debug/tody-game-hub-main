@@ -1,42 +1,35 @@
-# Logs
+# --- Next.js ---
+node_modules
+.next
+out
+build
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# --- Secrets ---
+# Nothing here is deployed from the repo, and an accidentally committed key is a
+# password for a paid API that cannot be rotated by editing a file.
+.env
+.env*.local
+.dev.vars
+.env.kv
+*.pem
+
+# --- Logs ---
 logs
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-.output
-# The Windows program that npm run dist builds.
-release
+# --- Tooling caches ---
 .vinxi
 .tanstack/**
 .nitro
-*.local
-.env
-
-# Wrangler / Cloudflare
 .wrangler/
-.dev.vars
-# Plaintext KV dump from scripts/dump-kv.mjs - session tokens, refresh tokens and
-# password hashes, none of which belong in git.
-.env.kv
+.vercel
 
-# Editor keys and local agent settings. `.continue/config.yaml` held a real
-# provider key, which is a password for a paid API and not a setting that
-# belongs in a repository; the file stays on disk and stays untracked.
-.continue/
-.continue
-
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
+# --- Editor ---
 .idea
 .DS_Store
 *.suo
@@ -44,55 +37,20 @@ release
 *.njsproj
 *.sln
 *.sw?
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.continue
+.continue/
 
-.vercel
-
-# Foreign package (not part of this project)
-nginx-proxy-manager-2.15.1/
-
-# Stray duplicate of public/мойта музика
-мойта музика/
-
-# Android (TWA) build artifacts
-android/android.keystore
-android/keystore-password.txt
-# The signing password, written by whoever builds the APK and read by
-# `npm run dist:android`. A keystore without its password is a signing identity that
-# cannot be used and cannot be replaced: the site's assetlinks.json names its
-# fingerprint, so a different keystore means editing and deploying the site as well.
-android/keystore.properties
-android/app/
-android/build/
-android/.gradle/
-android/gradle.properties
-android/settings.gradle
-android/build.gradle
-android/gradlew
-android/gradlew.bat
-android/gradle/
-android/store_icon.png
-android/*.apk
-android/*.aab
-android/manifest-checksum.txt
-android/.idea/
-
-# The installer.
-#
-# Not in git, and not deployed with the site either: Cloudflare Workers refuses any
-# static asset over 25 MiB and the installer is 107 MiB, so putting it here made
-# `wrangler deploy` refuse the whole site rather than skip one file. It is served
-# from R2 instead, which is what R2 is for — a few megabytes of chat uploads and a
-# hundred megabyte installer are the same problem.
-#
-# Copy it next to the site with:
-#   npm run build && copy release\Tody-Game-Hub-1.0.0-setup-x64.exe public\downloads\
-# and upload it to the bucket with `npm run dist` followed by the bucket step in the
-# deploy notes. Nothing links there at the moment — the menu and the chat's account
-# panel hand over the installer from Drive, which is where the build already is — but
-# the worker still sets the right headers for it if it is ever served from here.
+# --- Build artefacts ---
+# The installer is not in git and not deployed: it is 107 MiB, and every host
+# refuses an upload that large. Served from R2 instead.
+release/
 public/downloads/
 
-# CPU profiles written by scripts/profile-page.mjs. They are a build artefact of a
-# measurement, not source: the flame chart extension reads them off disk and they
-# are 5-15 MB each.
+# CPU profiles written by scripts/profile-page.mjs. A measurement, not source.
 profiles/
+
+# --- Foreign package (not part of this project) ---
+nginx-proxy-manager-2.15.1/
