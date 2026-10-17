@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  СТРАНИЦА МУЗИКА — GOOGLE SITES (редактируем)
+  ============================================================
+  Редактирай песните в списъка по-долу (промени името между <h3></h3>).
+  Качване в Google Sites: Вмъкване > Вграждане > Чрез кода.
+  Забележка: за да свири музика тук, файловете (mp3) трябва да са
+  достъпни онлайн. Ако не са, линковете могат да водят към живото
+  ти сайтче: https://tody-game-hub.bbailiaskk.workers.dev/music
+  ============================================================
+-->
+<html lang="bg">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Музика — Todor Khristov Gaming</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-C35YFLR7D7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-C35YFLR7D7');
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0b; color: #e5e5e7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.6; }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 22px 70px; }
+  .brand { color: #1DB954; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; }
+  h1 { font-size: clamp(34px, 6vw, 64px); line-height: 1; font-weight: 900; margin: 16px 0 24px; }
+  p { color: #a1a1aa; font-size: 14px; max-width: 760px; margin-bottom: 12px; }
+  .search { display: flex; align-items: center; gap: 10px; border: 1px solid #27272a; background: #101013; padding: 12px 16px; max-width: 560px; margin: 22px 0; }
+  .search input { flex: 1; background: transparent; border: none; outline: none; color: #e5e5e7; font-size: 14px; }
+  .list-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #27272a; padding-bottom: 12px; margin-top: 26px; }
+  .list-head h2 { font-size: 20px; }
+  .list-head span { font-size: 10px; letter-spacing: .15em; color: #a1a1aa; }
+  .track { display: flex; align-items: center; gap: 14px; padding: 13px 12px; border-radius: 10px; }
+  .track .num { width: 28px; color: #a1a1aa; font-family: monospace; font-size: 12px; }
+  .track .disc { color: #1DB954; font-size: 15px; }
+  .track h3 { font-size: 15px; font-weight: 500; }
+  .track:hover { background: #141417; }
+  .btn { display: inline-block; margin-top: 24px; padding: 14px 26px; border-radius: 999px; background: #1DB954; color: #06210f; text-decoration: none; font-size: 11px; font-weight: 800; letter-spacing: .14em; }
+</style>
+</head>
+<body>
+
+<main>
+  <!-- ==================== ЗАГЛАВИЕ — редактирай тук ==================== -->
+  <p class="brand">TK / MUSIC LIBRARY</p>
+  <h1>Тодор Христов</h1>
+  <p>
+    Този плейлист събира музиката на Todor Khristov Gaming на едно място.
+    Избери песен, използвай търсенето и остави player-а да продължи
+    автоматично със следващия трак — с контрол за звука, Shuffle и Repeat.
+  </p>
+  <p>
+    Всяка песен е подбрана да носи характер, настроение и личен стил, така че
+    слушането да се чувства като естествено продължение на изживяването от канала.
+  </p>
+
+  <div class="search">
+    <span>🔍</span>
+    <input id="search" type="text" placeholder="Да намерим нещо за вашия плейлист" />
+  </div>
+
+  <!-- ==================== ПЕСНИТЕ — редактирай тук ==================== -->
+  <div class="list-head">
+    <h2>Песни</h2>
+    <span id="count">11 TRACKS</span>
+  </div>
+  <div id="list">
+    <div class="track"><span class="num">01</span><span class="disc">●</span><h3>Аз обичам живота Mix</h3></div>
+    <div class="track"><span class="num">02</span><span class="disc">●</span><h3>В природата MIX</h3></div>
+    <div class="track"><span class="num">03</span><span class="disc">●</span><h3>Всеки ден качвам Mix</h3></div>
+    <div class="track"><span class="num">04</span><span class="disc">●</span><h3>Всеки ден с приятелка mix</h3></div>
+    <div class="track"><span class="num">05</span><span class="disc">●</span><h3>Вторник и петък натискай play сега! MIX</h3></div>
+    <div class="track"><span class="num">06</span><span class="disc">●</span><h3>Джойстикът ми знае Mix</h3></div>
+    <div class="track"><span class="num">07</span><span class="disc">●</span><h3>Кола и пиксели (Nightcore Mix)</h3></div>
+    <div class="track"><span class="num">08</span><span class="disc">●</span><h3>Копая към края MIX</h3></div>
+    <div class="track"><span class="num">09</span><span class="disc">●</span><h3>саламът бяга Mix</h3></div>
+    <div class="track"><span class="num">10</span><span class="disc">●</span><h3>Световно на победата Mix</h3></div>
+    <div class="track"><span class="num">11</span><span class="disc">●</span><h3>Тодор е тук</h3></div>
+  </div>
+
+  <a class="btn" href="https://tody-game-hub.bbailiaskk.workers.dev/music" target="_blank">ОТВОРИ ПЛЕЪРА ›</a>
+</main>
+
+<script>
+  var input = document.getElementById("search");
+  var tracks = Array.prototype.slice.call(document.querySelectorAll(".track"));
+  var count = document.getElementById("count");
+  function filter() {
+    var q = input.value.toLowerCase();
+    var shown = 0;
+    tracks.forEach(function (row) {
+      var match = row.textContent.toLowerCase().indexOf(q) !== -1;
+      row.style.display = match ? "" : "none";
+      if (match) shown++;
+    });
+    count.textContent = shown + " TRACKS";
+  }
+  input.addEventListener("input", filter);
+</script>
+
+</body>
+</html>

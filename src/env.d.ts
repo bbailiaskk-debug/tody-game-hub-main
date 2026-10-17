@@ -1,0 +1,155 @@
+declare class WebSocketPair {
+  0: import("cloudflare:workers").WebSocket;
+  1: import("cloudflare:workers").WebSocket;
+  constructor();
+}
+
+declare module "cloudflare:workers" {
+  export const env: {
+    GOOGLE_CLIENT_ID?: string;
+    GOOGLE_CLIENT_SECRET?: string;
+    STRIPE_PRO_PAYMENT_LINK?: string;
+    STRIPE_ENTERPRISE_PAYMENT_LINK?: string;
+    STRIPE_PRO_PRICE_ID?: string;
+    STRIPE_ENTERPRISE_PRICE_ID?: string;
+    STRIPE_SECRET_KEY?: string;
+    STRIPE_WEBHOOK_SECRET?: string;
+    STRIPE_CURRENCY?: string;
+    STRIPE_PRO_PRODUCT_ID?: string;
+    STRIPE_ENTERPRISE_PRODUCT_ID?: string;
+    ANTHROPIC_API_KEY?: string;
+    ANTHROPIC_MODEL?: string;
+    ANTHROPIC_TIMEOUT_MS?: string;
+    AUTH_USERS_KV?: {
+      get: (key: string) => Promise<string | null>;
+      put: (key: string, value: string) => Promise<void>;
+    };
+    GEMINI_CACHE_KV?: {
+      get: (key: string) => Promise<string | null>;
+      put: (key: string, value: string) => Promise<void>;
+    };
+    CHESS_GAME_DO?: DurableObjectNamespace;
+    TTT_GAME_DO?: DurableObjectNamespace;
+    AIR_HOCKEY_DO?: DurableObjectNamespace;
+    MESSAGES_DO?: DurableObjectNamespace;
+    MESSAGES_FILES?: R2Bucket;
+  };
+
+  export type AlarmInfo = {
+    scheduledTime: number;
+    noTimeout: boolean;
+  };
+
+  export type WebSocket = {
+    accept(): void;
+    send(message: string | ArrayBuffer | ArrayBufferView): void;
+    close(code?: number, reason?: string): void;
+    addEventListener(type: string, listener: (event: unknown) => void): void;
+  };
+
+  export type DurableObjectId = {
+    name: string | null;
+    toString(): string;
+  };
+
+  export type DurableObjectStub = {
+    id: DurableObjectId;
+    name: string;
+    fetch(request: Request): Promise<Response>;
+  };
+
+  export type DurableObjectNamespace = {
+    idFromName(name: string): DurableObjectId;
+    idFromString(id: string): DurableObjectId;
+    newUniqueId(): DurableObjectId;
+    get(id: DurableObjectId): DurableObjectStub;
+  };
+
+  export type DurableObjectStorage = {
+    get<T = unknown>(key: string): Promise<T | null>;
+    put<T = unknown>(key: string, value: T): Promise<void>;
+    delete(key: string): Promise<void>;
+    list<T = unknown>(options?: { prefix?: string }): Promise<Map<string, T>>;
+    setAlarm(delayMs: number | Date): Promise<void>;
+    getAlarm(): Promise<number | null>;
+    deleteAlarm(): Promise<void>;
+  };
+
+  export type DurableObjectState = {
+    id: DurableObjectId;
+    storage: DurableObjectStorage;
+    waitUntil(promise: Promise<unknown>): void;
+    acceptWebSocket(ws: WebSocket, tags?: string[]): void;
+    getWebSockets(tag?: string): WebSocket[];
+    getWebSocketTags(ws: WebSocket): string[];
+    blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T>;
+  };
+
+  export abstract class DurableObject<E = unknown> {
+    constructor(ctx: DurableObjectState, env: E);
+    protected readonly ctx: DurableObjectState;
+    protected readonly env: E;
+    fetch?(request: Request): Response | Promise<Response>;
+    alarm?(alarmInfo: AlarmInfo): void | Promise<void>;
+    webSocketMessage?(
+      ws: WebSocket,
+      message: string | ArrayBuffer | ArrayBufferView,
+    ): void | Promise<void>;
+    webSocketClose?(
+      ws: WebSocket,
+      code: number,
+      reason: string,
+      wasClean: boolean,
+    ): void | Promise<void>;
+    webSocketError?(ws: WebSocket, error: unknown): void | Promise<void>;
+  }
+
+  export type R2Range = { offset: number; length: number };
+
+  export type R2ObjectBody = {
+    key: string;
+    size: number;
+    uploaded: Date;
+    httpEtag: string;
+    /** The bytes, as a stream: nothing here is ever read into memory whole. */
+    body: ReadableStream;
+    /** Present only when the read was ranged, and describes what was returned. */
+    range?: R2Range;
+    /** 200, or 206 when a range was asked for and honoured. */
+    httpStatus: number;
+    httpMetadata?: { contentType?: string; contentDisposition?: string };
+    writeHttpMetadata?(headers: Headers): void;
+  };
+
+  export type R2Object = Omit<R2ObjectBody, "body" | "range" | "httpStatus">;
+
+  export type R2MultipartUpload = {
+    uploadId: string;
+    key: string;
+    uploadPart(
+      partNumber: number,
+      value: ArrayBuffer | ArrayBufferView | Blob | ReadableStream | string,
+    ): Promise<{ partNumber: number; etag: string }>;
+    complete(parts: { partNumber: number; etag: string }[]): Promise<{ key: string } | null>;
+    abort(): Promise<void>;
+  };
+
+  export type R2Bucket = {
+    head(key: string): Promise<R2Object | null>;
+    get(
+      key: string,
+      options?: { range?: R2Range | { suffix: number } },
+    ): Promise<R2ObjectBody | null>;
+    put(
+      key: string,
+      value: ArrayBuffer | ArrayBufferView | Blob | ReadableStream | string,
+      options?: { httpMetadata?: { contentType?: string; contentDisposition?: string } },
+    ): Promise<R2Object>;
+    delete(key: string): Promise<void>;
+    createMultipartUpload(
+      key: string,
+      options?: { httpMetadata?: { contentType?: string; contentDisposition?: string } },
+    ): Promise<{ uploadId: string; key: string }>;
+    resumeMultipartUpload(key: string, uploadId: string): R2MultipartUpload;
+  };
+}

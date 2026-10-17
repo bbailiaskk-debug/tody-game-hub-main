@@ -1,0 +1,26 @@
+[Unit]
+Description=to dy-game-hub Node SSR server (NGINX Unit backend)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/tody-game-hub
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOST=127.0.0.1
+Environment=HTTPS_REDIRECT=off
+Environment=GOOGLE_CLIENT_ID=your-google-client-id
+Environment=GOOGLE_CLIENT_SECRET=your-google-client-secret
+ExecStart=/usr/bin/node --import ./deploy/register-cloudflare-loader.mjs .output/server/index.mjs
+Restart=always
+RestartSec=3
+User=www-data
+Group=www-data
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

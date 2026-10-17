@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  СТРАНИЦА ИГРИ — GOOGLE SITES (редактируем)
+  ============================================================
+  Редактирай текста между секциите с Word / Notepad / VS Code.
+  Качване в Google Sites: Вмъкване > Вграждане > Чрез кода.
+  Картите линкват към живите игри на сайта — поправи ги, ако трябва.
+  ============================================================
+-->
+<html lang="bg">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Игри — Todor Khristov Gaming</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-C35YFLR7D7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-C35YFLR7D7');
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0b; color: #e5e5e7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.6; }
+  main { max-width: 1280px; margin: 0 auto; padding: 40px 22px 70px; }
+  .sec-head { display: flex; align-items: center; gap: 14px; }
+  .sec-head .num { color: #1DB954; font-size: 11px; letter-spacing: .15em; }
+  .sec-head .lbl { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; }
+  .title-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; margin-top: 22px; }
+  h1 { color: #1DB954; font-size: clamp(40px, 7vw, 72px); line-height: 1; font-weight: 900; }
+  .hub { font-size: 11px; letter-spacing: .15em; color: #a1a1aa; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin-top: 40px; }
+  .card { display: block; text-decoration: none; color: inherit; background: #141417; border: 1px solid #27272a; border-radius: 24px; padding: 24px; transition: border-color .2s, box-shadow .2s; }
+  .card:hover { border-color: #1DB95466; box-shadow: 0 0 24px rgba(29,185,84,.15); }
+  .card .tag { color: #1DB954; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+  .card h3 { font-size: 26px; margin: 36px 0 8px; }
+  .card p { color: #a1a1aa; font-size: 14px; }
+  .play { display: inline-flex; align-items: center; gap: 10px; margin-top: 20px; padding: 11px 20px; border-radius: 999px; border: 1px solid rgba(29,185,84,.3); color: #1DB954; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+  .card:hover .play { background: rgba(29,185,84,.1); }
+  .note { margin-top: 26px; color: #a1a1aa; font-size: 13px; }
+  .note a { color: #1DB954; }
+</style>
+</head>
+<body>
+
+<main>
+  <!-- ==================== ЗАГЛАВИЕ — редактирай тук ==================== -->
+  <div class="sec-head">
+    <span class="num">02 /</span>
+    <span class="lbl">Игри</span>
+  </div>
+  <div class="title-row">
+    <h1>ИГРАЙ СЕГА</h1>
+    <span class="hub">ГЕЙМ ХЪБ</span>
+  </div>
+
+  <!-- ==================== ИГРИТЕ — редактирай тук ==================== -->
+  <div class="cards">
+    <a class="card" href="https://tody-game-hub.bbailiaskk.workers.dev/chess" target="_blank">
+      <div class="tag">НАСТОЛНА</div>
+      <h3>ШАХ</h3>
+      <p>Класически шах срещу приятел — рокада, ан пасан и промоция.</p>
+      <span class="play">ИГРАЙ ›</span>
+    </a>
+    <a class="card" href="https://tody-game-hub.bbailiaskk.workers.dev/game2048" target="_blank">
+      <div class="tag">ПЪЗЗЛ</div>
+      <h3>2048</h3>
+      <p>Плъзгай и съединявай плочките, за да стигнеш до 2048.</p>
+      <span class="play">ИГРАЙ ›</span>
+    </a>
+    <a class="card" href="https://tody-game-hub.bbailiaskk.workers.dev/tictactoe" target="_blank">
+      <div class="tag">КЛАСИКА</div>
+      <h3>TIC TAC TOE</h3>
+      <p>Морски шах срещу компютъра или приятел.</p>
+      <span class="play">ИГРАЙ ›</span>
+    </a>
+  </div>
+
+  <p class="note">
+    Играта се отваря на живото ти сайтче. Ако се промени адресът, поправи линковете по-горе.
+  </p>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,753 @@
+@import "tailwindcss";
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-brand: var(--brand);
+  --color-brand-dim: var(--brand-dim);
+  --color-youtube: var(--youtube);
+  --color-tiktok: var(--tiktok);
+  --color-spotify: var(--spotify);
+  --color-discord: var(--discord);
+  --font-display: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-rotwimch: "RoTwimch", system-ui, sans-serif;
+  --shadow-glow: 0 18px 50px -18px color-mix(in oklab, var(--brand) 55%, transparent);
+  --animate-tk-bounce: tk-bounce 1.1s ease-in-out infinite;
+}
+
+@keyframes tk-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  50% {
+    transform: translateY(-6px);
+    opacity: 0.55;
+  }
+}
+
+.site-header-brand {
+  min-width: max-content;
+}
+
+.site-header-logo {
+  flex: 0 0 3rem;
+}
+
+.site-header-copy > span:first-child {
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .site-header-copy > span:last-child {
+    display: none;
+  }
+}
+
+:root {
+  --site-background-image: none;
+  --radius: 0.9rem;
+  --background: #161b16;
+  --foreground: oklch(0.97 0.005 150);
+  --card: oklch(0.215 0.008 150);
+  --card-foreground: oklch(0.97 0.005 150);
+  --popover: oklch(0.2 0.008 150);
+  --popover-foreground: oklch(0.97 0.005 150);
+  --surface: oklch(0.225 0.008 150);
+  --surface-2: oklch(0.26 0.01 150);
+  --brand: #1db954;
+  --brand-bright: #1db954;
+  --brand-dim: #168c40;
+  --primary: #1db954;
+  --primary-foreground: oklch(0.19 0.03 155);
+  --secondary: oklch(0.26 0.01 150);
+  --secondary-foreground: oklch(0.97 0.005 150);
+  --muted: oklch(0.26 0.01 150);
+  --muted-foreground: oklch(0.68 0.012 150);
+  --accent: oklch(0.28 0.02 155);
+  --accent-foreground: oklch(0.9 0.1 155);
+  --destructive: oklch(0.62 0.2 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.3 0.01 150);
+  --input: oklch(0.3 0.01 150);
+  --ring: #1db954;
+  --youtube: oklch(0.55 0.22 25);
+  --tiktok: oklch(0.28 0.01 150);
+  --spotify: #1db954;
+  --discord: oklch(0.62 0.17 292);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root,
+#app {
+  background-color: #161b16 !important;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
+/**
+ * Discord's own greys, scoped so the rest of the site keeps its accent.
+ *
+ * Discord builds a screen out of four near-identical greys and lets position
+ * alone say what a thing is, so the values are deliberately that close together
+ * and the separation is carried by the borders between the columns. Only the
+ * blurple, the green and the red are allowed to be loud, and they are the three
+ * a person acts on.
+ *
+ * Scoped rather than moved into `:root` because this is a look for the chat and
+ * calls, not for the games and music pages, and an accent a person picked for
+ * the rest of the site should not be thrown away by opening a conversation.
+ */
+.discord-shell {
+  --background: #1e1f22;
+  --foreground: #f2f3f5;
+  --card: #313338;
+  --card-foreground: #f2f3f5;
+  --popover: #313338;
+  --popover-foreground: #f2f3f5;
+  --surface: #2b2d31;
+  --surface-2: #383a40;
+  --muted: #2b2d31;
+  --muted-foreground: #949ba4;
+  --accent: #40444b;
+  --accent-foreground: #f2f3f5;
+  --border: #3f4147;
+  --input: #1e1f22;
+  --primary: #5865f2;
+  --primary-foreground: #ffffff;
+  --secondary: #2b2d31;
+  --secondary-foreground: #f2f3f5;
+  --brand: #5865f2;
+  --brand-bright: #5865f2;
+  --brand-dim: #4752c4;
+  --ring: #5865f2;
+  --destructive: #da373c;
+  --destructive-foreground: #ffffff;
+  --discord-rail: #1e1f22;
+  --discord-leave: #da373c;
+  --discord-deafen: #f0b232;
+  --discord-online: #23a55a;
+}
+
+.light {
+  --background: oklch(0.98 0.006 150);
+  --foreground: oklch(0.2 0.01 150);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.01 150);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.01 150);
+  --surface: oklch(0.96 0.008 150);
+  --surface-2: oklch(0.93 0.01 150);
+  --brand: oklch(0.54 0.16 155);
+  --brand-bright: #1db954;
+  --brand-dim: oklch(0.54 0.16 155);
+  --primary: oklch(0.54 0.16 155);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.93 0.01 150);
+  --secondary-foreground: oklch(0.2 0.01 150);
+  --muted: oklch(0.94 0.008 150);
+  --muted-foreground: oklch(0.45 0.015 150);
+  --accent: oklch(0.9 0.05 155);
+  --accent-foreground: oklch(0.3 0.1 155);
+  --border: oklch(0.88 0.01 150);
+  --input: oklch(0.88 0.01 150);
+  --ring: oklch(0.54 0.17 155);
+  --tiktok: oklch(0.25 0.01 150);
+}
+
+.night-panel {
+  --foreground: oklch(0.93 0.01 150);
+  --muted-foreground: oklch(0.68 0.012 150);
+  --surface: oklch(0.34 0.01 150);
+  --surface-2: oklch(0.38 0.01 150);
+  --brand: var(--brand-bright);
+  --brand-dim: var(--brand-bright);
+}
+
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+@utility grid-bg {
+  background-image:
+    radial-gradient(
+      circle at 70% 20%,
+      color-mix(in oklab, var(--brand) 4%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--border) 60%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--border) 60%, transparent) 1px,
+      transparent 1px
+    );
+  background-size:
+    100% 100%,
+    64px 64px,
+    64px 64px;
+  background-position: center, center, center;
+  background-attachment: scroll, scroll, scroll;
+}
+
+.art-image-0 {
+  background-image: url("/images/profile-portrait.webp");
+}
+
+.art-image-1 {
+  background-image: url("/cartoon-gamer-girl-mascot-logo-with-anime-style-for-esport-use-vector.jpg");
+}
+
+.welcome-slide-0 {
+  background-image: url("/undraw_ai-response_gaip.png");
+}
+
+.welcome-slide-1 {
+  background-image: url("/undraw_audio-player_7uwh.png");
+}
+
+.welcome-slide-2 {
+  background-image: url("/undraw_listening_fz9g.png");
+}
+
+.welcome-slide-3 {
+  background-image: url("/undraw_retro-video-game_l9zp.png");
+}
+
+@keyframes splash-ring-fill {
+  from {
+    stroke-dashoffset: 452.39;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes splash-bar-fill {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes splash-shine {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+@keyframes splash-logo-pulse {
+  0%,
+  100% {
+    transform: scale(0.98);
+  }
+
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.splash-root {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1.75rem;
+  padding: 1.5rem;
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      color-mix(in oklab, var(--brand) 16%, transparent),
+      transparent 26rem
+    ),
+    linear-gradient(135deg, #07100b 0%, #0b120e 48%, #050806 100%);
+  opacity: 1;
+  transition: opacity 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-splash-suppressed] .splash-root {
+  display: none;
+}
+
+.splash-root::before {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--brand) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--brand) 7%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  content: "";
+  mask-image: linear-gradient(to bottom, transparent, black 35%, transparent 85%);
+  opacity: 0.35;
+}
+
+.splash-root::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.06),
+    transparent 18%,
+    transparent 82%,
+    rgba(29, 185, 84, 0.08)
+  );
+  background-size: 100% 100%;
+  content: "";
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.splash-fade {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.splash-logo {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: clamp(152px, 30vw, 210px);
+  height: auto;
+  filter: drop-shadow(0 0 18px color-mix(in oklab, var(--brand) 34%, transparent))
+    drop-shadow(0 0 48px rgba(29, 185, 84, 0.26));
+  animation: splash-logo-pulse 1.8s ease-in-out infinite;
+}
+
+.splash-ring {
+  animation: splash-ring-fill 1800ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: drop-shadow(0 0 10px rgba(29, 185, 84, 0.9)) drop-shadow(0 0 26px rgba(29, 185, 84, 0.7));
+}
+
+.splash-track {
+  position: relative;
+  z-index: 1;
+  width: min(300px, 78vw);
+  height: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(29, 185, 84, 0.35);
+  border-radius: 9999px;
+  background: rgba(6, 13, 9, 0.88);
+  box-shadow:
+    0 0 20px rgba(29, 185, 84, 0.2),
+    inset 0 0 12px rgba(29, 185, 84, 0.08);
+}
+
+.splash-status {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: color-mix(in oklab, var(--brand) 72%, white 28%);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.splash-status-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 9999px;
+  background: #4ade80;
+  box-shadow: 0 0 10px #1db954;
+  animation: tk-bounce 1.1s ease-in-out infinite;
+}
+
+.splash-fill {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  border-radius: 9999px;
+  transform-origin: left;
+  background-color: #1db954;
+  box-shadow:
+    0 0 12px rgba(29, 185, 84, 0.9),
+    0 0 30px rgba(29, 185, 84, 0.7),
+    0 0 56px rgba(29, 185, 84, 0.35),
+    inset 0 0 18px rgba(255, 255, 255, 0.12);
+  background-image: linear-gradient(
+    90deg,
+    rgba(29, 185, 84, 0.2) 0%,
+    rgba(102, 247, 160, 0.98) 18%,
+    #1db954 52%,
+    rgba(102, 247, 160, 0.98) 84%,
+    rgba(29, 185, 84, 0.2) 100%
+  );
+  background-size: 220% 100%;
+  background-position: center;
+  animation: splash-bar-fill 1800ms ease-out forwards;
+}
+
+.splash-fill::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: "";
+  background-image: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, 0.32) 50%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  transform: translateX(-120%);
+  animation: splash-shine 1.3s linear infinite;
+  will-change: transform;
+}
+
+@layer base {
+  html,
+  body {
+    overflow-x: hidden;
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  * {
+    border-color: var(--color-border);
+  }
+
+  /**
+   * `html` paints the full canvas; `body` paints its own box. Both use the
+   * background token directly so uncovered areas keep the same base colour.
+   */
+  html {
+    background-color: var(--color-background);
+  }
+
+  body {
+    background-color: var(--color-background);
+    background-image: var(--site-background-image);
+    background-position: center;
+    background-size: cover;
+    background-attachment: fixed;
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-weight: 600;
+  }
+
+  @media (max-width: 767px) {
+    body {
+      background-image: none;
+      background-attachment: scroll;
+    }
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer base {
+  /**
+   * The scrollbar every panel in the app inherits.
+   *
+   * Left to the browser, a scrolling panel on Windows grows the classic bar with
+   * a button at each end, and a chat column on a narrow screen then spends a
+   * sixth of its width on two arrow buttons that scroll nothing. It also appears
+   * and disappears with the content, which moves a list sideways as a message
+   * arrives. This makes the bar thin, quiet, and the same everywhere, so a panel
+   * is the only thing that has to be looked at.
+   *
+   * Applied through `*` rather than per component on purpose: a container that
+   * somebody adds later is styled correctly by default, and the utilities below
+   * still win where they are asked for.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--tk-text, var(--color-foreground)) 32%, transparent)
+      transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--tk-text, var(--color-foreground)) 32%, transparent);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--tk-text, var(--color-foreground)) 55%, transparent);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  .ai-chat-root {
+    color-scheme: dark;
+    background-image:
+      linear-gradient(
+        color-mix(in srgb, #05070a 42%, transparent),
+        color-mix(in srgb, #05070a 42%, transparent)
+      ),
+      var(--site-background-image);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--tk-text, var(--color-foreground)) 32%, transparent)
+      transparent;
+    scrollbar-gutter: stable;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: color-mix(in srgb, var(--tk-text, var(--color-foreground)) 10%, transparent);
+    border-radius: 999px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--tk-text, var(--color-foreground)) 35%, transparent);
+    border-radius: 999px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--tk-text, var(--color-foreground)) 55%, transparent);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .scrollbar-brand {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--brand, #1ce38b) 70%, transparent)
+      color-mix(in srgb, var(--brand, #1ce38b) 10%, transparent);
+    scrollbar-gutter: stable;
+  }
+
+  .scrollbar-brand::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-brand::-webkit-scrollbar-track {
+    background: color-mix(in srgb, var(--brand, #1ce38b) 8%, transparent);
+    border-radius: 999px;
+  }
+
+  .scrollbar-brand::-webkit-scrollbar-thumb {
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--brand, #1ce38b) 85%, white 12%),
+      color-mix(in srgb, var(--brand, #1ce38b) 55%, transparent)
+    );
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .scrollbar-brand::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--brand, #1ce38b) 95%, white 8%);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+  }
+
+  .scrollbar-brand::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --font-display: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  /**
+   * A phone has no scrollbar to aim at.
+   *
+   * A finger drags the content, so a bar is a strip of the width given back for
+   * nothing, and the arrow buttons Windows insists on are the thing that pushed
+   * the chat list off a small screen. The content still scrolls; only the bar
+   * goes. Touch devices are matched by pointer, not by width, so a tablet held
+   * in a hand gets the same treatment as a phone in the same class.
+   */
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+}
+
+/* Мобилна версия на мрежестия фон: без повтарящите се 1px линии, които
+   принуждават пребоядисване при скрол на телефони. Оставяме само мекия бранд
+   ореол, за да запазим визуалната идентичност. */
+@media (max-width: 767px) {
+  .grid-bg {
+    background-image: radial-gradient(
+      ellipse 120% 45% at 50% 0%,
+      color-mix(in oklab, var(--brand) 8%, transparent),
+      transparent 60%
+    );
+    background-size: 100% 100%;
+    background-position: center;
+    background-attachment: scroll;
+  }
+}
+
+/* iOS Safari авто-zoom-ва inputs с font-size < 16px. На телефони полетата
+   стават по-големи, но падането на "фокуса" изчезва — по-добре за UX. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Зачитане на "намалено движение" — спира безкрайните анимации. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Долни player-и и ленти: спрямо сензорните зони на iOS (home indicator). */
+@utility pb-safe {
+  padding-bottom: 0.75rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+/* Секции под гънката: браузърът ги рендерира при доближаване, вместо да
+   blended-ва цялата страница наведнъж. */
+@utility lazy-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
+/* Pricing plan CTA buttons: every plan lights up in solid brand green on hover,
+   the Pro (already solid) card gets a brighter green plus a stronger glow so the
+   hover state is visible on all three cards. */
+.plan-cta {
+  transition:
+    transform 200ms ease,
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    filter 200ms ease;
+}
+
+.plan-cta:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background-color: color-mix(in oklab, var(--brand) 62%, white);
+  border-color: color-mix(in oklab, var(--brand) 62%, white);
+  color: var(--primary-foreground);
+  box-shadow:
+    0 0 0 2px color-mix(in oklab, var(--brand) 45%, transparent),
+    0 0 44px -4px color-mix(in oklab, var(--brand) 80%, transparent);
+}
+
+.plan-cta:hover:not(:disabled) .plan-cta-icon {
+  transform: translate(2px, -2px);
+}
+
+.plan-cta-icon {
+  transition: transform 200ms ease;
+}
+
+.plan-cta:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
