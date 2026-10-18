@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowUpRight,
@@ -16,6 +16,19 @@ import { confirmCheckoutSession, useCheckout, useUserPlan } from "../lib/plan-ac
 import { planCovers, requiredPlanForGame } from "../lib/plans";
 import { seoHead } from "../lib/seo";
 
+/**
+ * The hero logo, in the two modern formats the browser picks from.
+ *
+ * The PNG is the fallback rather than dead weight: it is what a browser without
+ * WebP support actually downloads, and it is also the file the logo is
+ * regenerated from.
+ */
+const LOGO_SRC_SET =
+  "/tk-gamer-logo-448.webp 448w, /tk-gamer-logo-720.webp 720w, /tk-gamer-logo-1080.webp 1080w";
+
+/** The logo sits in a `max-w-md` (448px) box, and goes full-width below that. */
+const LOGO_SIZES = "(min-width: 1024px) 448px, calc(100vw - 3rem)";
+
 export const Route = createFileRoute("/")({
   head: () => {
     const seo = seoHead({
@@ -30,10 +43,18 @@ export const Route = createFileRoute("/")({
       links: [
         ...seo.links,
         {
+          /*
+            Preloaded with the same srcset the picture below uses. A single
+            hard-coded href would preload one width while the page then asks for
+            another, which is a wasted round trip and the reason this used to
+            preload a file nothing ever requested.
+          */
           rel: "preload",
           as: "image",
-          href: "/animo-focus-shift-poster.jpg",
-          media: "(min-width: 1024px)",
+          type: "image/webp",
+          href: "/tk-gamer-logo-720.webp",
+          imageSrcSet: LOGO_SRC_SET,
+          imageSizes: LOGO_SIZES,
           fetchPriority: "high",
         },
       ],
@@ -183,7 +204,6 @@ function Index() {
   const { plan: activePlan, refresh: refreshPlan } = useUserPlan();
   const { availability, busyPlan, error: checkoutError, startCheckout } = useCheckout();
   const [checkoutState, setCheckoutState] = useState<"none" | "success" | "cancelled">("none");
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -209,85 +229,6 @@ function Index() {
       })
       .catch(() => setCheckoutState("none"));
   }, [refreshPlan]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.muted = true;
-    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let isVisible = false;
-    let posterObserver: IntersectionObserver | null = null;
-    if ("IntersectionObserver" in window) {
-      posterObserver = new IntersectionObserver(
-        ([entry]) => {
-          if (!entry.isIntersecting) return;
-          video.poster = "/animo-focus-shift-poster.jpg";
-          posterObserver?.disconnect();
-        },
-        { rootMargin: "200px 0px" },
-      );
-      posterObserver.observe(video);
-    } else {
-      video.poster = "/animo-focus-shift-poster.jpg";
-    }
-
-    const start = () => {
-      if (!isVisible || document.hidden || motionPreference.matches) {
-        video.pause();
-        return;
-      }
-
-      if (!video.paused) return;
-      void video.play().catch((error: unknown) => {
-        if (error instanceof Error && error.name === "NotAllowedError") return;
-        console.warn("Hero video playback failed:", error);
-      });
-    };
-
-    const observer =
-      "IntersectionObserver" in window
-        ? new IntersectionObserver(([entry]) => {
-            isVisible = entry.isIntersecting;
-            start();
-          })
-        : null;
-
-    if (observer) {
-      observer.observe(video);
-    } else {
-      isVisible = true;
-    }
-
-    video.addEventListener("loadeddata", start);
-    video.addEventListener("canplay", start);
-    document.addEventListener("visibilitychange", start);
-    motionPreference.addEventListener("change", start);
-
-    const onGesture = () => {
-      start();
-      window.removeEventListener("pointerdown", onGesture);
-      window.removeEventListener("keydown", onGesture);
-      window.removeEventListener("touchstart", onGesture);
-    };
-    window.addEventListener("pointerdown", onGesture);
-    window.addEventListener("keydown", onGesture);
-    window.addEventListener("touchstart", onGesture);
-
-    start();
-
-    return () => {
-      observer?.disconnect();
-      posterObserver?.disconnect();
-      video.removeEventListener("loadeddata", start);
-      video.removeEventListener("canplay", start);
-      document.removeEventListener("visibilitychange", start);
-      motionPreference.removeEventListener("change", start);
-      window.removeEventListener("pointerdown", onGesture);
-      window.removeEventListener("keydown", onGesture);
-      window.removeEventListener("touchstart", onGesture);
-    };
-  }, []);
 
   return (
     <main className="grid-bg min-h-screen">
@@ -405,19 +346,31 @@ function Index() {
           </div>
         </div>
 
-        <div className="relative aspect-square w-full max-w-md overflow-hidden rounded-4xl border border-border lg:justify-self-center">
-          <video
-            ref={videoRef}
-            className="absolute inset-0 size-full object-cover"
-            loop
-            muted
-            playsInline
-            preload="none"
-            aria-hidden="true"
-          >
-            <source src="/animo-focus-shift.webm" type="video/webm" />
-            <source src="/animo-focus-shift.mp4" type="video/mp4" />
-          </video>
+        <div className="relative aspect-square w-full max-w-md lg:justify-self-center">
+          {/*
+            The logo carries its own rounded frame, so nothing is put around it
+            here and nothing is cropped off it: `object-contain` in a square box
+            is an exact fit. The srcset is what stops the 720px file being sent
+            to a box that only needs 448 of it.
+          */}
+          <picture>
+            <source type="image/webp" srcSet={LOGO_SRC_SET} sizes={LOGO_SIZES} />
+            {/*
+              No srcset here on purpose: the <source> above is what sizes the
+              file for a modern browser, and a webp srcset on the fallback would
+              send these very URLs to a browser that just failed to load them.
+            */}
+            <img
+              src="/tk-gamer-logo.png"
+              alt="TK Gaming"
+              width={720}
+              height={720}
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+              className="absolute inset-0 size-full rounded-4xl object-contain"
+            />
+          </picture>
         </div>
       </section>
 

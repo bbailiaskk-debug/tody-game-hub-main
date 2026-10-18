@@ -187,22 +187,52 @@ function RootShell({ children }: { children: ReactNode }) {
             __html: `(function(){
   var forced=new URLSearchParams(window.location.search).get("splash");
   var suppressed=forced==="0"||forced==="false";
-  if(!suppressed){try{suppressed=!!window.sessionStorage.getItem("tk-splash-done");}catch(e){}}
+  if(!suppressed&&forced!=="1"&&forced!=="true"){try{suppressed=!!window.sessionStorage.getItem("tk-splash-done");}catch(e){}}
   if(suppressed)document.documentElement.setAttribute("data-splash-suppressed","");
 })();`,
           }}
         />
+        {/*
+          This link stays render-blocking on purpose.
+
+          `critical.css` is inlined above and its rules are guarded by
+          `html:not([data-css-on])`, which reads as "paint early with an
+          approximation". It is not an approximation of the whole site: it
+          mirrors only the header and the landing hero, and it does not mirror
+          them exactly — the hero headline falls back to its inherited size and
+          the header links render as plain underlined anchors.
+
+          Two ways of not blocking were tried here and both are wrong:
+
+          - `media="print"` plus a swap on load: the browser paints the
+            half-styled mirror for as long as the CSS takes to arrive —
+            measured at 4 seconds on a 400 kbit/s connection, followed by a
+            224px layout jump.
+          - `rel="preload" as="style"` with the swap deferred to the preload's
+            `load` event: that event can fire before this script runs, in which
+            case the listener never attaches, `rel` stays `preload`, the
+            stylesheet is never applied at all, and the page sits in the mirror
+            design permanently. Whether it happens depends on the cache — which
+            makes it worse than either outcome on its own.
+
+          So the stylesheet blocks rendering and the page paints once, correctly.
+          The mirror remains what it was written for: the case where the
+          stylesheet fails to load at all, which `data-css-error` now reports.
+        */}
         <link rel="stylesheet" href={appCssUrl} id="app-css" suppressHydrationWarning />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){
-  var l=document.getElementById("app-css");if(!l)return;
-  function apply(){
-    document.documentElement.setAttribute("data-css-on","");
-  }
-  l.addEventListener("load",apply,{once:true});
-  l.addEventListener("error",function(){console.warn("Application stylesheet failed to load:",l.href);},{once:true});
-  try{if(l.sheet&&l.sheet.cssRules.length)apply();}catch(e){apply();}
+  var l=document.getElementById("app-css");
+  var root=document.documentElement;
+  if(!l)return;
+  function ready(){root.setAttribute("data-css-on","");}
+  l.addEventListener("load",ready,{once:true});
+  l.addEventListener("error",function(){
+    console.warn("Application stylesheet failed to load:",l.href);
+    root.setAttribute("data-css-error","");
+  },{once:true});
+  try{if(l.sheet&&l.sheet.cssRules.length)ready();}catch(e){ready();}
 })();`,
           }}
         />

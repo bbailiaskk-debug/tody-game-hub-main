@@ -854,43 +854,6 @@ html:not([data-css-on]) .-space-x-3 > :not([hidden]) ~ :not([hidden]) {
   min-height: calc(100svh - 4.25rem);
 }
 
-/* --- Мрежестият фон (.grid-bg) за художествената идентичност. Стойностите са
-   идентични с тези в styles.css, затова е безопасно да се използват като
-   огледало преди зареждането на пълния stylesheet. --- */
-html:not([data-css-on]) .grid-bg {
-  background-image:
-    radial-gradient(
-      circle at 70% 20%,
-      color-mix(in oklab, var(--brand) 4%, transparent),
-      transparent 55%
-    ),
-    linear-gradient(
-      to right,
-      color-mix(in oklab, var(--border) 60%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      color-mix(in oklab, var(--border) 60%, transparent) 1px,
-      transparent 1px
-    );
-  background-size:
-    100% 100%,
-    64px 64px,
-    64px 64px;
-  background-position: center, center, center;
-  background-attachment: scroll, scroll, scroll;
-}
-
-@media (max-width: 767px) {
-  html:not([data-css-on]) .grid-bg {
-    background-image: radial-gradient(
-      ellipse 120% 45% at 50% 0%,
-      color-mix(in oklab, var(--brand) 8%, transparent),
-      transparent 60%
-    );
-    background-size: 100% 100%;
-    background-position: center;
-    background-attachment: scroll;
-  }
-}
+/* --- Мрежата на заден план е премахната и тук. Огледалото трябва да
+   съвпада със styles.css, иначе решетката все още се появява за част от
+   времето, в което пълният stylesheet още не е пристигнал. --- */

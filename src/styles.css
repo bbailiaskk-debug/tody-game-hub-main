@@ -221,29 +221,11 @@ body {
   color: var(--muted-foreground);
 }
 
+/* Мрежата на заден план е премахната нарочно: 64px линиите минаваха и през
+   текста, и през снимките в hero-блока, и четене ставаше трудно. Класът остава
+   в разметката, защото е бил на ~25 места, но не рисува нищо. */
 @utility grid-bg {
-  background-image:
-    radial-gradient(
-      circle at 70% 20%,
-      color-mix(in oklab, var(--brand) 4%, transparent),
-      transparent 55%
-    ),
-    linear-gradient(
-      to right,
-      color-mix(in oklab, var(--border) 60%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      color-mix(in oklab, var(--border) 60%, transparent) 1px,
-      transparent 1px
-    );
-  background-size:
-    100% 100%,
-    64px 64px,
-    64px 64px;
-  background-position: center, center, center;
-  background-attachment: scroll, scroll, scroll;
+  background-image: none;
 }
 
 .art-image-0 {
@@ -665,21 +647,8 @@ html[data-splash-suppressed] .splash-root {
   }
 }
 
-/* Мобилна версия на мрежестия фон: без повтарящите се 1px линии, които
-   принуждават пребоядисване при скрол на телефони. Оставяме само мекия бранд
-   ореол, за да запазим визуалната идентичност. */
-@media (max-width: 767px) {
-  .grid-bg {
-    background-image: radial-gradient(
-      ellipse 120% 45% at 50% 0%,
-      color-mix(in oklab, var(--brand) 8%, transparent),
-      transparent 60%
-    );
-    background-size: 100% 100%;
-    background-position: center;
-    background-attachment: scroll;
-  }
-}
+/* Мобилната версия на мрежата е премахната заедно с нея — иначе на телефони
+   оставаше само ореолът и страницата изглеждаше променена, а не изчистена. */
 
 /* iOS Safari авто-zoom-ва inputs с font-size < 16px. На телефони полетата
    стават по-големи, но падането на "фокуса" изчезва — по-добре за UX. */

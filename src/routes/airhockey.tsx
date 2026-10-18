@@ -821,10 +821,22 @@ function AhOnlineGameLobby({ online }: { online: AirHockeyOnlineController }) {
 
   if (online.phase === "connecting") {
     return (
-      <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 p-8 text-center">
+      <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 p-8 text-center">
         <span className="font-mono text-sm tracking-[0.2em] text-brand uppercase">
           {isBg ? "Свързване…" : isZh ? "连接中…" : "CONNECTING…"}
         </span>
+        {/*
+          The one way out of a panel that replaces the whole lobby. Without it
+          a connection that never establishes leaves nothing to click but the
+          browser's back button.
+        */}
+        <button
+          type="button"
+          onClick={online.leaveGame}
+          className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 font-mono text-xs tracking-[0.15em] text-foreground transition-colors hover:bg-surface"
+        >
+          {isBg ? "ОТКАЗИ" : isZh ? "取消" : "CANCEL"}
+        </button>
       </div>
     );
   }

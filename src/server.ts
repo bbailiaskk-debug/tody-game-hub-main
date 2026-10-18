@@ -121,6 +121,23 @@ function responseUrlPath(response: Response): string | null {
 const HSTS_POLICY = "max-age=63072000; includeSubDomains; preload";
 
 function withHsts(response: Response): Response {
+  /**
+   * A WebSocket handshake is handed back exactly as the object produced it.
+   *
+   * Everything below rebuilds the response to attach headers, and that cannot
+   * be done to a 101: the `Response` constructor accepts only 200-599, so it
+   * threw a RangeError, the whole upgrade came back as a 500, and every
+   * multiplayer game sat on its connecting screen until the browser gave up.
+   * The failing frame was in this function rather than in any of the four
+   * routes, which is why chess, tic-tac-toe and air hockey all broke together.
+   *
+   * Nothing is lost by passing it through. A 101 has no body and no headers
+   * worth rewriting — HSTS is established by the response that carries the
+   * socket, and it is already HTTPS by the time this runs.
+   */
+  const handedOverSocket = (response as { webSocket?: unknown }).webSocket;
+  if (response.status === 101 || handedOverSocket) return response;
+
   const nextHeaders = new Headers(response.headers);
   if (!nextHeaders.has("strict-transport-security")) {
     nextHeaders.set("Strict-Transport-Security", HSTS_POLICY);

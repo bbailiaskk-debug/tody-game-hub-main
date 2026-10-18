@@ -113,7 +113,19 @@ function Profile() {
             if (!hasLocalBirthday && serverBirthday) nextBirthday = serverBirthday;
             if (!hasLocalGender && serverGender) nextGender = serverGender;
             nextName = result.data.name || nextName;
-            if (result.data.avatar) nextAvatar = result.data.avatar;
+            /**
+             * The server is the backup, not the authority here.
+             *
+             * An upload writes the server in the background, so for as long as
+             * that request is in flight the account still holds the previous
+             * picture — and this function runs on every `userStateChanged`,
+             * including the one the upload itself sends. Taking the server's
+             * copy unconditionally therefore undid the change the person had
+             * just made, which read as the header and this card disagreeing
+             * about which photo it was. A device that has none locally still
+             * gets the server's, which is the case this keeps.
+             */
+            if (result.data.avatar && !nextAvatar) nextAvatar = result.data.avatar;
             writePersistedUserProfile({
               name: nextName,
               email: result.data.email || nextEmail,

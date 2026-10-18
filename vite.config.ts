@@ -42,6 +42,11 @@ export default defineConfig({
       },
     ],
     build: {
+      // Lighthouse flags any JavaScript chunk over 75 kB that ships without a
+      // source map, because an unminified trace of the bundle is the only way to
+      // see which of its bytes a given page never used. The maps are only ever
+      // fetched when devtools has them open, so they cost the visitor nothing.
+      sourcemap: true,
       rollupOptions: {
         external: ["cloudflare:workers"],
         output: {

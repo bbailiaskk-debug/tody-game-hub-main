@@ -332,7 +332,7 @@ const stubCallBrowser = () => {
 };
 
 const render = async () => {
-  const { MessagesPage } = await import("../routes/messages");
+  const { MessagesPage } = await import("../components/site/MessagesPage");
   const { SiteSettingsProvider } = await import("../components/site/theme");
   const { createElement } = await import("react");
   const host = document.createElement("div");

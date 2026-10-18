@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 const MIN_VISIBLE_MS = 300;
-const MAX_VISIBLE_MS = 550;
 const FADE_DURATION_MS = 220;
 const CHECK_INTERVAL_MS = 120;
 const SPLASH_DONE_KEY = "tk-splash-done";
@@ -22,7 +21,12 @@ function isPageFullyLoaded(): boolean {
 
   const appCss = document.getElementById("app-css") as HTMLLinkElement | null;
   if (!appCss) return true;
-  return appCss.media === "all" || document.documentElement.hasAttribute("data-css-on");
+  const root = document.documentElement;
+  return (
+    appCss.media === "all" ||
+    root.hasAttribute("data-css-on") ||
+    root.hasAttribute("data-css-error")
+  );
 }
 
 export function SplashScreen() {
@@ -30,12 +34,13 @@ export function SplashScreen() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const forced = new URLSearchParams(window.location.search).get("splash");
     if (!shouldRenderSplash()) {
       setPhase("hidden");
       return;
     }
     try {
-      if (window.sessionStorage.getItem(SPLASH_DONE_KEY)) {
+      if (forced !== "1" && forced !== "true" && window.sessionStorage.getItem(SPLASH_DONE_KEY)) {
         setPhase("hidden");
         return;
       }
@@ -62,8 +67,6 @@ export function SplashScreen() {
     const check = () => {
       const elapsed = Date.now() - startedAt;
       if (elapsed >= MIN_VISIBLE_MS && isPageFullyLoaded()) {
-        finish();
-      } else if (elapsed >= MAX_VISIBLE_MS) {
         finish();
       } else {
         pendingTimer = window.setTimeout(check, CHECK_INTERVAL_MS);

@@ -45,7 +45,14 @@ const libraryTracks: Track[] = [
   "Всеки ден с приятелка mix.mp3",
   "Вторник и петък натискай play сега! MIX.mp3",
   "Джойстикът ми знае Mix.mp3",
-  "Катя и Нелка (1).mp3",
+  /*
+   * Without the "(1)" that Windows appends when a file is downloaded twice.
+   * The name in this list is the file name and nothing else — the url is built
+   * from it — so a stray "(1)" asked for a file that does not exist and this
+   * track came back 404, which the player cannot report and just looks like a
+   * track that refuses to play.
+   */
+  "Катя и Нелка.mp3",
   "Кола и пиксели (Nightcore Mix).mp3",
   "Копая към края MIX.mp3",
   "саламът бяга Mix.mp3",

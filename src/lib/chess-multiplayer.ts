@@ -33,6 +33,18 @@ export type ChessOnlineController = {
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const MAX_RECONNECT_ATTEMPTS = 3;
 const PING_INTERVAL_MS = 15000;
+/**
+ * How long the whole attempt may take, from creating the socket to the first
+ * snapshot.
+ *
+ * It is deliberately started at `new WebSocket` and not in `onopen`. A
+ * connection that never upgrades — a hung handshake, a proxy holding the
+ * request open — fires neither `onopen` nor `onclose`, so a timer waiting on
+ * `onopen` never starts and the page reads CONNECTING for ever with no way
+ * out. Ending it at the first snapshot still leaves the healthy path untouched,
+ * which arrives in milliseconds.
+ */
+const CONNECT_TIMEOUT_MS = 12000;
 
 function randomGameCode(length = 5): string {
   let code = "";
@@ -74,11 +86,13 @@ export function useChessOnline(): ChessOnlineController {
   const attemptsRef = useRef(0);
   const leftRef = useRef(true);
   const pingTimerRef = useRef<number | null>(null);
+  const handshakeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
       leftRef.current = true;
       if (pingTimerRef.current !== null) window.clearInterval(pingTimerRef.current);
+      if (handshakeTimerRef.current !== null) window.clearTimeout(handshakeTimerRef.current);
       wsRef.current?.close();
     };
   }, []);
@@ -87,6 +101,25 @@ export function useChessOnline(): ChessOnlineController {
     if (pingTimerRef.current !== null) {
       window.clearInterval(pingTimerRef.current);
       pingTimerRef.current = null;
+    }
+  }, []);
+
+  const stopHandshake = useCallback(() => {
+    if (handshakeTimerRef.current !== null) {
+      window.clearTimeout(handshakeTimerRef.current);
+      handshakeTimerRef.current = null;
+    }
+  }, []);
+
+  /** Hangs up on a socket that never got there, so `onclose` drives the retry. */
+  const abortSocket = useCallback((ws: WebSocket) => {
+    if (wsRef.current !== ws) return;
+    if (ws.readyState === WebSocket.CLOSED) return;
+    try {
+      ws.close();
+    } catch {
+      // Closing a socket that is still upgrading throws in some runtimes; the
+      // reconnect below is what actually matters, so the failure is ignored.
     }
   }, []);
 
@@ -101,6 +134,7 @@ export function useChessOnline(): ChessOnlineController {
     const info = connectInfoRef.current;
     if (!info) return;
 
+    stopHandshake();
     wsRef.current?.close();
 
     const connId = crypto.randomUUID();
@@ -115,6 +149,14 @@ export function useChessOnline(): ChessOnlineController {
     wsRef.current = ws;
     setPhase("connecting");
     setError(null);
+
+    // Covers the upgrade and the join as one attempt. Ending it at the first
+    // snapshot leaves the healthy path untouched.
+    stopHandshake();
+    handshakeTimerRef.current = window.setTimeout(() => {
+      handshakeTimerRef.current = null;
+      abortSocket(ws);
+    }, CONNECT_TIMEOUT_MS);
 
     ws.onopen = () => {
       send({
@@ -139,6 +181,7 @@ export function useChessOnline(): ChessOnlineController {
       }
       switch (msg.type) {
         case "state":
+          stopHandshake();
           setSnapshot(msg.snapshot);
           setPhase(
             msg.snapshot.result
@@ -172,7 +215,13 @@ export function useChessOnline(): ChessOnlineController {
           break;
         case "opponentStatus":
         case "pong":
+          break;
         case "error":
+          // The server answered, it just said no. Leaving the phase alone here
+          // is what used to strand the page on CONNECTING.
+          stopHandshake();
+          setError(msg.message);
+          setPhase("error");
           break;
         default:
           break;
@@ -182,6 +231,7 @@ export function useChessOnline(): ChessOnlineController {
     ws.onclose = () => {
       if (wsRef.current !== ws) return;
       stopPing();
+      stopHandshake();
       if (!leftRef.current && attemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
         attemptsRef.current += 1;
         window.setTimeout(openSocket, 1500 * attemptsRef.current);
@@ -196,7 +246,7 @@ export function useChessOnline(): ChessOnlineController {
     ws.onerror = () => {
       // onclose follows and drives reconnect / error state.
     };
-  }, [send, stopPing]);
+  }, [send, stopPing, stopHandshake, abortSocket]);
 
   const connectGame = useCallback(
     async (gameIdInput: string) => {
@@ -268,6 +318,7 @@ export function useChessOnline(): ChessOnlineController {
   const leaveGame = useCallback(() => {
     leftRef.current = true;
     stopPing();
+    stopHandshake();
     wsRef.current?.close();
     wsRef.current = null;
     connectInfoRef.current = null;
@@ -276,7 +327,7 @@ export function useChessOnline(): ChessOnlineController {
     setError(null);
     setRematch({ white: false, black: false });
     setPhase("idle");
-  }, [stopPing]);
+  }, [stopPing, stopHandshake]);
 
   const sendMove = useCallback(
     (from: Square, to: Square, promotion?: PieceType) => {
