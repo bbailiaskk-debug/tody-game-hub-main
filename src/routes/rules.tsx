@@ -7,10 +7,14 @@ import {
   HandHeart,
   Lock,
   MessageSquareWarning,
+  Play,
   ScrollText,
   Sparkles,
   Users,
+  Volume2,
+  X,
 } from "lucide-react";
+import { useRef, useState } from "react";
 
 import { useSiteSettings } from "../components/site/theme";
 import { serverGetEmailjsQuota, type EmailjsQuota } from "../lib/emailjs-quota";
@@ -72,6 +76,7 @@ const bgRules: RuleItem[] = [
   },
   {
     icon: Baby,
+    id: "children-styles",
     title: "Деца и Styles / Регистрация",
     text: "Деца от 5 до 8 години нямат право да пипат Styles или да натискат клавиша F12. Преди да пипат каквито и да е Styles или да си направят регистрация сами, децата задължително трябва да попитат своите родители дали могат да го направят.",
   },
@@ -116,6 +121,7 @@ const enRules: RuleItem[] = [
   },
   {
     icon: Baby,
+    id: "children-styles",
     title: "Children and Styles / Registration",
     text: "Children between 5 and 8 are not allowed to touch Styles or press the F12 key. Before touching any Styles or registering on their own, children must always ask their parents whether they may do so.",
   },
@@ -160,6 +166,7 @@ const zhRules: RuleItem[] = [
   },
   {
     icon: Baby,
+    id: "children-styles",
     title: "儿童与 Styles / 注册",
     text: "5 至 8 岁的儿童不得触碰 Styles 或按 F12 键。在触碰任何 Styles 或自行注册之前，儿童必须征得父母同意后才能进行。",
   },
@@ -216,8 +223,17 @@ function RulesPage() {
   const isBg = lang === "bg";
   const isZh = lang === "zh";
   const quota = Route.useLoaderData();
+  const [isChildrenVideoOpen, setIsChildrenVideoOpen] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+  const childrenVideoRef = useRef<HTMLVideoElement>(null);
 
   const rules = isZh ? zhRules : isBg ? bgRules : enRules;
+
+  const closeChildrenVideo = () => {
+    childrenVideoRef.current?.pause();
+    if (childrenVideoRef.current) childrenVideoRef.current.currentTime = 0;
+    setIsChildrenVideoOpen(false);
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -257,6 +273,76 @@ function RulesPage() {
                   <p className="mt-1 text-sm text-muted-foreground">{rule.text}</p>
                   {rule.id === "emailjs" && quota ? (
                     <EmailjsQuotaNotice quota={quota} isBg={isBg} isZh={isZh} />
+                  ) : null}
+                  {rule.id === "children-styles" ? (
+                    <div className="mt-4">
+                      {!isChildrenVideoOpen ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVideoError(false);
+                            setIsChildrenVideoOpen(true);
+                          }}
+                          aria-label={
+                            isZh
+                              ? "播放带声音的视频"
+                              : isBg
+                                ? "Пусни клипа със звук"
+                                : "Play video with sound"
+                          }
+                          className="group relative block aspect-video w-full max-w-lg overflow-hidden rounded-2xl border border-border/70 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                        >
+                          <img
+                            src="/rules-children-video-poster.jpg"
+                            alt=""
+                            className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                            loading="lazy"
+                          />
+                          <span className="absolute inset-0 grid place-items-center bg-black/35 transition-colors group-hover:bg-black/50">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/70 px-5 py-3 text-sm font-semibold text-white">
+                              <Play className="size-4 fill-current" />
+                              {isZh ? "播放视频" : isBg ? "Гледай клипа" : "Watch video"}
+                              <Volume2 className="size-4" />
+                            </span>
+                          </span>
+                        </button>
+                      ) : (
+                        <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-border/70 bg-black">
+                          <video
+                            ref={childrenVideoRef}
+                            src="/2026-10-19_18-05-56_1.mp4"
+                            poster="/rules-children-video-poster.jpg"
+                            controls
+                            autoPlay
+                            playsInline
+                            preload="auto"
+                            aria-label={
+                              isZh ? "规则视频" : isBg ? "Клип към правилото" : "Rules video"
+                            }
+                            onEnded={() => setIsChildrenVideoOpen(false)}
+                            onError={() => setVideoError(true)}
+                            className="block aspect-video w-full"
+                          />
+                          <button
+                            type="button"
+                            onClick={closeChildrenVideo}
+                            aria-label={isZh ? "关闭视频" : isBg ? "Затвори клипа" : "Close video"}
+                            className="absolute right-2 top-2 grid size-9 place-items-center rounded-full bg-black/75 text-white transition-colors hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                          >
+                            <X className="size-4" />
+                          </button>
+                          {videoError ? (
+                            <p role="alert" className="px-3 py-2 text-xs text-red-300">
+                              {isZh
+                                ? "视频无法加载。"
+                                : isBg
+                                  ? "Клипът не може да се зареди."
+                                  : "The video could not be loaded."}
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
                   ) : null}
                 </div>
               </div>
