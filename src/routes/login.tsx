@@ -10,6 +10,7 @@ import {
   serverRequestPasswordReset,
   serverSyncUserProfile,
   serverUserExists,
+  serverValidateAuthSession,
 } from "../lib/auth-functions";
 import { cachedRead, fnv1a, invalidateCachePrefix } from "../lib/remote-cache";
 import { messagesStore } from "../lib/messages-store";
@@ -33,6 +34,16 @@ import {
   EMAILJS_SERVICE_ID,
 } from "../lib/emailjs-config";
 import { describeEmailJsError, sendEmailJsWithFallback } from "../lib/emailjs-send";
+import { consumePostLoginRedirect } from "../lib/auth-redirect";
+
+function getPostLoginLocation() {
+  try {
+    return consumePostLoginRedirect(window.sessionStorage);
+  } catch (error) {
+    console.warn("Could not restore the protected page after sign-in.", error);
+    return "/";
+  }
+}
 
 type StoredUser = {
   name: string;
@@ -200,19 +211,27 @@ function Login() {
 
   useEffect(() => {
     const session = readPersistedAuthSession();
-    if (!session) return;
+    if (!session?.token) return;
 
-    const normalizedEmail = session.email.trim().toLowerCase();
-    const profile = readPersistedUserProfile();
-    const hasLocalAccount =
-      profile?.email === normalizedEmail ||
-      readRegisteredUsers().some(
-        (user) => (user.email ?? "").trim().toLowerCase() === normalizedEmail,
-      );
-
-    if (hasLocalAccount) {
-      window.location.replace("/");
-    }
+    let active = true;
+    void serverValidateAuthSession({ data: { email: session.email, token: session.token } })
+      .then(({ valid }) => {
+        if (!active || !valid) return;
+        const normalizedEmail = session.email.trim().toLowerCase();
+        const profile = readPersistedUserProfile();
+        const hasLocalAccount =
+          profile?.email === normalizedEmail ||
+          readRegisteredUsers().some(
+            (user) => (user.email ?? "").trim().toLowerCase() === normalizedEmail,
+          );
+        if (hasLocalAccount) window.location.replace(getPostLoginLocation());
+      })
+      .catch((error) => {
+        console.error("Failed to validate the current sign-in session.", error);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -347,13 +366,15 @@ function Login() {
         .catch(() => null);
 
       window.dispatchEvent(new Event("userStateChanged"));
-      void Promise.all([syncPromise, avatarPromise]).finally(() => window.location.replace("/"));
+      void Promise.all([syncPromise, avatarPromise]).finally(() =>
+        window.location.replace(getPostLoginLocation()),
+      );
     },
     [syncStoredUserProfile],
   );
 
   const completeGoogleLogin = useCallback(
-    async (profile: GoogleProfile) => {
+    async (profile: GoogleProfile, sessionToken: string) => {
       setSubmitting(true);
       setError("");
       setNotice("");
@@ -372,7 +393,7 @@ function Login() {
             },
           ]);
         }
-        signIn({ ...profile, provider: "google" });
+        signIn({ ...profile, provider: "google" }, sessionToken);
       } catch (caughtError) {
         console.warn("Google sign-in verification failed.", caughtError);
         setError(isBg ? "Google входът не беше успешен." : "Google sign-in was not successful.");
@@ -471,7 +492,7 @@ function Login() {
           setSubmitting(false);
           return;
         }
-        await completeGoogleLogin(result.profile);
+        await completeGoogleLogin(result.profile, result.sessionToken);
       } catch (error) {
         console.warn("Google sign-in exchange failed.", error);
         setError(isBg ? "Google входът не беше успешен." : "Google sign-in was not successful.");

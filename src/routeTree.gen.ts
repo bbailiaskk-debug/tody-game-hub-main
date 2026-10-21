@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AiRouteImport } from './routes/ai'
 import { Route as AirhockeyRouteImport } from './routes/airhockey'
 import { Route as BeatbattleRouteImport } from './routes/beatbattle'
+import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as CandycrushRouteImport } from './routes/candycrush'
 import { Route as ChessRouteImport } from './routes/chess'
 import { Route as CrystalrealmRouteImport } from './routes/crystalrealm'
@@ -35,6 +36,7 @@ import { Route as TetrisRouteImport } from './routes/tetris'
 import { Route as TictactoeRouteImport } from './routes/tictactoe'
 import { Route as TutorialRouteImport } from './routes/tutorial'
 import { Route as WordleRouteImport } from './routes/wordle'
+import { Route as YoutubeRouteImport } from './routes/youtube'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -54,6 +56,11 @@ const AirhockeyRoute = AirhockeyRouteImport.update({
 const BeatbattleRoute = BeatbattleRouteImport.update({
   id: '/beatbattle',
   path: '/beatbattle',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalendarRoute = CalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CandycrushRoute = CandycrushRouteImport.update({
@@ -166,12 +173,18 @@ const WordleRoute = WordleRouteImport.update({
   path: '/wordle',
   getParentRoute: () => rootRouteImport,
 } as any)
+const YoutubeRoute = YoutubeRouteImport.update({
+  id: '/youtube',
+  path: '/youtube',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai': typeof AiRoute
   '/airhockey': typeof AirhockeyRoute
   '/beatbattle': typeof BeatbattleRoute
+  '/calendar': typeof CalendarRoute
   '/candycrush': typeof CandycrushRoute
   '/chess': typeof ChessRoute
   '/crystalrealm': typeof CrystalrealmRoute
@@ -194,12 +207,14 @@ export interface FileRoutesByFullPath {
   '/tictactoe': typeof TictactoeRoute
   '/tutorial': typeof TutorialRoute
   '/wordle': typeof WordleRoute
+  '/youtube': typeof YoutubeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai': typeof AiRoute
   '/airhockey': typeof AirhockeyRoute
   '/beatbattle': typeof BeatbattleRoute
+  '/calendar': typeof CalendarRoute
   '/candycrush': typeof CandycrushRoute
   '/chess': typeof ChessRoute
   '/crystalrealm': typeof CrystalrealmRoute
@@ -222,6 +237,7 @@ export interface FileRoutesByTo {
   '/tictactoe': typeof TictactoeRoute
   '/tutorial': typeof TutorialRoute
   '/wordle': typeof WordleRoute
+  '/youtube': typeof YoutubeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -229,6 +245,7 @@ export interface FileRoutesById {
   '/ai': typeof AiRoute
   '/airhockey': typeof AirhockeyRoute
   '/beatbattle': typeof BeatbattleRoute
+  '/calendar': typeof CalendarRoute
   '/candycrush': typeof CandycrushRoute
   '/chess': typeof ChessRoute
   '/crystalrealm': typeof CrystalrealmRoute
@@ -251,6 +268,7 @@ export interface FileRoutesById {
   '/tictactoe': typeof TictactoeRoute
   '/tutorial': typeof TutorialRoute
   '/wordle': typeof WordleRoute
+  '/youtube': typeof YoutubeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -259,6 +277,7 @@ export interface FileRouteTypes {
     | '/ai'
     | '/airhockey'
     | '/beatbattle'
+    | '/calendar'
     | '/candycrush'
     | '/chess'
     | '/crystalrealm'
@@ -281,12 +300,14 @@ export interface FileRouteTypes {
     | '/tictactoe'
     | '/tutorial'
     | '/wordle'
+    | '/youtube'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/ai'
     | '/airhockey'
     | '/beatbattle'
+    | '/calendar'
     | '/candycrush'
     | '/chess'
     | '/crystalrealm'
@@ -309,12 +330,14 @@ export interface FileRouteTypes {
     | '/tictactoe'
     | '/tutorial'
     | '/wordle'
+    | '/youtube'
   id:
     | '__root__'
     | '/'
     | '/ai'
     | '/airhockey'
     | '/beatbattle'
+    | '/calendar'
     | '/candycrush'
     | '/chess'
     | '/crystalrealm'
@@ -337,6 +360,7 @@ export interface FileRouteTypes {
     | '/tictactoe'
     | '/tutorial'
     | '/wordle'
+    | '/youtube'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -344,6 +368,7 @@ export interface RootRouteChildren {
   AiRoute: typeof AiRoute
   AirhockeyRoute: typeof AirhockeyRoute
   BeatbattleRoute: typeof BeatbattleRoute
+  CalendarRoute: typeof CalendarRoute
   CandycrushRoute: typeof CandycrushRoute
   ChessRoute: typeof ChessRoute
   CrystalrealmRoute: typeof CrystalrealmRoute
@@ -366,6 +391,7 @@ export interface RootRouteChildren {
   TictactoeRoute: typeof TictactoeRoute
   TutorialRoute: typeof TutorialRoute
   WordleRoute: typeof WordleRoute
+  YoutubeRoute: typeof YoutubeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -396,6 +422,13 @@ declare module '@tanstack/react-router' {
       path: '/beatbattle'
       fullPath: '/beatbattle'
       preLoaderRoute: typeof BeatbattleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calendar': {
+      id: '/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof CalendarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/candycrush': {
@@ -552,6 +585,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WordleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/youtube': {
+      id: '/youtube'
+      path: '/youtube'
+      fullPath: '/youtube'
+      preLoaderRoute: typeof YoutubeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -560,6 +600,7 @@ const rootRouteChildren: RootRouteChildren = {
   AiRoute: AiRoute,
   AirhockeyRoute: AirhockeyRoute,
   BeatbattleRoute: BeatbattleRoute,
+  CalendarRoute: CalendarRoute,
   CandycrushRoute: CandycrushRoute,
   ChessRoute: ChessRoute,
   CrystalrealmRoute: CrystalrealmRoute,
@@ -582,6 +623,7 @@ const rootRouteChildren: RootRouteChildren = {
   TictactoeRoute: TictactoeRoute,
   TutorialRoute: TutorialRoute,
   WordleRoute: WordleRoute,
+  YoutubeRoute: YoutubeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

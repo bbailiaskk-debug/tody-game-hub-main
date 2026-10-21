@@ -16,7 +16,7 @@
   CDN-Cache-Control: max-age=31536000
   Access-Control-Allow-Origin: *
 
-/downloads/*
+/todor/*
   # The installer is a hundred megabytes and is replaced by hand when there is a
   # new build, so it must never be cached: a stale copy here is somebody running
   # last month's program and blaming it for this month's bug. Short enough that a

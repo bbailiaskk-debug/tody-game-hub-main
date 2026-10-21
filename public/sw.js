@@ -1,92 +1,80 @@
-/* ===========================================================
-   pwabuilder-sw.js
-   Service worker for Todor Khristov Gaming (PWA / TWA)
-   - Precache app shell + referenced JS/CSS bundles at install
-   - Network-first for navigations, offline fallbacks included
-   - Cache-first (stale-while-revalidate) for static assets
-   =========================================================== */
+const CACHE_NAME = "tkg-pwabuilder-v2.0.3";
+const PRECACHE_URLS = ["/", "/offline.html", "/android-chrome-192x192.png", "/favicon-32x32.png"];
 
-const CACHE_NAME = "tkg-pwabuilder-v2.0.1";
-const PRECACHE_URLS = [
-  "/",
-  "/offline.html",
-  "/site.webmanifest",
-  "/android-chrome-192x192.png",
-  "/android-chrome-512x512.png",
-  "/favicon-32x32.png",
-];
+const ASSET_EXTENSIONS = /\.(?:js|css|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|webmanifest)$/;
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-const ASSET_EXTENSIONS = /\.(?:js|css|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|webmanifest|json)$/;
-
-const CACHE_MAX_AGE = 60 * 1000;
-const TIMESTAMP_SUFFIX = "@timestamp";
-
-async function cacheResponse(request, response) {
-  if (!response || !response.ok) return;
-  const cache = await caches.open(CACHE_NAME);
-  // Използваме .clone(), за да предотвратим грешката с вече използвано тяло
-  cache.put(request, response.clone());
-  cache.put(request.url + TIMESTAMP_SUFFIX, new Response(String(Date.now())));
+function cacheTimestampKey(request) {
+  const url = new URL(typeof request === "string" ? request : request.url, self.location.origin);
+  url.searchParams.set("__tkg_cached_at", "1");
+  return url.href;
 }
 
-async function getCacheAge(url) {
-  const cache = await caches.open(CACHE_NAME);
-  const meta = await cache.match(url + TIMESTAMP_SUFFIX);
-  if (!meta) return Infinity;
-  const time = Number(await meta.text());
-  return Number.isFinite(time) ? Date.now() - time : Infinity;
+function isAppCache(name) {
+  return name.startsWith("tkg-pwabuilder-");
 }
 
-/* Collect every same-origin JS/CSS asset referenced by the app shell so the
-   whole bundle is available offline, not just the HTML. */
-async function precacheShellAssets(cache, shellPath) {
-  const shell = await cache.match(shellPath);
-  if (!shell) return;
-  const html = await shell.text();
-  const urls = new Set();
-  const pattern = /(?:src|href)="(\/[^"']+\.(?:js|css)(?:\?[^"']*)?)"/g;
-  let match;
-  while ((match = pattern.exec(html)) !== null) {
-    const clean = (match[1] || "").split("?")[0];
-    if (clean) urls.add(clean);
+function shouldRefreshCachedAssets() {
+  const connection = self.navigator.connection;
+  if (connection?.saveData) return false;
+  return !["slow-2g", "2g", "3g"].includes(connection?.effectiveType);
+}
+
+async function isCacheStale(cache, request) {
+  const metadata = await cache.match(cacheTimestampKey(request));
+  if (!metadata) return true;
+  const cachedAt = Number(await metadata.text());
+  return !Number.isFinite(cachedAt) || Date.now() - cachedAt >= CACHE_MAX_AGE_MS;
+}
+
+async function cacheResponse(cache, request, response, allowNoStore = false) {
+  const cacheControl = response.headers.get("cache-control") || "";
+  if (
+    response.status !== 200 ||
+    response.type === "opaque" ||
+    (!allowNoStore && /\b(?:private|no-store)\b/i.test(cacheControl))
+  ) {
+    return;
   }
-  await Promise.allSettled(
-    Array.from(urls, (path) => {
-      const url = new URL(path, self.location.origin);
-      if (url.origin !== self.location.origin) return Promise.resolve();
-      return (async () => {
-        try {
-          const response = await fetch(url);
-          if (response && response.ok) {
-            await cache.put(url, response.clone());
-            await cache.put(url.toString() + TIMESTAMP_SUFFIX, new Response(String(Date.now())));
-          }
-        } catch (error) {
-          /* offline at install time — assets will be cached on first online visit */
-        }
-      })();
-    }),
-  );
+
+  try {
+    await cache.put(request, response.clone());
+    await cache.put(cacheTimestampKey(request), new Response(String(Date.now())));
+  } catch (error) {
+    console.warn("ServiceWorker cache write failed:", error);
+  }
 }
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      await Promise.allSettled(
-        PRECACHE_URLS.map(async (path) => {
-          try {
-            const response = await fetch(path);
-            if (response && response.ok) {
-              // ИЗКЛЮЧИТЕЛНО ВАЖНО: Винаги ползваме .clone() тук, за да няма грешки!
-              await cache.put(path, response.clone());
-            }
-          } catch (error) {
-            /* ignore — offline install is non-fatal */
-          }
+      const oldCacheNames = (await caches.keys()).filter(
+        (name) => isAppCache(name) && name !== CACHE_NAME,
+      );
+      await Promise.all(
+        oldCacheNames.map(async (name) => {
+          const oldCache = await caches.open(name);
+          const requests = await oldCache.keys();
+          await Promise.all(
+            requests.map(async (request) => {
+              if (!(await cache.match(request))) {
+                const response = await oldCache.match(request);
+                if (response) await cache.put(request, response);
+              }
+            }),
+          );
         }),
       );
-      await precacheShellAssets(cache, "/");
+      await Promise.allSettled(
+        PRECACHE_URLS.map(async (path) => {
+          const response = await fetch(path);
+          if (response.ok) await cacheResponse(cache, path, response, path === "/");
+        }),
+      );
+      if (!(await cache.match("/")) || !(await cache.match("/offline.html"))) {
+        throw new Error("The app shell and offline page must be cached before activation.");
+      }
       await self.skipWaiting();
     })(),
   );
@@ -97,7 +85,11 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
+        Promise.all(
+          keys
+            .filter((key) => isAppCache(key) && key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
+        ),
       )
       .then(() => self.clients.claim()),
   );
@@ -111,19 +103,27 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
+    const networkResponse = fetch(request);
+    const cacheUpdate = networkResponse.then(async (response) => {
+      if (response.ok && url.pathname === "/") {
+        const cache = await caches.open(CACHE_NAME);
+        await cacheResponse(cache, "/", response, true);
+      }
+      return response;
+    });
+    event.waitUntil(
+      cacheUpdate.catch((error) => console.warn("ServiceWorker page cache update failed:", error)),
+    );
     event.respondWith(
       (async () => {
         try {
-          const response = await fetch(request);
-          if (response && response.ok) cacheResponse(request, response);
-          return response;
-        } catch (error) {
-          const exact = await caches.match(request);
-          if (exact) return exact;
-          const offline = await caches.match("/offline.html");
+          return await networkResponse;
+        } catch {
+          const cache = await caches.open(CACHE_NAME);
+          const offline = await cache.match("/offline.html");
           if (offline) return offline;
-          const cached = await caches.match("/");
-          if (cached) return cached;
+          const home = await cache.match("/");
+          if (home) return home;
           return new Response("Offline", {
             status: 503,
             statusText: "Service Unavailable",
@@ -135,30 +135,47 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (ASSET_EXTENSIONS.test(url.pathname)) {
-    event.respondWith(
-      (async () => {
-        const cached = await caches.match(request);
-        if (cached) {
-          const age = await getCacheAge(request.url);
-          if (age < CACHE_MAX_AGE) return cached;
-          fetch(request)
-            .then((response) => {
-              if (response && response.ok) cacheResponse(request, response);
-            })
-            .catch(() => {});
-          return cached;
-        }
-        try {
-          const response = await fetch(request);
-          if (response && response.ok) cacheResponse(request, response);
-          return response;
-        } catch (error) {
-          return new Response("", { status: 504, statusText: "Network Error" });
-        }
-      })(),
-    );
-  }
+  if (!ASSET_EXTENSIONS.test(url.pathname) || request.headers.has("authorization")) return;
+
+  const isHashedBuildAsset = url.pathname.startsWith("/assets/");
+  const cacheRefresh = (async () => {
+    if (isHashedBuildAsset || !shouldRefreshCachedAssets()) return;
+
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(request);
+    if (!cached || !(await isCacheStale(cache, request))) return;
+
+    const response = await fetch(request);
+    if (response.ok) await cacheResponse(cache, request, response);
+  })();
+  event.waitUntil(
+    cacheRefresh.catch((error) => console.warn("ServiceWorker asset refresh failed:", error)),
+  );
+  const cachePromise = caches.open(CACHE_NAME);
+  const cachedResponse = cachePromise.then((cache) => cache.match(request));
+  const networkResponse = cachedResponse.then((cached) => (cached ? null : fetch(request)));
+  const cacheWrite = networkResponse.then(async (response) => {
+    if (response?.ok) {
+      await cacheResponse(await cachePromise, request, response);
+    }
+  });
+  event.waitUntil(
+    cacheWrite.catch((error) => console.warn("ServiceWorker asset cache failed:", error)),
+  );
+  event.respondWith(
+    (async () => {
+      const cached = await cachedResponse;
+      if (cached) return cached;
+
+      try {
+        return (
+          (await networkResponse) || new Response("", { status: 504, statusText: "Network Error" })
+        );
+      } catch {
+        return new Response("", { status: 504, statusText: "Network Error" });
+      }
+    })(),
+  );
 });
 
 self.addEventListener("message", (event) => {

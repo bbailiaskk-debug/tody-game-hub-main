@@ -12,7 +12,9 @@ import { useEffect, type ReactNode } from "react";
 import appCssUrl from "../styles.css?url";
 import criticalCss from "../critical.css?inline";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { requiresAuthentication } from "../lib/auth-redirect";
 import { SiteHeader } from "../components/site/SiteHeader";
+import { AuthRequired } from "../components/site/AuthRequired";
 import { SiteSettingsProvider, useSiteSettings } from "../components/site/theme";
 import { SplashScreen } from "../components/site/SplashScreen";
 
@@ -342,13 +344,20 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const fullBleed = isFullBleed(pathname);
+  const protectedRoute = requiresAuthentication(pathname);
 
   return (
     <SiteSettingsProvider>
       <SplashScreen />
       {fullBleed ? null : <SiteHeader />}
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      {protectedRoute ? (
+        <AuthRequired>
+          <Outlet />
+        </AuthRequired>
+      ) : (
+        <Outlet />
+      )}
     </SiteSettingsProvider>
   );
 }

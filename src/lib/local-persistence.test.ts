@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  clearPersistedAuthSession,
   clearPersistedUserProfile,
   readPersistedAuthSession,
   readPersistedProfileFields,
@@ -26,12 +27,32 @@ describe("auth session and profile persistence", () => {
   });
 
   it("persists an auth session and reads it back", () => {
-    writePersistedAuthSession({ email: "Player@Example.com", name: "Player One" });
+    writePersistedAuthSession({
+      email: "Player@Example.com",
+      name: "Player One",
+      token: "server-session-token",
+    });
 
     const session = readPersistedAuthSession();
     expect(session).not.toBeNull();
     expect(session?.email).toBe("player@example.com");
     expect(session?.name).toBe("Player One");
+    expect(session?.token).toBe("server-session-token");
+  });
+
+  it("clears an expired sign-in without deleting the saved profile", () => {
+    writePersistedUserProfile({ name: "Player One", email: "player@example.com" });
+    writePersistedAuthSession({
+      email: "player@example.com",
+      name: "Player One",
+      token: "expired-session-token",
+    });
+
+    clearPersistedAuthSession();
+
+    expect(readPersistedAuthSession()).toBeNull();
+    expect(readPersistedUserProfile()?.email).toBe("player@example.com");
+    expect(window.localStorage.getItem("siteSessionToken")).toBeNull();
   });
 
   it("keeps the registered users list across logins (logout only clears the current user)", () => {

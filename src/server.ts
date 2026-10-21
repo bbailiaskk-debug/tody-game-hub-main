@@ -193,7 +193,7 @@ function withHsts(response: Response): Response {
   }
 
   /**
-   * The installer, when this handler is the one serving it.
+   * A download, when this handler is the one serving it.
    *
    * `public/_headers` already says this for the edge, but that file only covers
    * static assets. A self-hosted deployment serves `public/` through this worker
@@ -207,7 +207,7 @@ function withHsts(response: Response): Response {
    */
   const servedPath = responseUrlPath(response);
 
-  if (servedPath && servedPath.startsWith("/downloads/")) {
+  if (servedPath && servedPath.startsWith("/todor/")) {
     if (!nextHeaders.has("cache-control")) {
       nextHeaders.set("Cache-Control", "public, max-age=3600, must-revalidate");
     }
@@ -275,6 +275,104 @@ function initializeCloudflareEnv(env: unknown): void {
   (globalThis as typeof globalThis & { CF_ENV?: unknown }).CF_ENV = realEnv;
 }
 
+const WINDOWS_INSTALLER_PARTS = [
+  "/todor/windows-installer.part-0.bin",
+  "/todor/windows-installer.part-1.bin",
+  "/todor/windows-installer.part-2.bin",
+  "/todor/windows-installer.part-3.bin",
+  "/todor/windows-installer.part-4.bin",
+] as const;
+const WINDOWS_INSTALLER_SIZE = 111_752_749;
+
+function serveWindowsInstaller(request: Request, env: unknown): Response | null {
+  if (new URL(request.url).pathname !== "/todor/Tody-Game-Hub-1.0.0-setup-x64%20(11).exe") {
+    return null;
+  }
+
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: { Allow: "GET, HEAD", "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  const runtimeEnv = env ?? (globalThis as typeof globalThis & { __env__?: unknown }).__env__;
+  const bindings =
+    runtimeEnv && typeof runtimeEnv === "object"
+      ? (runtimeEnv as { ASSETS?: unknown }).ASSETS
+      : undefined;
+  if (!bindings || typeof bindings !== "object" || !("fetch" in bindings)) {
+    console.error("The static asset binding is not available for the Windows installer.");
+    return new Response("Installer download is temporarily unavailable.", {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "60" },
+    });
+  }
+
+  const fetchAsset = bindings.fetch;
+  if (typeof fetchAsset !== "function") {
+    console.error("The static asset binding does not provide fetch for the Windows installer.");
+    return new Response("Installer download is temporarily unavailable.", {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "60" },
+    });
+  }
+
+  const headers = new Headers({
+    "Cache-Control": "public, max-age=3600, must-revalidate",
+    "Content-Disposition": 'attachment; filename="Tody-Game-Hub-1.0.0-setup-x64 (11).exe"',
+    "Content-Length": String(WINDOWS_INSTALLER_SIZE),
+    "Content-Type": "application/vnd.microsoft.portable-executable",
+    "X-Content-Type-Options": "nosniff",
+  });
+
+  if (request.method === "HEAD") return new Response(null, { headers });
+
+  let partIndex = 0;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        while (true) {
+          if (!reader) {
+            if (partIndex >= WINDOWS_INSTALLER_PARTS.length) {
+              controller.close();
+              return;
+            }
+            const partPath = WINDOWS_INSTALLER_PARTS[partIndex++];
+            if (!partPath) throw new Error("The Windows installer is missing a configured part.");
+            const partUrl = new URL(partPath, request.url);
+            const part = await fetchAsset.call(bindings, new Request(partUrl));
+            if (!part.ok || !part.body) {
+              throw new Error(`Installer part request failed with status ${part.status}.`);
+            }
+            reader = part.body.getReader();
+          }
+
+          const activeReader = reader;
+          if (!activeReader) throw new Error("The Windows installer stream is not ready.");
+          const result = await activeReader.read();
+          if (result.done) {
+            activeReader.releaseLock();
+            reader = null;
+            continue;
+          }
+          controller.enqueue(result.value);
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to stream a Windows installer part.", error);
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      if (reader) await reader.cancel(reason);
+    },
+  });
+
+  return new Response(body, { headers });
+}
+
 function buildSitemapXml(): string {
   const baseUrl = "https://tody-game-hub.bbailiaskk.workers.dev";
   const pages = [
@@ -298,6 +396,7 @@ function buildSitemapXml(): string {
     { loc: "/rules", changefreq: "monthly", priority: "0.5" },
     { loc: "/tutorial", changefreq: "monthly", priority: "0.5" },
     { loc: "/music", changefreq: "weekly", priority: "0.8" },
+    { loc: "/youtube", changefreq: "daily", priority: "0.8" },
     { loc: "/info", changefreq: "weekly", priority: "0.8" },
   ];
 
@@ -3053,6 +3152,11 @@ export default {
     const sitemapResponse = serveSitemap(request);
     if (sitemapResponse) {
       return withHsts(sitemapResponse);
+    }
+
+    const installerResponse = serveWindowsInstaller(request, env);
+    if (installerResponse) {
+      return withHsts(installerResponse);
     }
 
     const stripeResponse = await serveStripeWebhook(request);

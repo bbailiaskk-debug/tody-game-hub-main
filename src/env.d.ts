@@ -20,6 +20,8 @@ declare module "cloudflare:workers" {
     ANTHROPIC_API_KEY?: string;
     ANTHROPIC_MODEL?: string;
     ANTHROPIC_TIMEOUT_MS?: string;
+    YOUTUBE_API_KEY?: string;
+    YOUTUBE_CHANNEL_ID?: string;
     AUTH_USERS_KV?: {
       get: (key: string) => Promise<string | null>;
       put: (key: string, value: string) => Promise<void>;

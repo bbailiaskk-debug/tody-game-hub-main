@@ -3,6 +3,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import {
   Bot,
   BookHeart,
+  CalendarDays,
   Candy,
   ChessKnight,
   ChevronDown,
@@ -25,6 +26,7 @@ import {
   Sparkles,
   Radio,
   X,
+  Youtube,
   Zap,
   Blocks,
 } from "lucide-react";
@@ -203,8 +205,13 @@ export function SiteHeader() {
   const menuItems = [
     { to: "/", label: t.nav.home },
     { to: "/games", label: t.nav.games },
+    {
+      to: "/calendar",
+      label: lang === "bg" ? "КАЛЕНДАР" : lang === "zh" ? "日历" : "CALENDAR",
+    },
     { to: "/rules", label: t.nav.rules },
     { to: "/music", label: t.nav.music },
+    { to: "/youtube", label: t.nav.videos },
     { to: "/messages", label: t.nav.messages },
     { to: "/info", label: t.nav.info },
   ] as const;
@@ -422,7 +429,15 @@ export function SiteHeader() {
                             "flex items-center justify-between rounded-[1.2rem] bg-primary px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] text-primary-foreground",
                         }}
                       >
-                        <span>{item.label}</span>
+                        <span className="flex items-center gap-3">
+                          {item.to === "/calendar" ? (
+                            <CalendarDays className="size-4 text-brand" />
+                          ) : null}
+                          {item.to === "/youtube" ? (
+                            <Youtube className="size-4 text-brand" />
+                          ) : null}
+                          {item.label}
+                        </span>
                         <span className="text-[1rem] text-current transition-transform group-hover:translate-x-1">
                           ›
                         </span>

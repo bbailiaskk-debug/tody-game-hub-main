@@ -12,7 +12,7 @@
   "navigationDividerColorDark": "#0D120D",
   "backgroundColor": "#0D120D",
   "enableNotifications": false,
-  "startUrl": "/messages",
+  "startUrl": "/",
   "iconUrl": "https://tody-game-hub.bbailiaskk.workers.dev/android-chrome-512x512.png",
   "maskableIconUrl": "https://tody-game-hub.bbailiaskk.workers.dev/android-chrome-512x512.png",
   "splashScreenFadeOutDuration": 300,

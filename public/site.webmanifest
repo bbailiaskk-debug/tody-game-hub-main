@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Todor Khristov Gaming",
   "short_name": "TK Gaming",
-  "start_url": "/messages",
+  "start_url": "/",
   "scope": "/",
   "description": "Яки игри и забавление с Todor Khristov Gaming",
   "categories": ["games", "social", "entertainment"],

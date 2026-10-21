@@ -15,11 +15,10 @@ const DEFAULT_ORIGIN = "https://tody-game-hub.bbailiaskk.workers.dev";
 /**
  * Where the window opens.
  *
- * `/messages` is the reason the app exists, and it already sends a signed out
- * visitor to the login form, so this lands in the chat or in the login and
- * never in an empty page.
+ * Start at the public homepage. Protected sections can still send signed-out
+ * visitors to sign in when they choose to open them.
  */
-const resolveEntry = (origin = DEFAULT_ORIGIN, path = process.env.TODY_APP_PATH || "/messages") => {
+const resolveEntry = (origin = DEFAULT_ORIGIN, path = process.env.TODY_APP_PATH || "/") => {
   const base = String(origin).trim().replace(/\/+$/, "");
   const suffix = String(path || "").trim();
   const target = suffix.startsWith("/") ? suffix : `/${suffix}`;

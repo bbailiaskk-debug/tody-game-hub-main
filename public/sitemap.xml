@@ -91,6 +91,11 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://tody-game-hub.bbailiaskk.workers.dev/youtube</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://tody-game-hub.bbailiaskk.workers.dev/info</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>

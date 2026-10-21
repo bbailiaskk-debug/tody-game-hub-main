@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { createGoogleAuthSession } from "./auth-functions";
 
 type GoogleCodeInput = {
   code: string;
@@ -15,7 +16,8 @@ export type GoogleProfile = {
 };
 
 type GoogleCodeResult =
-  { success: true; profile: GoogleProfile } | { success: false; error: string };
+  | { success: true; profile: GoogleProfile; sessionToken: string }
+  | { success: false; error: string };
 
 type GoogleIdTokenResult =
   { ok: true; profile: GoogleProfile; sub?: string } | { ok: false; reason: string };
@@ -254,8 +256,9 @@ export const exchangeGoogleCode = createServerFn({ method: "POST" })
       }
 
       await grantChatSession(verified.profile.email);
+      const sessionToken = await createGoogleAuthSession(verified.profile);
 
-      return { success: true, profile: verified.profile };
+      return { success: true, profile: verified.profile, sessionToken };
     } catch (error) {
       console.warn("Google authorization exchange failed.", error);
       return { success: false, error: "Google authorization could not be completed." };

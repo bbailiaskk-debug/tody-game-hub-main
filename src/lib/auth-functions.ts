@@ -37,6 +37,7 @@ export type AuthStore = {
   users: UserRecord[];
   resetTokens: Record<string, string>;
   accountDeletionTokens?: Record<string, { hash: string; expiresAt: number }>;
+  sessions?: Record<string, { email: string; expiresAt: number }>;
 };
 
 type AuthKvNamespace = {
@@ -59,6 +60,7 @@ const getInMemoryStore = (): AuthStore => {
       users: [],
       resetTokens: {},
       accountDeletionTokens: {},
+      sessions: {},
     };
   }
 
@@ -97,6 +99,9 @@ const getStore = async (): Promise<AuthStore> => {
             { hash: string; expiresAt: number }
           >)
         : {},
+      sessions: isRecord(parsedStore["sessions"])
+        ? (parsedStore["sessions"] as Record<string, { email: string; expiresAt: number }>)
+        : {},
     };
 
     const globalStore = globalThis as typeof globalThis & { __authStore?: AuthStore };
@@ -123,12 +128,78 @@ const persistStore = async (store: AuthStore) => {
 };
 
 const generateToken = () => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 };
+
+const hashSessionToken = async (token: string) => {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+export async function createAuthSession(store: AuthStore, email: string) {
+  const token = generateToken();
+  const sessions = (store.sessions ??= {});
+  const now = Date.now();
+  for (const [hash, session] of Object.entries(sessions)) {
+    if (session.expiresAt <= now) delete sessions[hash];
+  }
+  const existingSessions = Object.entries(sessions).sort(
+    ([, first], [, second]) => first.expiresAt - second.expiresAt,
+  );
+  while (existingSessions.length >= 1000) {
+    const oldest = existingSessions.shift();
+    if (oldest) delete sessions[oldest[0]];
+  }
+  sessions[await hashSessionToken(token)] = {
+    email: normalizeEmail(email),
+    expiresAt: now + 365 * 24 * 60 * 60 * 1000,
+  };
+  return token;
+}
+
+export async function isValidAuthSession(email: string, token: string) {
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedToken = token.trim();
+  if (
+    !normalizedEmail ||
+    normalizedEmail.length > 254 ||
+    !normalizedToken ||
+    normalizedToken.length > 256
+  ) {
+    return false;
+  }
+  const session = (await getStore()).sessions?.[await hashSessionToken(normalizedToken)];
+  return (
+    session?.email === normalizedEmail &&
+    typeof session.expiresAt === "number" &&
+    session.expiresAt > Date.now()
+  );
+}
+
+export const serverValidateAuthSession = createServerFn({ method: "POST" })
+  .validator((data: { email: string; token: string }) => data)
+  .handler(async ({ data }) => ({
+    valid: await isValidAuthSession(data.email, data.token),
+  }));
+
+export async function createGoogleAuthSession(input: { name: string; email: string }) {
+  const email = normalizeEmail(input.email);
+  const name = input.name.trim();
+  if (!email || !name) throw new Error("Google account details are incomplete.");
+  const store = await getStore();
+  let user = store.users.find((storedUser) => storedUser.email === email);
+  if (!user) {
+    user = { name, email, accentColor: "#1db954" };
+    store.users.push(user);
+  } else if (!user.name) {
+    user.name = name;
+  }
+  const token = await createAuthSession(store, email);
+  await persistStore(store);
+  return token;
+}
 
 const preparePassword = async (password: string) => {
   const result = await hashPassword(password);
@@ -233,6 +304,7 @@ export const serverRegister = createServerFn({ method: "POST" })
     };
 
     store.users.push(user);
+    const token = await createAuthSession(store, user.email);
     await persistStore(store);
 
     return {
@@ -243,7 +315,7 @@ export const serverRegister = createServerFn({ method: "POST" })
         birthday: user.birthday,
         gender: user.gender,
         accentColor: user.accentColor,
-        token: generateToken(),
+        token,
       },
     };
   });
@@ -270,6 +342,9 @@ export const serverLogin = createServerFn({ method: "POST" })
       };
     }
 
+    const token = await createAuthSession(store, email);
+    await persistStore(store);
+
     return {
       success: true,
       data: {
@@ -279,7 +354,7 @@ export const serverLogin = createServerFn({ method: "POST" })
         gender: user.gender ?? "",
         accentColor: user.accentColor ?? "#1db954",
         avatar: user.avatar ?? "",
-        token: generateToken(),
+        token,
       },
     };
   });
@@ -414,6 +489,9 @@ export const serverDeleteAccount = createServerFn({ method: "POST" })
     }
 
     store.users = store.users.filter((user) => user.email !== email);
+    for (const [hash, session] of Object.entries(store.sessions ?? {})) {
+      if (session.email === email) delete store.sessions?.[hash];
+    }
     delete store.resetTokens[email];
     delete accountDeletionTokens[email];
 

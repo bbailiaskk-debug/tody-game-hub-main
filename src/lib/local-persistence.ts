@@ -304,6 +304,13 @@ export function writePersistedAuthSession(session: PersistedAuthSession) {
   if (session.token) storageSet("siteSessionToken", session.token);
 }
 
+export function clearPersistedAuthSession() {
+  if (!isBrowser()) return;
+  [AUTH_SESSION_KEY, "currentUserEmail", "userEmail", "siteSessionToken"].forEach(storageRemove);
+  document.cookie = "siteSession=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+  window.dispatchEvent(new Event("userStateChanged"));
+}
+
 export function clearPersistedUserProfile() {
   if (!isBrowser()) return;
   [

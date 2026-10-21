@@ -42,7 +42,11 @@ const shell = createRequire(import.meta.url)("../../desktop/shell.cjs") as {
 const ORIGIN = shell.DEFAULT_ORIGIN;
 
 describe("where the window opens", () => {
-  it("opens the chat, which sends a stranger to the login form", () => {
+  it("opens the public homepage by default", () => {
+    expect(shell.resolveEntry(ORIGIN)).toBe(`${ORIGIN}/`);
+  });
+
+  it("can open a requested path", () => {
     expect(shell.resolveEntry(ORIGIN, "/messages")).toBe(`${ORIGIN}/messages`);
   });
 
