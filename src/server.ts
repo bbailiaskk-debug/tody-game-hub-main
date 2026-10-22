@@ -283,11 +283,13 @@ const WINDOWS_INSTALLER_PARTS = [
   "/todor/windows-installer.part-4.bin",
 ] as const;
 const WINDOWS_INSTALLER_SIZE = 111_752_749;
+const WINDOWS_INSTALLER_PATHS = new Set([
+  "/todor/Tody-Game-Hub-1.0.0-setup-x64.exe",
+  "/todor/Tody-Game-Hub-1.0.0-setup-x64%20(11).exe",
+]);
 
 function serveWindowsInstaller(request: Request, env: unknown): Response | null {
-  if (new URL(request.url).pathname !== "/todor/Tody-Game-Hub-1.0.0-setup-x64%20(11).exe") {
-    return null;
-  }
+  if (!WINDOWS_INSTALLER_PATHS.has(new URL(request.url).pathname)) return null;
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response("Method not allowed", {
@@ -320,7 +322,7 @@ function serveWindowsInstaller(request: Request, env: unknown): Response | null 
 
   const headers = new Headers({
     "Cache-Control": "public, max-age=3600, must-revalidate",
-    "Content-Disposition": 'attachment; filename="Tody-Game-Hub-1.0.0-setup-x64 (11).exe"',
+    "Content-Disposition": 'attachment; filename="Tody-Game-Hub-1.0.0-setup-x64.exe"',
     "Content-Length": String(WINDOWS_INSTALLER_SIZE),
     "Content-Type": "application/vnd.microsoft.portable-executable",
     "X-Content-Type-Options": "nosniff",
@@ -3149,37 +3151,52 @@ export default {
       return withHsts(httpsRedirect);
     }
 
-    const sitemapResponse = serveSitemap(request);
+    const pathname = new URL(request.url).pathname;
+
+    const sitemapResponse = pathname === "/sitemap.xml" ? serveSitemap(request) : null;
     if (sitemapResponse) {
       return withHsts(sitemapResponse);
     }
 
-    const installerResponse = serveWindowsInstaller(request, env);
+    const installerResponse = WINDOWS_INSTALLER_PATHS.has(pathname)
+      ? serveWindowsInstaller(request, env)
+      : null;
     if (installerResponse) {
       return withHsts(installerResponse);
     }
 
-    const stripeResponse = await serveStripeWebhook(request);
+    const stripeResponse =
+      pathname === "/api/stripe/webhook" && request.method === "POST"
+        ? await serveStripeWebhook(request)
+        : null;
     if (stripeResponse) {
       return withHsts(stripeResponse);
     }
 
-    const chessResponse = await serveChessGameRequest(request, env);
+    const chessResponse = pathname.startsWith("/api/ws/chess/")
+      ? await serveChessGameRequest(request, env)
+      : null;
     if (chessResponse) {
       return withHsts(chessResponse);
     }
 
-    const tttResponse = await serveTicTacToeGameRequest(request, env);
+    const tttResponse = pathname.startsWith("/api/ws/ttt/")
+      ? await serveTicTacToeGameRequest(request, env)
+      : null;
     if (tttResponse) {
       return withHsts(tttResponse);
     }
 
-    const airHockeyResponse = await serveAirHockeyGameRequest(request, env);
+    const airHockeyResponse = pathname.startsWith("/api/ws/airhockey/")
+      ? await serveAirHockeyGameRequest(request, env)
+      : null;
     if (airHockeyResponse) {
       return withHsts(airHockeyResponse);
     }
 
-    const messagesResponse = await serveMessagesRequest(request, env);
+    const messagesResponse = pathname.startsWith("/api/messages")
+      ? await serveMessagesRequest(request, env)
+      : null;
     if (messagesResponse) {
       return withHsts(messagesResponse);
     }

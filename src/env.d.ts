@@ -34,6 +34,7 @@ declare module "cloudflare:workers" {
     TTT_GAME_DO?: DurableObjectNamespace;
     AIR_HOCKEY_DO?: DurableObjectNamespace;
     MESSAGES_DO?: DurableObjectNamespace;
+    YOUTUBE_COMMUNITY_DO?: DurableObjectNamespace;
     MESSAGES_FILES?: R2Bucket;
   };
 

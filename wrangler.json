@@ -43,6 +43,10 @@
       {
         "name": "MESSAGES_DO",
         "class_name": "MessagesDO"
+      },
+      {
+        "name": "YOUTUBE_COMMUNITY_DO",
+        "class_name": "YoutubeCommunityDO"
       }
     ]
   },
@@ -62,6 +66,10 @@
     {
       "tag": "v4",
       "new_sqlite_classes": ["MessagesDO"]
+    },
+    {
+      "tag": "v5",
+      "new_sqlite_classes": ["YoutubeCommunityDO"]
     }
   ],
   "compatibility_flags": ["nodejs_compat"]

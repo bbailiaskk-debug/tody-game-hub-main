@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  ArrowLeft,
   Eye,
   ExternalLink,
   ListVideo,
@@ -15,7 +16,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSiteSettings } from "../components/site/theme";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../components/ui/dialog";
 import { cachedRead } from "../lib/remote-cache";
 import { seoHead } from "../lib/seo";
 import {
@@ -86,6 +86,8 @@ const labels: Record<
     justNow: string;
     playlistItems: string;
     watchOnYoutube: string;
+    backToChannel: string;
+    upNext: string;
     close: string;
     search: string;
     searchPlaceholder: string;
@@ -132,6 +134,8 @@ const labels: Record<
     justNow: "току-що",
     playlistItems: "клипа",
     watchOnYoutube: "Гледай в YouTube",
+    backToChannel: "Назад към канала",
+    upNext: "Следващи видеа",
     close: "Затвори",
     search: "Търсене",
     searchPlaceholder: "Търси във видеата си",
@@ -177,6 +181,8 @@ const labels: Record<
     justNow: "just now",
     playlistItems: "videos",
     watchOnYoutube: "Watch on YouTube",
+    backToChannel: "Back to channel",
+    upNext: "Up next",
     close: "Close",
     search: "Search",
     searchPlaceholder: "Search your videos",
@@ -221,6 +227,8 @@ const labels: Record<
     justNow: "刚刚",
     playlistItems: "个视频",
     watchOnYoutube: "在 YouTube 观看",
+    backToChannel: "返回频道",
+    upNext: "接下来播放",
     close: "关闭",
     search: "搜索",
     searchPlaceholder: "在你的视频中搜索",
@@ -285,6 +293,7 @@ function YoutubePage() {
   }, [searchOpen]);
 
   const feed: YoutubeFeed | null = result?.ok ? result.feed : null;
+  const allVideos = feed ? [...feed.videos, ...feed.shorts, ...feed.live] : [];
 
   const trimmedQuery = query.trim().toLowerCase();
 
@@ -313,113 +322,116 @@ function YoutubePage() {
   return (
     <main className="min-h-[calc(100vh-68px)] bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-10">
-        <ChannelHeader feed={feed} t={t} onRefresh={() => void load()} refreshing={refreshing} />
-
-        <ChannelNav
-          tab={tab}
-          t={t}
-          searchOpen={searchOpen}
-          query={query}
-          searchInput={searchInput}
-          onSelect={selectTab}
-          onToggleSearch={() => {
-            setSearchOpen((open) => !open);
-            if (searchOpen) setQuery("");
-          }}
-          onQueryChange={setQuery}
-        />
-
-        {result && !result.ok ? (
-          <p
-            role="alert"
-            className="mt-8 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-4 text-sm text-destructive"
-          >
-            {result.error === "not-configured"
-              ? t.errorNotConfigured
-              : result.error === "not-found"
-                ? t.errorNotFound
-                : result.error === "network"
-                  ? t.errorNetwork
-                  : t.errorUnknown}
-          </p>
-        ) : null}
-
-        {!result && !feed ? (
-          <p className="mt-8 font-mono text-xs tracking-[0.18em] text-muted-foreground">
-            {t.loading}
-          </p>
-        ) : null}
-
-        {searchResults ? (
-          <SearchResults
-            results={searchResults}
+        {activeVideo ? (
+          <VideoWatchPage
+            video={activeVideo}
+            videos={allVideos}
+            channelTitle={feed?.channel.title ?? "YouTube"}
             t={t}
             lang={lang as Lang}
-            query={query}
+            onBack={() => setActiveVideo(null)}
             onSelect={setActiveVideo}
           />
-        ) : null}
-
-        {!searchResults && feed ? (
+        ) : (
           <>
-            {tab === "home" ? (
-              <HomeView
-                feed={feed}
+            <ChannelHeader
+              feed={feed}
+              t={t}
+              onRefresh={() => void load()}
+              refreshing={refreshing}
+            />
+
+            <ChannelNav
+              tab={tab}
+              t={t}
+              searchOpen={searchOpen}
+              query={query}
+              searchInput={searchInput}
+              onSelect={selectTab}
+              onToggleSearch={() => {
+                setSearchOpen((open) => !open);
+                if (searchOpen) setQuery("");
+              }}
+              onQueryChange={setQuery}
+            />
+
+            {result && !result.ok ? (
+              <p
+                role="alert"
+                className="mt-8 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-4 text-sm text-destructive"
+              >
+                {result.error === "not-configured"
+                  ? t.errorNotConfigured
+                  : result.error === "not-found"
+                    ? t.errorNotFound
+                    : result.error === "network"
+                      ? t.errorNetwork
+                      : t.errorUnknown}
+              </p>
+            ) : null}
+
+            {!result && !feed ? (
+              <p className="mt-8 font-mono text-xs tracking-[0.18em] text-muted-foreground">
+                {t.loading}
+              </p>
+            ) : null}
+
+            {searchResults ? (
+              <SearchResults
+                results={searchResults}
                 t={t}
                 lang={lang as Lang}
+                query={query}
                 onSelect={setActiveVideo}
-                onOpenTab={selectTab}
               />
             ) : null}
 
-            {tab === "videos" ? (
-              <VideoGrid
-                videos={feed.videos}
-                t={t}
-                lang={lang as Lang}
-                onSelect={setActiveVideo}
-                emptyTitle={t.empty}
-                emptyHint={t.emptyHint}
-              />
-            ) : null}
+            {!searchResults && feed ? (
+              <>
+                {tab === "home" ? (
+                  <HomeView
+                    feed={feed}
+                    t={t}
+                    lang={lang as Lang}
+                    onSelect={setActiveVideo}
+                    onOpenTab={selectTab}
+                  />
+                ) : null}
 
-            {tab === "shorts" ? (
-              <ShortGrid
-                shorts={feed.shorts}
-                t={t}
-                lang={lang as Lang}
-                onSelect={setActiveVideo}
-                emptyTitle={t.empty}
-                emptyHint={t.emptyHint}
-              />
-            ) : null}
+                {tab === "videos" ? (
+                  <VideoGrid
+                    videos={feed.videos}
+                    t={t}
+                    lang={lang as Lang}
+                    onSelect={setActiveVideo}
+                    emptyTitle={t.empty}
+                    emptyHint={t.emptyHint}
+                  />
+                ) : null}
 
-            {tab === "live" ? (
-              <LiveView
-                live={feed.live}
-                t={t}
-                lang={lang as Lang}
-                onSelect={setActiveVideo}
-              />
-            ) : null}
+                {tab === "shorts" ? (
+                  <ShortGrid
+                    shorts={feed.shorts}
+                    t={t}
+                    lang={lang as Lang}
+                    onSelect={setActiveVideo}
+                    emptyTitle={t.empty}
+                    emptyHint={t.emptyHint}
+                  />
+                ) : null}
 
-            {tab === "playlists" ? (
-              <PlaylistGrid playlists={feed.playlists} t={t} />
-            ) : null}
+                {tab === "live" ? (
+                  <LiveView live={feed.live} t={t} lang={lang as Lang} onSelect={setActiveVideo} />
+                ) : null}
 
-            {tab === "posts" ? (
-              <PostList posts={feed.posts} t={t} lang={lang as Lang} />
+                {tab === "playlists" ? <PlaylistGrid playlists={feed.playlists} t={t} /> : null}
+
+                {tab === "posts" ? <PostList posts={feed.posts} t={t} lang={lang as Lang} /> : null}
+              </>
             ) : null}
           </>
-        ) : null}
+        )}
       </div>
-
-      <VideoDialog
-        video={activeVideo}
-        t={t}
-        lang={lang as Lang}
-        onClose={() => setActiveVideo(null)}
-      />
     </main>
   );
 }
@@ -626,9 +638,7 @@ function HomeView({
 }) {
   return (
     <div className="mt-8 space-y-12">
-      {feed.live.length > 0 ? (
-        <LiveBanner videos={feed.live} t={t} onSelect={onSelect} />
-      ) : null}
+      {feed.live.length > 0 ? <LiveBanner videos={feed.live} t={t} onSelect={onSelect} /> : null}
 
       {feed.shorts.length > 0 ? (
         <Shelf title={t.latestShorts} onMore={() => onOpenTab("shorts")}>
@@ -655,13 +665,7 @@ function HomeView({
           </div>
           <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {feed.videos.slice(0, 8).map((video) => (
-              <VideoCard
-                key={video.id}
-                video={video}
-                t={t}
-                lang={lang}
-                onSelect={onSelect}
-              />
+              <VideoCard key={video.id} video={video} t={t} lang={lang} onSelect={onSelect} />
             ))}
           </div>
         </section>
@@ -995,9 +999,7 @@ function PostList({ posts, t, lang }: { posts: YoutubePost[]; t: Labels; lang: L
 }
 
 function PostCard({ post, t, lang }: { post: YoutubePost; t: Labels; lang: Lang }) {
-  const when = post.publishedAt
-    ? formatRelativeDate(post.publishedAt, lang)
-    : post.publishedLabel;
+  const when = post.publishedAt ? formatRelativeDate(post.publishedAt, lang) : post.publishedLabel;
 
   return (
     <article className="rounded-3xl border border-border bg-card p-5 transition-colors hover:border-primary/40">
@@ -1069,13 +1071,7 @@ function SearchResults({
         <section>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {results.videos.map((video) => (
-              <VideoCard
-                key={video.id}
-                video={video}
-                t={t}
-                lang={lang}
-                onSelect={onSelect}
-              />
+              <VideoCard key={video.id} video={video} t={t} lang={lang} onSelect={onSelect} />
             ))}
           </div>
         </section>
@@ -1294,65 +1290,181 @@ function EmptyState({
 }) {
   return (
     <div className="rounded-3xl border border-border bg-card px-6 py-12 text-center">
-      {icon ? <span className="mx-auto grid size-11 place-items-center rounded-full bg-surface text-muted-foreground">{icon}</span> : null}
+      {icon ? (
+        <span className="mx-auto grid size-11 place-items-center rounded-full bg-surface text-muted-foreground">
+          {icon}
+        </span>
+      ) : null}
       <p className="mt-3 font-display text-sm font-semibold">{title}</p>
       <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 }
 
-function VideoDialog({
+function VideoWatchPage({
   video,
+  videos,
+  channelTitle,
   t,
   lang,
-  onClose,
+  onBack,
+  onSelect,
 }: {
   video: YoutubeVideo | null;
+  videos: YoutubeVideo[];
+  channelTitle: string;
   t: Labels;
   lang: Lang;
-  onClose: () => void;
+  onBack: () => void;
+  onSelect: (video: YoutubeVideo) => void;
+}) {
+  if (!video) return null;
+
+  const recommendations = videos.filter((item) => item.id !== video.id).slice(0, 12);
+
+  return (
+    <VideoWatchPageContent
+      key={video.id}
+      video={video}
+      recommendations={recommendations}
+      channelTitle={channelTitle}
+      t={t}
+      lang={lang}
+      onBack={onBack}
+      onSelect={onSelect}
+    />
+  );
+}
+
+function VideoWatchPageContent({
+  video,
+  recommendations,
+  channelTitle,
+  t,
+  lang,
+  onBack,
+  onSelect,
+}: {
+  video: YoutubeVideo;
+  recommendations: YoutubeVideo[];
+  channelTitle: string;
+  t: Labels;
+  lang: Lang;
+  onBack: () => void;
+  onSelect: (video: YoutubeVideo) => void;
 }) {
   return (
-    <Dialog open={Boolean(video)} onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent className="max-w-[min(64rem,94vw)] gap-0 overflow-hidden border-border/80 bg-background p-0">
-        {video ? (
-          <>
-            <div className="relative aspect-video w-full bg-black">
-              <iframe
-                key={video.id}
-                src={video.embedUrl}
-                title={video.title}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-                className="absolute inset-0 size-full border-0"
-              />
-            </div>
+    <section className="mt-2">
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 font-mono text-xs tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        {t.backToChannel}
+      </button>
 
-            <div className="flex flex-wrap items-start justify-between gap-4 p-5">
-              <div className="min-w-0 flex-1">
-                <DialogTitle className="font-display text-base font-semibold leading-snug">
-                  {video.title}
-                </DialogTitle>
-                <DialogDescription className="mt-2 font-mono text-[0.68rem] tracking-[0.14em] text-muted-foreground">
-                  {formatCount(video.viewCount)} {t.views}
-                  {video.publishedAt ? ` · ${formatRelativeDate(video.publishedAt, lang)}` : ""}
-                </DialogDescription>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0">
+          <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
+            <iframe
+              key={video.id}
+              src={video.embedUrl}
+              title={video.title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+              className="absolute inset-0 size-full border-0"
+            />
+          </div>
+
+          <div className="mt-5">
+            <h1 className="font-display text-xl font-bold leading-snug sm:text-2xl">
+              {video.title}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="grid size-11 place-items-center rounded-full border border-primary/30 bg-surface text-sm font-bold text-brand">
+                  {channelTitle.slice(0, 1)}
+                </span>
+                <div>
+                  <p className="font-display text-sm font-semibold">{channelTitle}</p>
+                  <p className="mt-1 font-mono text-xs text-muted-foreground">
+                    {formatCount(video.viewCount)} {t.views}
+                    {video.publishedAt ? ` · ${formatRelativeDate(video.publishedAt, lang)}` : ""}
+                  </p>
+                </div>
               </div>
-
+            </div>
+            <div className="mt-4 flex justify-end border-y border-border py-3">
               <a
                 href={video.watchUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-4 py-2.5 font-mono text-[0.68rem] tracking-[0.16em] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2.5 font-mono text-xs tracking-wide text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
               >
                 {t.watchOnYoutube}
                 <ExternalLink className="size-3.5" />
               </a>
             </div>
-          </>
-        ) : null}
-      </DialogContent>
-    </Dialog>
+            {video.description ? (
+              <p className="mt-5 whitespace-pre-line rounded-2xl border border-border bg-card p-4 text-sm leading-relaxed text-muted-foreground">
+                {video.description}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <aside className="min-w-0">
+          <h2 className="mb-4 font-display text-sm font-semibold">{t.upNext}</h2>
+          {recommendations.length ? (
+            <div className="flex flex-col gap-3">
+              {recommendations.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onSelect(item)}
+                  className="group flex w-full gap-3 rounded-2xl border border-transparent p-2 text-left transition-colors hover:border-border hover:bg-card"
+                >
+                  <span className="relative aspect-video w-[42%] shrink-0 overflow-hidden rounded-xl bg-surface-2">
+                    {item.thumbnail ? (
+                      <img
+                        src={item.thumbnail}
+                        alt=""
+                        width={240}
+                        height={135}
+                        loading="lazy"
+                        decoding="async"
+                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    ) : null}
+                    {formatDuration(item.durationSeconds) ? (
+                      <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 py-0.5 font-mono text-[0.6rem] text-white">
+                        {formatDuration(item.durationSeconds)}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="line-clamp-2 block font-display text-xs font-semibold leading-snug">
+                      {item.title}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-muted-foreground">
+                      {channelTitle}
+                    </span>
+                    <span className="mt-1 block font-mono text-[0.62rem] text-muted-foreground">
+                      {formatCount(item.viewCount)} {t.views}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
+              {t.empty}
+            </p>
+          )}
+        </aside>
+      </div>
+    </section>
   );
 }

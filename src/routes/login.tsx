@@ -217,6 +217,8 @@ function Login() {
     void serverValidateAuthSession({ data: { email: session.email, token: session.token } })
       .then(({ valid }) => {
         if (!active || !valid) return;
+        const params = new URLSearchParams(window.location.search);
+        if (params.has("code") || params.has("error")) return;
         const normalizedEmail = session.email.trim().toLowerCase();
         const profile = readPersistedUserProfile();
         const hasLocalAccount =

@@ -3997,3 +3997,298 @@ export class MessagesDO extends DurableObject<MessagesEnv> {
     }
   }
 }
+
+type YoutubeCommunityComment = {
+  id: string;
+  authorName: string;
+  text: string;
+  createdAt: number;
+  youtubeStatus: "pending" | "published" | "failed";
+  youtubeCommentId?: string;
+};
+
+type YoutubeReactionCounts = { likes: number; dislikes: number };
+
+const YOUTUBE_COMMUNITY_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+const YOUTUBE_COMMUNITY_MAX_COMMENT_LENGTH = 1_000;
+const YOUTUBE_COMMUNITY_MAX_COMMENTS_PER_VIDEO = 5_000;
+const YOUTUBE_COMMUNITY_COMMENT_COOLDOWN_MS = 15_000;
+const YOUTUBE_COMMUNITY_COMMENT_LIMIT = 50;
+
+export class YoutubeCommunityDO extends DurableObject {
+  override async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    try {
+      if (request.method === "GET" && url.pathname === "/snapshot") {
+        const videoId = url.searchParams.get("videoId") ?? "";
+        const email = normalizeMessagesEmail(url.searchParams.get("email") ?? "");
+        if (!YOUTUBE_COMMUNITY_VIDEO_ID.test(videoId)) {
+          return jsonResponse({ ok: false, error: "invalid-video" }, 400);
+        }
+        return this.ctx.blockConcurrencyWhile(async () =>
+          jsonResponse(await this.readSnapshot(videoId, email)),
+        );
+      }
+
+      if (request.method !== "POST") {
+        return jsonResponse({ ok: false, error: "method-not-allowed" }, 405);
+      }
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        return jsonResponse({ ok: false, error: "invalid-request" }, 400);
+      }
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return jsonResponse({ ok: false, error: "invalid-request" }, 400);
+      }
+      const payload = body as Record<string, unknown>;
+      const path = url.pathname;
+
+      if (path === "/comment") {
+        const videoId = payload["videoId"];
+        const email =
+          typeof payload["email"] === "string" ? payload["email"].trim().toLowerCase() : "";
+        const authorName =
+          typeof payload["authorName"] === "string"
+            ? payload["authorName"].trim().slice(0, 80)
+            : "";
+        const text = typeof payload["text"] === "string" ? payload["text"].trim() : "";
+        if (
+          typeof videoId !== "string" ||
+          !YOUTUBE_COMMUNITY_VIDEO_ID.test(videoId) ||
+          !email ||
+          email.length > 254 ||
+          !authorName ||
+          !text
+        ) {
+          return jsonResponse({ ok: false, error: "invalid-comment" }, 400);
+        }
+        if (text.length > YOUTUBE_COMMUNITY_MAX_COMMENT_LENGTH) {
+          return jsonResponse({ ok: false, error: "comment-too-long" }, 400);
+        }
+        const outcome = await this.ctx.blockConcurrencyWhile(() =>
+          this.writeComment(videoId, email, authorName, text),
+        );
+        if (outcome.error) {
+          return jsonResponse({ ok: false, error: outcome.error }, outcome.status);
+        }
+        return jsonResponse({
+          ok: true,
+          commentId: outcome.commentId,
+          snapshot: await this.readSnapshot(videoId, email),
+        });
+      }
+
+      if (path === "/comment-status") {
+        const videoId = payload["videoId"];
+        const commentId = payload["commentId"];
+        const status = payload["status"];
+        const youtubeCommentId = payload["youtubeCommentId"];
+        const email =
+          typeof payload["email"] === "string" ? payload["email"].trim().toLowerCase() : "";
+        if (
+          typeof videoId !== "string" ||
+          !YOUTUBE_COMMUNITY_VIDEO_ID.test(videoId) ||
+          typeof commentId !== "string" ||
+          !/^[\w-]{1,64}$/.test(commentId) ||
+          !(status === "published" || status === "failed") ||
+          !email ||
+          email.length > 254 ||
+          (status === "published" &&
+            (typeof youtubeCommentId !== "string" || youtubeCommentId.length > 256))
+        ) {
+          return jsonResponse({ ok: false, error: "invalid-request" }, 400);
+        }
+        const snapshot = await this.ctx.blockConcurrencyWhile(() =>
+          this.updateCommentStatus(videoId, commentId, status, youtubeCommentId, email),
+        );
+        if (!snapshot) return jsonResponse({ ok: false, error: "not-found" }, 404);
+        return jsonResponse(snapshot);
+      }
+
+      if (path === "/snapshot") {
+        const videoId = payload["videoId"];
+        const email =
+          typeof payload["email"] === "string" ? payload["email"].trim().toLowerCase() : "";
+        if (
+          typeof videoId !== "string" ||
+          !YOUTUBE_COMMUNITY_VIDEO_ID.test(videoId) ||
+          (payload["email"] !== undefined && (!email || email.length > 254))
+        ) {
+          return jsonResponse({ ok: false, error: "invalid-request" }, 400);
+        }
+        return this.ctx.blockConcurrencyWhile(async () =>
+          jsonResponse(await this.readSnapshot(videoId, email)),
+        );
+      }
+
+      if (path === "/reaction") {
+        const videoId = payload["videoId"];
+        const email =
+          typeof payload["email"] === "string" ? payload["email"].trim().toLowerCase() : "";
+        const reaction = payload["reaction"];
+        if (
+          typeof videoId !== "string" ||
+          !YOUTUBE_COMMUNITY_VIDEO_ID.test(videoId) ||
+          !email ||
+          email.length > 254 ||
+          !(reaction === "like" || reaction === "dislike" || reaction === null)
+        ) {
+          return jsonResponse({ ok: false, error: "invalid-request" }, 400);
+        }
+        return this.ctx.blockConcurrencyWhile(async () => {
+          await this.writeReaction(videoId, email, reaction);
+          return jsonResponse(await this.readSnapshot(videoId, email));
+        });
+      }
+
+      if (path === "/subscription") {
+        const email =
+          typeof payload["email"] === "string" ? payload["email"].trim().toLowerCase() : "";
+        const subscribed = payload["subscribed"];
+        if (!email || email.length > 254 || typeof subscribed !== "boolean") {
+          return jsonResponse({ ok: false, error: "invalid-request" }, 400);
+        }
+        return this.ctx.blockConcurrencyWhile(async () => {
+          const key = `subscriber:${encodeURIComponent(email)}`;
+          const wasSubscribed = (await this.ctx.storage.get<boolean>(key)) === true;
+          if (wasSubscribed !== subscribed) {
+            const count = Number(await this.ctx.storage.get("subscriber-count")) || 0;
+            await this.ctx.storage.put(
+              "subscriber-count",
+              Math.max(0, count + (subscribed ? 1 : -1)),
+            );
+            if (subscribed) await this.ctx.storage.put(key, true);
+            else await this.ctx.storage.delete(key);
+          }
+          return jsonResponse({
+            ok: true,
+            subscribed: (await this.ctx.storage.get<boolean>(key)) === true,
+            subscribers: Number(await this.ctx.storage.get("subscriber-count")) || 0,
+          });
+        });
+      }
+
+      return jsonResponse({ ok: false, error: "not-found" }, 404);
+    } catch (error) {
+      console.error("YouTube community Durable Object request failed.", error);
+      return jsonResponse({ ok: false, error: "storage-error" }, 500);
+    }
+  }
+
+  private async readSnapshot(videoId: string, email: string) {
+    const comments = await this.ctx.storage.list<YoutubeCommunityComment>({
+      prefix: `comment:${videoId}:`,
+    });
+    const reaction = email
+      ? await this.ctx.storage.get<"like" | "dislike">(
+          `reaction:${videoId}:${encodeURIComponent(email)}`,
+        )
+      : null;
+    const counts = (await this.ctx.storage.get<YoutubeReactionCounts>(
+      `reaction-counts:${videoId}`,
+    )) ?? {
+      likes: 0,
+      dislikes: 0,
+    };
+    const subscribed = email
+      ? (await this.ctx.storage.get<boolean>(`subscriber:${encodeURIComponent(email)}`)) === true
+      : false;
+
+    return {
+      ok: true,
+      likes: counts.likes,
+      dislikes: counts.dislikes,
+      subscribers: Number(await this.ctx.storage.get("subscriber-count")) || 0,
+      reaction: reaction ?? null,
+      subscribed,
+      commentCount: Number(await this.ctx.storage.get(`comment-count:${videoId}`)) || 0,
+      comments: Array.from(comments.values())
+        .sort((first, second) => second.createdAt - first.createdAt)
+        .slice(0, YOUTUBE_COMMUNITY_COMMENT_LIMIT),
+    };
+  }
+
+  private async writeReaction(
+    videoId: string,
+    email: string,
+    next: "like" | "dislike" | null,
+  ): Promise<void> {
+    const key = `reaction:${videoId}:${encodeURIComponent(email)}`;
+    const previous = await this.ctx.storage.get<"like" | "dislike">(key);
+    if (previous === next) return;
+
+    const counts = (await this.ctx.storage.get<YoutubeReactionCounts>(
+      `reaction-counts:${videoId}`,
+    )) ?? {
+      likes: 0,
+      dislikes: 0,
+    };
+    if (previous === "like") counts.likes = Math.max(0, counts.likes - 1);
+    if (previous === "dislike") counts.dislikes = Math.max(0, counts.dislikes - 1);
+    if (next === "like") counts.likes += 1;
+    if (next === "dislike") counts.dislikes += 1;
+
+    await this.ctx.storage.put(`reaction-counts:${videoId}`, counts);
+    if (next) await this.ctx.storage.put(key, next);
+    else await this.ctx.storage.delete(key);
+  }
+
+  private async writeComment(
+    videoId: string,
+    email: string,
+    authorName: string,
+    text: string,
+  ): Promise<{ error?: string; status?: number; commentId?: string }> {
+    const countKey = `comment-count:${videoId}`;
+    const count = Number(await this.ctx.storage.get(countKey)) || 0;
+    if (count >= YOUTUBE_COMMUNITY_MAX_COMMENTS_PER_VIDEO) {
+      return { error: "comment-limit", status: 409 };
+    }
+
+    const lastCommentKey = `last-comment:${videoId}:${encodeURIComponent(email)}`;
+    const lastCommentAt = Number(await this.ctx.storage.get(lastCommentKey)) || 0;
+    if (Date.now() - lastCommentAt < YOUTUBE_COMMUNITY_COMMENT_COOLDOWN_MS) {
+      return { error: "rate-limited", status: 429 };
+    }
+
+    const createdAt = Date.now();
+    const comment: YoutubeCommunityComment = {
+      id: crypto.randomUUID(),
+      authorName,
+      text,
+      createdAt,
+      youtubeStatus: "pending",
+    };
+    const order = String(createdAt).padStart(13, "0");
+    await this.ctx.storage.put(`comment:${videoId}:${order}:${comment.id}`, comment);
+    await this.ctx.storage.put(countKey, count + 1);
+    await this.ctx.storage.put(lastCommentKey, createdAt);
+    return { commentId: comment.id };
+  }
+
+  private async updateCommentStatus(
+    videoId: string,
+    commentId: string,
+    status: "published" | "failed",
+    youtubeCommentId: unknown,
+    email: string,
+  ) {
+    const comments = await this.ctx.storage.list<YoutubeCommunityComment>({
+      prefix: `comment:${videoId}:`,
+    });
+    for (const [key, comment] of comments) {
+      if (comment.id !== commentId) continue;
+      await this.ctx.storage.put(key, {
+        ...comment,
+        youtubeStatus: status,
+        ...(status === "published" && typeof youtubeCommentId === "string"
+          ? { youtubeCommentId }
+          : {}),
+      });
+      return this.readSnapshot(videoId, email);
+    }
+    return null;
+  }
+}

@@ -34,12 +34,14 @@ describe("buildEmbedUrl", () => {
     expect(url.hostname).toBe("www.youtube-nocookie.com");
     expect(url.pathname).toBe("/embed/vjKqyVD2sQ4");
     expect(url.searchParams.get("autoplay")).toBe("1");
+    expect(url.searchParams.get("mute")).toBe("1");
     expect(url.searchParams.get("playsinline")).toBe("1");
   });
 
   it("can be asked not to autoplay", () => {
     const url = new URL(buildEmbedUrl("vjKqyVD2sQ4", { autoplay: false }));
     expect(url.searchParams.get("autoplay")).toBe("0");
+    expect(url.searchParams.get("mute")).toBe("0");
   });
 });
 

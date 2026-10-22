@@ -104,17 +104,17 @@ export function isYoutubeVideoId(value: string): boolean {
 /**
  * The embeddable player url for a video.
  *
- * `youtube-nocookie.com` rather than `youtube.com`: it sets no tracking cookies
- * until the visitor actually presses play, which is the one thing this site
- * should not do to somebody who clicked a thumbnail.
+ * `youtube-nocookie.com` rather than `youtube.com` uses the privacy-enhanced
+ * embed mode, while avoiding third-party cookies before playback starts.
  *
- * `autoplay=1` because the click that opened the player is the press. A player
- * that loads and waits is a player that looks broken.
+ * Muted autoplay lets browser autoplay policies honor the click that opened the
+ * player; viewers can unmute it in YouTube's controls.
  */
 export function buildEmbedUrl(videoId: string, opts?: { autoplay?: boolean }): string {
   const autoplay = opts?.autoplay === false ? "0" : "1";
   const params = new URLSearchParams({
     autoplay,
+    mute: autoplay,
     rel: "0",
     modestbranding: "1",
     playsinline: "1",
