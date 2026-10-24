@@ -40,6 +40,34 @@ describe("auth session and profile persistence", () => {
     expect(session?.token).toBe("server-session-token");
   });
 
+  it("keeps the active session token when updating the same user's profile", () => {
+    writePersistedAuthSession({
+      email: "player@example.com",
+      name: "Player One",
+      token: "server-session-token",
+    });
+
+    writePersistedUserProfile({ name: "Player Updated", email: "player@example.com" });
+
+    expect(readPersistedAuthSession()).toEqual({
+      email: "player@example.com",
+      name: "Player Updated",
+      token: "server-session-token",
+    });
+  });
+
+  it("does not carry a session token over to a different user's profile", () => {
+    writePersistedAuthSession({
+      email: "alice@example.com",
+      name: "Alice",
+      token: "alice-session-token",
+    });
+
+    writePersistedUserProfile({ name: "Bob", email: "bob@example.com" });
+
+    expect(readPersistedAuthSession()).toEqual({ email: "bob@example.com", name: "Bob" });
+  });
+
   it("clears an expired sign-in without deleting the saved profile", () => {
     writePersistedUserProfile({ name: "Player One", email: "player@example.com" });
     writePersistedAuthSession({

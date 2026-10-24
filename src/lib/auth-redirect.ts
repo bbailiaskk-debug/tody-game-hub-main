@@ -14,7 +14,6 @@ const PROTECTED_PATHS = new Set([
   "/messages",
   "/music",
   "/prismheart",
-  "/profile",
   "/prompt-lab",
   "/streamer",
   "/sudoku",

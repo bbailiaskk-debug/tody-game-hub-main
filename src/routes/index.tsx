@@ -424,11 +424,10 @@ function Index() {
 
         {checkoutState !== "none" ? (
           <p
-            className={`mt-6 rounded-full border px-5 py-3 text-center text-xs ${
-              checkoutState === "success"
+            className={`mt-6 rounded-full border px-5 py-3 text-center text-xs ${checkoutState === "success"
                 ? "border-brand/40 bg-brand/10 text-brand"
                 : "border-border bg-card text-muted-foreground"
-            }`}
+              }`}
           >
             {checkoutState === "success"
               ? isBg

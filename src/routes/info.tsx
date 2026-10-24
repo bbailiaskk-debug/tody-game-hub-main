@@ -113,6 +113,54 @@ const contentItems = {
   ],
 } as const;
 
+const toolsUsed = {
+  bg: [
+    { label: "СНИМАНЕ И СТРИЙМВАНЕ", value: "OBS Studio" },
+    { label: "ОБРАБОТКА", value: "Adobe Premiere Pro" },
+    { label: "ТЪМБНЕЙЛИ", value: "Adobe Photoshop CC 2018" },
+    { label: "КАМЕРА", value: "Mascoz" },
+  ],
+  en: [
+    { label: "CAPTURE & STREAMING", value: "OBS Studio" },
+    { label: "EDITING", value: "Adobe Premiere Pro" },
+    { label: "THUMBNAILS", value: "Adobe Photoshop CC 2018" },
+    { label: "CAMERA", value: "Mascoz" },
+  ],
+  zh: [
+    { label: "录制与直播", value: "OBS Studio" },
+    { label: "剪辑", value: "Adobe Premiere Pro" },
+    { label: "缩略图", value: "Adobe Photoshop CC 2018" },
+    { label: "相机", value: "Mascoz" },
+  ],
+} as const;
+
+const computerSpecs = {
+  bg: [
+    { label: "ПРОЦЕСОР", value: "AMD Ryzen 5 5600X", detail: "6-Core / 3.70 GHz" },
+    { label: "РАМ", value: "16 GB", detail: "DDR4" },
+    { label: "ГРАФИЧНА КАРТА", value: "NVIDIA GeForce RTX 3060 Ti", detail: "8 GB" },
+    { label: "ДЪННА ПЛАТКА", value: "Gaming motherboard", detail: "ATX / gaming setup" },
+    { label: "ЗАХРАНВАНЕ", value: "1000 W", detail: "Стабилно захранване" },
+    { label: "СЪХРАНЕНИЕ", value: "1 HDD + 2 SSD", detail: "1 TB each • ADATA SU650 / LEGEND 710" },
+  ],
+  en: [
+    { label: "CPU", value: "AMD Ryzen 5 5600X", detail: "6-Core / 3.70 GHz" },
+    { label: "RAM", value: "16 GB", detail: "DDR4" },
+    { label: "GPU", value: "NVIDIA GeForce RTX 3060 Ti", detail: "8 GB" },
+    { label: "MOTHERBOARD", value: "Gaming motherboard", detail: "ATX / gaming setup" },
+    { label: "POWER SUPPLY", value: "1000 W", detail: "Stable PSU" },
+    { label: "STORAGE", value: "1 HDD + 2 SSD", detail: "1 TB each • ADATA SU650 / LEGEND 710" },
+  ],
+  zh: [
+    { label: "处理器", value: "AMD Ryzen 5 5600X", detail: "6核 / 3.70 GHz" },
+    { label: "内存", value: "16 GB", detail: "DDR4" },
+    { label: "显卡", value: "NVIDIA GeForce RTX 3060 Ti", detail: "8 GB" },
+    { label: "主板", value: "Gaming motherboard", detail: "ATX / gaming setup" },
+    { label: "电源", value: "1000 W", detail: "稳定供电" },
+    { label: "存储", value: "1 HDD + 2 SSD", detail: "1 TB each • ADATA SU650 / LEGEND 710" },
+  ],
+} as const;
+
 function InfoPage() {
   const { lang } = useSiteSettings();
   const isBg = lang === "bg";
@@ -168,24 +216,24 @@ function InfoPage() {
 
   return (
     <main className="grid-bg min-h-screen">
-      <section className="mx-auto max-w-[1000px] px-6 pb-28 pt-20">
-        <div className="flex items-center gap-4">
+      <section className='mx-auto max-w-[1233px] px-5 pb-24 pt-14 sm:px-8 sm:pt-20 mt-[3px]'>
+        <div className='flex items-center gap-4 ml-[0px] mt-[0px]'>
           <span className="label-mono text-brand">03 /</span>
           <span className="label-mono">
             {isBg ? "ПРОФИЛ НА СЪЗДАТЕЛЯ" : isZh ? "创作者简介" : "CREATOR PROFILE"}
           </span>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
-          <h1 className="text-brand text-[clamp(2.5rem,7vw,4.5rem)] leading-none">
+        <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-b border-border/70 pb-6">
+          <h1 className="text-brand text-5xl leading-none sm:text-6xl">
             {isBg ? "ЗАД КАНАЛА" : isZh ? "频道背后" : "BEHIND THE CHANNEL"}
           </h1>
         </div>
 
-        <div className="mt-10 grid gap-6 items-start md:grid-cols-[0.8fr_1.2fr]">
+        <div className='grid items-start gap-5 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] lg:gap-7 ml-[4px] mt-[-15px]'>
           <div className="flex flex-col gap-6">
-            <div className="flex flex-col rounded-3xl border border-border bg-card p-6">
-              <div className="relative aspect-[7/10] w-full overflow-hidden rounded-2xl bg-surface/70">
+            <div className='flex flex-col rounded-2xl border border-border bg-card p-4 sm:p-5 ml-[3px] mt-[1px]'>
+              <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-surface/70">
                 <img
                   src="/images/profile-portrait.webp"
                   alt={isBg ? "Профилна снимка" : "Profile photo"}
@@ -193,7 +241,7 @@ function InfoPage() {
                   height={1222}
                   fetchPriority="high"
                   decoding="async"
-                  className="absolute inset-0 h-full w-full rounded-xl object-cover object-center"
+                  className='absolute inset-0 h-full w-full rounded-xl object-cover object-center ml-[4px] mt-[6px]'
                 />
               </div>
               <p className="label-mono mt-5 text-[0.6rem]">
@@ -224,7 +272,7 @@ function InfoPage() {
               </div>
             </div>
 
-            <div className="night-panel rounded-3xl border border-[#1DB954]/20 bg-[#161B16] p-5">
+            <div className="night-panel h-fit rounded-2xl border border-[#1DB954]/20 bg-[#161B16] p-4 sm:p-5">
               <h2 className="label-mono text-[var(--brand-bright)] text-[0.7rem]">
                 {isBg ? "СЪДЪРЖАНИЕ" : isZh ? "内容" : "CONTENT"}
               </h2>
@@ -256,28 +304,8 @@ function InfoPage() {
             </div>
           </div>
 
-          <div
-            className="rounded-3xl border border-border bg-card p-7"
-            style={{ paddingLeft: "2rem", paddingRight: "2rem" }}
-          >
-            <h2
-              className="mb-2 block text-4xl leading-snug sm:text-5xl font-rotwimch"
-              style={{
-                fontFamily: '"LIGHTZ", system-ui, sans-serif',
-                fontWeight: 900,
-                letterSpacing: "-0.05em",
-                display: "block",
-                width: "100%",
-                maxWidth: "100%",
-                lineHeight: 1.05,
-                margin: 0,
-                marginBottom: "0.35rem",
-                overflowWrap: "anywhere",
-                whiteSpace: "normal",
-                paddingLeft: "1rem",
-                paddingRight: "1rem",
-              }}
-            >
+          <div className='rounded-2xl border border-border bg-card p-5 sm:p-8 ml-[0px] mt-[-2px]'>
+            <h2 className="mb-5 text-4xl leading-tight font-bold sm:text-5xl">
               {isBg ? (
                 <>
                   Добре дошли в официалния свят на{" "}
@@ -294,19 +322,7 @@ function InfoPage() {
                 </>
               )}
             </h2>
-            <div
-              className="space-y-2 text-muted-foreground font-rotwimch"
-              style={{
-                fontFamily: '"LIGHTZ", system-ui, sans-serif',
-                fontWeight: 500,
-                fontSize: "1.26rem",
-                lineHeight: 1.5,
-                letterSpacing: "-0.018em",
-                paddingLeft: "1.5rem",
-                paddingRight: "1.5rem",
-                paddingBottom: "1.5rem",
-              }}
-            >
+            <div className='space-y-4 text-2xl leading-8 text-muted-foreground ml-[0px] mt-[0px]'>
               <p>
                 {isBg
                   ? "Тук забавлението е на първо място. Влизам в най-различни виртуални светове, за да споделя с вас незабравими гейминг емоции, епични моменти и много смях. Зад всеки кадър стои старателна обработка, използване на виртуална стая и професионален софтуер като NVIDIA Broadcast, за да ви осигуря най-доброто и качествено изживяване."
@@ -335,6 +351,49 @@ function InfoPage() {
                     ? "从不同类型游戏的尝试，到音乐时刻和精心设计的画面，我们希望保持能量、创意和持续不断的乐趣。每次发布都让氛围保持活力与互动，并始终为新游戏做好准备。"
                     : "From experiments across different game genres to music moments and visually styled content, the goal is to keep the energy alive, creative, and always ready for the next session. Every upload is designed to maintain a fun, interactive atmosphere and a strong connection with the audience."}
               </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-6 sm:grid-cols-2">
+          <div className="night-panel flex flex-col rounded-3xl border border-[#1DB954]/20 bg-[#161B16] p-5">
+            <h2 className="label-mono text-[var(--brand-bright)] text-xs">
+              {isBg ? "СОФТУЕР & ГЕАР" : isZh ? "软件与设备" : "SOFTWARE & GEAR"}
+            </h2>
+            <div className="mt-4 flex flex-1 flex-col gap-3">
+              {toolsUsed[lang].map((item) => (
+                <div
+                  key={item.label}
+                  className="flex flex-1 items-center justify-between gap-4 rounded-xl border border-border bg-surface-2/70 px-3 py-3 min-h-[72px]"
+                >
+                  <span className="font-mono text-xs tracking-[0.12em] text-muted-foreground uppercase">
+                    {item.label}
+                  </span>
+                  <span className="text-right text-base font-medium text-foreground">
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="night-panel rounded-3xl border border-[#1DB954]/20 bg-[#161B16] p-5">
+            <h2 className="label-mono text-[var(--brand-bright)] text-xs">
+              {isBg ? "ХАРДВЪР" : isZh ? "硬件配置" : "HARDWARE"}
+            </h2>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {computerSpecs[lang].map((spec) => (
+                <div
+                  key={spec.label}
+                  className="rounded-2xl border border-border bg-surface-2/70 p-3 text-left min-h-[112px]"
+                >
+                  <p className="font-mono text-xs tracking-[0.12em] text-muted-foreground uppercase">
+                    {spec.label}
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-foreground">{spec.value}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{spec.detail}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

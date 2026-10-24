@@ -270,10 +270,10 @@ function Login() {
 
       const nextUsers = existingUser
         ? users.map((storedUser) =>
-            (storedUser.email ?? "").trim().toLowerCase() === normalizedEmail
-              ? nextUser
-              : storedUser,
-          )
+          (storedUser.email ?? "").trim().toLowerCase() === normalizedEmail
+            ? nextUser
+            : storedUser,
+        )
         : [...users, nextUser];
 
       writeRegisteredUsers(nextUsers);
@@ -457,8 +457,7 @@ function Login() {
     }
     if (oauthError) {
       setError(
-        `${isBg ? "Google входът беше отказан." : "Google sign-in was cancelled."}${
-          oauthErrorDescription ? ` (${oauthErrorDescription})` : ""
+        `${isBg ? "Google входът беше отказан." : "Google sign-in was cancelled."}${oauthErrorDescription ? ` (${oauthErrorDescription})` : ""
         }`,
       );
       setSubmitting(false);
@@ -487,8 +486,7 @@ function Login() {
         });
         if (!result.success) {
           setError(
-            `${isBg ? "Google входът не беше успешен." : "Google sign-in was not successful."}${
-              result.error ? ` (${result.error})` : ""
+            `${isBg ? "Google входът не беше успешен." : "Google sign-in was not successful."}${result.error ? ` (${result.error})` : ""
             }`,
           );
           setSubmitting(false);
@@ -940,22 +938,20 @@ function Login() {
                     <button
                       type="button"
                       onClick={() => setGender("male")}
-                      className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                        gender === "male"
-                          ? "bg-primary text-primary-foreground"
-                          : "border border-border bg-background text-foreground hover:border-primary"
-                      }`}
+                      className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${gender === "male"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-background text-foreground hover:border-primary"
+                        }`}
                     >
                       {isBg ? "Мъжки" : isZh ? "男" : "Male"}
                     </button>
                     <button
                       type="button"
                       onClick={() => setGender("female")}
-                      className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                        gender === "female"
-                          ? "bg-primary text-primary-foreground"
-                          : "border border-border bg-background text-foreground hover:border-primary"
-                      }`}
+                      className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${gender === "female"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-background text-foreground hover:border-primary"
+                        }`}
                     >
                       {isBg ? "Женски" : isZh ? "女" : "Female"}
                     </button>

@@ -52,25 +52,24 @@ const PLAYLIST_LIMIT = 24;
 const POST_LIMIT = 12;
 
 /**
- * The lifetimes of the cached pieces, and what each one costs.
+ * The lifetimes of the cached pieces, balancing stream freshness and API quota.
  *
- * The expensive calls are the `search.list` ones, so their windows are long:
+ * Approximate daily costs at the default 10 000-unit quota:
  *
- *   search (long + short)  100 units each, twice a day      ~200
- *   search (live)          100 units, every two hours       ~1200
- *   playlistItems + videos  1 + 1 units, every five minutes ~600
+ *   search (long + short)  100 units each, twice a day      ~400
+ *   search (live)          100 units, every twenty minutes  ~7200
+ *   playlistItems + videos 1 + 1 units, every five minutes  ~600
  *   channel + playlists    1 + 1 units, every six hours     ~8
  *
- * That is roughly 2 000 units a day against a 10 000 unit allowance, with
- * room for a busy week. The cheap calls are refreshed often because they are
- * what a visitor actually notices: a new upload should show up within
- * minutes. The expensive ones can wait, because a video never changes which
- * side of the long/short line it is on.
+ * That is roughly 8 200 units a day against a 10 000 unit allowance. The live
+ * search is kept short enough to show new streams in a reasonable time; the
+ * other expensive searches can wait because a video never changes which side
+ * of the long/short line it is on.
  */
 const CHANNEL_TTL_MS = 6 * 60 * 60 * 1_000;
 const UPLOADS_TTL_MS = 5 * 60 * 1_000;
 const SEARCH_TTL_MS = 12 * 60 * 60 * 1_000;
-const LIVE_TTL_MS = 2 * 60 * 60 * 1_000;
+const LIVE_TTL_MS = 20 * 60 * 1_000;
 const PLAYLISTS_TTL_MS = 6 * 60 * 60 * 1_000;
 const POSTS_TTL_MS = 30 * 60 * 1_000;
 
@@ -626,7 +625,7 @@ export async function loadYoutubeFeed(): Promise<YoutubeFeed> {
     return fetchVideoDetails(ids);
   }).catch(() => [] as YoutubeVideo[]);
 
-  const liveFromSearch = await cached(`live:${channelId}`, LIVE_TTL_MS, async () => {
+  const liveFromSearch = await cached(`live:v2:${channelId}`, LIVE_TTL_MS, async () => {
     const ids = await fetchSearchIds(channelId, { eventType: "live" });
     return fetchVideoDetails(ids);
   }).catch(() => [] as YoutubeVideo[]);

@@ -236,9 +236,16 @@ export function writePersistedUserProfile(profile: Partial<PersistedUserProfile>
   }
 
   storageSet(USER_PROFILE_KEY, JSON.stringify(next));
+  const currentSession = readPersistedAuthSession();
   storageSet(
     AUTH_SESSION_KEY,
-    JSON.stringify({ email: next.email, name: next.name } satisfies PersistedAuthSession),
+    JSON.stringify({
+      email: next.email,
+      name: next.name,
+      ...(currentSession?.email === next.email && currentSession.token
+        ? { token: currentSession.token }
+        : {}),
+    } satisfies PersistedAuthSession),
   );
 
   const users = readRegisteredUsers();

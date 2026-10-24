@@ -124,6 +124,7 @@ beforeEach(() => {
 
 afterEach(() => {
   __resetYoutubeCacheForTests();
+  vi.useRealTimers();
   globalThis.fetch = originalFetch;
   if (originalCFEnv === undefined) {
     delete (globalThis as typeof globalThis & { CF_ENV?: unknown }).CF_ENV;
@@ -180,7 +181,7 @@ describe("loadYoutubeFeed", () => {
       channels: channelHandler("UC_BROKEN_SEARCH"),
       playlists: playlistsHandler,
       playlistItems: playlistItemsHandler(["vid00000003"]),
-      videos: videosHandler([{ id: "vid00000003", duration: "PT2M", views: "10" }]),
+      videos: videosHandler([{ id: "vid00000003", duration: "PT4M", views: "10" }]),
       search: () => ({ error: { message: "quota exceeded" } }),
       community: () => "<html></html>",
     });
@@ -211,6 +212,55 @@ describe("loadYoutubeFeed", () => {
       ["channels", "community", "playlistItems", "playlists", "search", "search", "search", "videos"].sort(),
     );
     expect(secondPass).toEqual([]);
+  });
+
+  it("finds a new live stream after the live-search cache expires", async () => {
+    setEnv({ YOUTUBE_API_KEY: "test-key", YOUTUBE_CHANNEL_ID: "UC_LIVE_REFRESH" });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-23T12:00:00Z"));
+
+    let liveSearches = 0;
+    installFetch({
+      channels: channelHandler("UC_LIVE_REFRESH"),
+      playlists: playlistsHandler,
+      playlistItems: playlistItemsHandler([]),
+      videos: (url) => ({
+        items: (url.searchParams.get("id") ?? "")
+          .split(",")
+          .filter(Boolean)
+          .map((id) => ({
+            id,
+            snippet: {
+              title: "Live stream",
+              publishedAt: "2026-10-23T12:00:00Z",
+              thumbnails: { high: thumbnails.high },
+              liveBroadcastContent: "live",
+            },
+            contentDetails: { duration: "PT1H", liveBroadcastContent: "live" },
+            statistics: { viewCount: "1", likeCount: "0" },
+          })),
+      }),
+      search: (url) => {
+        if (url.searchParams.get("eventType") !== "live") return { items: [] };
+        liveSearches += 1;
+        return {
+          items:
+            liveSearches === 1
+              ? []
+              : [{ id: { videoId: "vid00000007" }, snippet: { liveBroadcastContent: "live" } }],
+        };
+      },
+      community: () => "<html></html>",
+    });
+
+    const initialFeed = await loadYoutubeFeed();
+    expect(initialFeed.live).toEqual([]);
+
+    vi.setSystemTime(new Date(Date.now() + 21 * 60 * 1_000));
+    const refreshedFeed = await loadYoutubeFeed();
+
+    expect(liveSearches).toBe(2);
+    expect(refreshedFeed.live.map((video) => video.id)).toEqual(["vid00000007"]);
   });
 
   it("reports a missing key rather than calling the api", async () => {

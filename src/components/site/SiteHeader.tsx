@@ -155,7 +155,7 @@ export function SiteHeader() {
       typeof requestIdleCallback === "function"
         ? requestIdleCallback
         : (cb: IdleRequestCallback) =>
-            setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), 0);
+          setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), 0);
     const idleId = schedule(checkUser);
 
     const handleUserChange = () => {
@@ -289,11 +289,10 @@ export function SiteHeader() {
 
               <div
                 id="profile-menu"
-                className={`absolute right-0 top-full mt-2 w-[18rem] z-50 overflow-hidden rounded-[1.5rem] border border-border/80 bg-background shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 ${
-                  profileMenuOpen
-                    ? "translate-y-0 opacity-100"
-                    : "pointer-events-none -translate-y-2 opacity-0"
-                }`}
+                className={`absolute right-0 top-full mt-2 w-[18rem] z-50 overflow-hidden rounded-[1.5rem] border border-border/80 bg-background shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 ${profileMenuOpen
+                  ? "translate-y-0 opacity-100"
+                  : "pointer-events-none -translate-y-2 opacity-0"
+                  }`}
               >
                 <div className="border-b border-border/70 px-4 py-3">
                   <p className="text-[0.7rem] font-mono tracking-[0.1em] text-muted-foreground uppercase">
@@ -341,9 +340,9 @@ export function SiteHeader() {
               aria-expanded={menuOpen}
               aria-controls="site-main-menu"
               onClick={() => setMenuOpen((prev) => !prev)}
-              className="grid size-10 place-items-center rounded-full border border-border bg-surface/90 text-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.02)] transition-transform duration-200 hover:-translate-y-0.5 hover:bg-surface"
+              className='grid size-10 place-items-center rounded-full border border-border bg-surface/90 text-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.02)] transition-transform duration-200 hover:-translate-y-0.5 hover:bg-surface ml-[0px] mt-[0px] [transform:translate(0px,_0px)]'
             >
-              {menuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+              {menuOpen ? <X className="size-4" /> : <Menu className='size-4 ml-[0px] mt-[0px]' />}
             </button>
 
             {menuOpen ? (
@@ -364,17 +363,15 @@ export function SiteHeader() {
                           onClick={() => setGamesMenuOpen((current) => !current)}
                           aria-expanded={gamesMenuOpen}
                           aria-controls="games-submenu"
-                          className={`group flex w-full items-center justify-between rounded-[1.2rem] px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] transition-colors ${
-                            gamePathActive
-                              ? "bg-primary text-primary-foreground"
-                              : "text-muted-foreground hover:bg-surface hover:text-foreground"
-                          }`}
+                          className={`group flex w-full items-center justify-between rounded-[1.2rem] px-3 py-3.5 font-mono text-[1.05rem] tracking-[0.2em] transition-colors ${gamePathActive
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-surface hover:text-foreground"
+                            }`}
                         >
                           <span>{item.label}</span>
                           <ChevronDown
-                            className={`size-4 transition-transform duration-200 ${
-                              gamesMenuOpen ? "rotate-180" : ""
-                            }`}
+                            className={`size-4 transition-transform duration-200 ${gamesMenuOpen ? "rotate-180" : ""
+                              }`}
                           />
                         </button>
                         {gamesMenuOpen ? (
@@ -551,11 +548,10 @@ export function SiteHeader() {
                         setLang("bg");
                         setMenuOpen(false);
                       }}
-                      className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${
-                        lang === "bg"
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border bg-surface text-muted-foreground hover:text-foreground"
-                      }`}
+                      className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${lang === "bg"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-surface text-muted-foreground hover:text-foreground"
+                        }`}
                     >
                       BG
                     </button>
@@ -565,11 +561,10 @@ export function SiteHeader() {
                         setLang("en");
                         setMenuOpen(false);
                       }}
-                      className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${
-                        lang === "en"
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border bg-surface text-muted-foreground hover:text-foreground"
-                      }`}
+                      className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${lang === "en"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-surface text-muted-foreground hover:text-foreground"
+                        }`}
                     >
                       EN
                     </button>
@@ -579,11 +574,10 @@ export function SiteHeader() {
                         setLang("zh");
                         setMenuOpen(false);
                       }}
-                      className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${
-                        lang === "zh"
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border bg-surface text-muted-foreground hover:text-foreground"
-                      }`}
+                      className={`rounded-xl border px-3 py-2.5 font-mono text-[0.95rem] tracking-[0.18em] transition-colors ${lang === "zh"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-surface text-muted-foreground hover:text-foreground"
+                        }`}
                     >
                       中文
                     </button>
@@ -663,11 +657,11 @@ export function SiteHeader() {
 
       {open && mounted
         ? createPortal(
-            <Suspense fallback={null}>
-              <SettingsPanel onClose={() => setOpen(false)} />
-            </Suspense>,
-            document.body,
-          )
+          <Suspense fallback={null}>
+            <SettingsPanel onClose={() => setOpen(false)} />
+          </Suspense>,
+          document.body,
+        )
         : null}
     </header>
   );

@@ -3,6 +3,12 @@
 
 import path from 'node:path';
 
+let enabled = false;
+
+export function setLiveUiEditorEnabled(value) {
+	enabled = value;
+}
+
 function base64UrlEncode(str) {
 	return Buffer.from(String(str), 'utf8')
 		.toString('base64')
@@ -50,6 +56,7 @@ export default function liveUiEditorBabelPlugin(babel) {
 		name: 'live-ui-editor-data-lui',
 		visitor: {
 			JSXOpeningElement(path, state) {
+				if (!enabled) return;
 				const node = path.node;
 				if (!node) return;
 				// Skip if already tagged.
